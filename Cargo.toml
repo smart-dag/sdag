@@ -1,0 +1,50 @@
+[package]
+description = "sdag rust implmentation"
+name = "sdag"
+version = "0.2.0"
+authors = ["Xudong Huang <huangxu008@hotmail.com>"]
+license = "MIT"
+
+[dependencies]
+may = "0.3"
+log = "0.4"
+url = "1.7"
+rand = "0.6"
+chrono = "0.4"
+config = "0.9"
+failure = "0.1"
+indexmap = "1.0"
+num_cpus = "1"
+rcu_cell = "0.1"
+smallvec = "0.6"
+crossbeam = "0.5"
+may_waiter = "0.1"
+lazy_static = "1"
+tungstenite = "0.6"
+
+serde = "1"
+serde_json = "1"
+serde_derive = "1"
+
+base32 = "0.4"
+base64 = "0.10"
+secp256k1 = "0.11"
+sha1 = "0.6"
+sha2 = "0.8"
+ripemd160 = "0.8"
+bit-vec = "0.5"
+
+#rust-embed = { version = "4", features = ["debug-embed"] }
+rust-embed = { git = "https://github.com/Xudong-Huang/rust-embed.git" }
+rusqlite ={ version = "0.14", features = ["bundled"] }
+
+[profile.release]
+lto = true
+# codegen-units = 1
+# panic = "abort"
+
+[workspace]
+members = [
+    "hub",
+    "wallet_base",
+]
