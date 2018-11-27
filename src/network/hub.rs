@@ -10,7 +10,7 @@ use config;
 use crossbeam::atomic::ArcCell;
 use error::Result;
 use failure::ResultExt;
-use joint::{Joint, Level};
+use joint::{Joint, JointSequence, Level};
 use light::{self, HistoryRequest, HistoryResponse};
 use main_chain;
 use may::coroutine;
@@ -938,6 +938,9 @@ impl HubConn {
             }
         };
         let joint_data = cached_joint.read().unwrap();
+        if joint_data.unit.content_hash.is_some() {
+            joint_data.set_sequence(JointSequence::FinalBad);
+        }
 
         if !joint_data.is_missing_parent() {
             return validation::validate_ready_joint(cached_joint);

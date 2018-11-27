@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use cache::{CachedJoint, SDAG_CACHE};
 use error::Result;
-use joint::Joint;
+use joint::{Joint, JointSequence};
 
 #[inline]
 fn is_authored_by_any_addr(joint: &Joint, addresses: &[&String]) -> bool {
@@ -45,7 +45,9 @@ pub fn is_unstable_joint_non_serial(joint: CachedJoint) -> Result<bool> {
 
     for u in no_include_relationship_units {
         let j_data = SDAG_CACHE.get_joint(&u)?.read()?;
-        if is_authored_by_any_addr(&j_data, &addresses) {
+        if is_authored_by_any_addr(&j_data, &addresses)
+            && j_data.get_sequence() != JointSequence::FinalBad
+        {
             info!(
                 "joint [{}] detect non serial with unit [{}]",
                 joint_data.get_unit_hash(),
