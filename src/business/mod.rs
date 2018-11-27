@@ -339,10 +339,23 @@ impl BusinessCache {
             bail!("joint is already set to finalbad, unit={}", joint.unit.unit);
         }
 
+        if !self
+            .global_state
+            .read()
+            .unwrap()
+            .is_include_last_stable_self_unit(joint)?
+        {
+            bail!(
+                "the unit does not include last_self_stable, unit={}",
+                joint.unit.unit
+            )
+        }
+
         let business_state = self.business_state.read().unwrap();
         for i in 0..joint.unit.messages.len() {
             business_state.validate_message(joint, i)?;
         }
+
         Ok(())
     }
 
