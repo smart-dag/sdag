@@ -109,7 +109,6 @@ pub fn basic_validate(joint: &Joint) -> Result<()> {
 }
 
 // check if joint.ball correct
-
 fn validate_ball(joint: &JointData) -> Result<()> {
     if joint.ball.is_none() {
         return Ok(());
@@ -429,21 +428,9 @@ fn validate_parents(joint: &JointData) -> Result<()> {
     let mut max_parent_last_ball_mci = Level::minimum();
     for parent in new_parents {
         let parent_joint = parent.read()?;
-
-        //get max_parent_last_ball_mci
-        if let Some(ref parent_last_ball_unit) = parent_joint.unit.last_ball_unit {
-            let last_ball_joint_mci = SDAG_CACHE
-                .get_joint(parent_last_ball_unit)?
-                .read()?
-                .get_mci();
-
-            if last_ball_joint_mci.is_none() {
-                bail!("parent's last ball should be stable and have a valid mci");
-            }
-
-            if last_ball_joint_mci > max_parent_last_ball_mci {
-                max_parent_last_ball_mci = last_ball_joint_mci;
-            }
+        let parent_last_ball_mci = parent_joint.get_last_ball_mci()?;
+        if parent_last_ball_mci > max_parent_last_ball_mci {
+            max_parent_last_ball_mci = parent_last_ball_mci;
         }
     }
 
@@ -490,7 +477,7 @@ fn validate_skip_list(skip_list: &[String]) -> Result<()> {
 // 5) the count of witness_unit (mci <= last_ball_mci, and is_stable, and sequence is 'good', and address distinct) must be 12 (cancel this check)
 // 6) allow witnesses change one between last_ball_unit and current unit, but not allow changes more than one(cancel this check)
 // Note: in future we would read all witnesses from the chain itself, thus we don't have to validate witnesses for a joint
-fn validate_witnesses(joint: &Joint) -> Result<()> {
+fn validate_witnesses(joint: &JointData) -> Result<()> {
     let unit = &joint.unit;
 
     if unit.witness_list_unit.is_some() && !unit.witnesses.is_empty() {
@@ -508,17 +495,7 @@ fn validate_witnesses(joint: &Joint) -> Result<()> {
             bail!("witness list unit is not stable");
         }
         // Note: the witness unit should be ahead of last ball unit
-        if witness_joint_props.mci
-            > SDAG_CACHE
-                .get_joint(
-                    &unit
-                        .last_ball_unit
-                        .as_ref()
-                        .ok_or_else(|| format_err!("last_ball_unit is none"))?,
-                )?
-                .read()?
-                .get_mci()
-        {
+        if witness_joint_props.mci > joint.get_last_ball_mci()? {
             bail!("witness list unit must come before last ball");
         }
 
