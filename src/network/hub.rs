@@ -1403,6 +1403,21 @@ pub fn purge_temp_bad_free_joints(timeout: u64) -> Result<()> {
 pub fn start_catchup(ws: Arc<HubConn>) -> Result<()> {
     info!("catchup started");
 
+    // timely wait the hash tree ball consumed
+    fn wait_hash_tree_ball_consumed(left_len: usize) {
+        let mut wait_time = 0;
+        while SDAG_CACHE.get_hash_tree_ball_len() > left_len {
+            // at most we wait for 10 second
+            if wait_time >= 10 {
+                return;
+            }
+            // every one second check again
+            info!("wait for catchup data consumed!");
+            coroutine::sleep(Duration::from_secs(1));
+            wait_time += 1;
+        }
+    }
+
     // before a catchup the hash_tree_ball should be clear
     assert_eq!(SDAG_CACHE.get_hash_tree_ball_len(), 0);
     let mut catchup_chain_balls = ws.request_catchup()?;
@@ -1428,20 +1443,11 @@ pub fn start_catchup(ws: Arc<HubConn>) -> Result<()> {
         catchup_chain_balls.pop();
 
         // wait the batch number below a value and then start another batch
-        // TODO: we should add a timeout value in case the unit never returns
-        while SDAG_CACHE.get_hash_tree_ball_len() > 30 {
-            // every one second check again
-            info!("wait for catchup data consumed!");
-            coroutine::sleep(Duration::from_secs(1));
-        }
+        wait_hash_tree_ball_consumed(30);
     }
 
     // wait all the catchup done
-    while SDAG_CACHE.get_hash_tree_ball_len() > 0 {
-        // every one second check again
-        info!("wait for catchup data consumed!");
-        coroutine::sleep(Duration::from_secs(1));
-    }
+    wait_hash_tree_ball_consumed(0);
 
     // now we are done the catchup
     COMING_ONLINE_TIME.store(::time::now() as usize, Ordering::Relaxed);
