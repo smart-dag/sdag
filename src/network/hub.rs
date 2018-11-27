@@ -915,9 +915,12 @@ impl HubConn {
     fn handle_online_joint(&self, joint: Joint) -> Result<()> {
         // clear the main chain index, main chain index is used by light only
         // joint.unit.main_chain_index = None;
-        let unit = joint.get_unit_hash();
 
-        // check the unit hash first!
+        // check content_hash or unit_hash first!
+        let unit = match joint.unit.content_hash {
+            Some(ref hash) => hash,
+            None => &joint.unit.unit,
+        };
         if unit != &joint.unit.calc_unit_hash() {
             // TODO: the peer is doing something evil, we should record that
             bail!("wrong unit hash calculated");

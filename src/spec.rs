@@ -207,6 +207,7 @@ impl Unit {
         get_base64_hash(&self.get_naked_unit()).expect("get_unit_content_hash failed")
     }
 
+    // FIXME: this func may be optimized
     pub fn calc_unit_hash(&self) -> String {
         if self.content_hash.is_some() {
             return get_base64_hash(&self.get_naked_unit()).expect("get_unit_hash naked failed");
@@ -236,7 +237,7 @@ impl Unit {
             witness_list_unit: Option<String>,
         }
 
-        let mut stripped_unit = StrippedUnit {
+        let stripped_unit = StrippedUnit {
             alt: self.alt.clone(),
             authors: self
                 .authors
@@ -246,24 +247,13 @@ impl Unit {
                 })
                 .collect::<Vec<_>>(),
             content_hash: self.get_unit_content_hash(),
-            last_ball: None,
-            last_ball_unit: None,
+            last_ball: self.last_ball.clone(),
+            last_ball_unit: self.last_ball_unit.clone(),
             parent_units: self.parent_units.clone(),
             version: self.version.clone(),
-            witnesses: Vec::new(),
-            witness_list_unit: None,
+            witnesses: self.witnesses.clone(),
+            witness_list_unit: self.witness_list_unit.clone(),
         };
-
-        if self.witness_list_unit.is_some() {
-            stripped_unit.witness_list_unit = self.witness_list_unit.clone();
-        } else {
-            stripped_unit.witnesses = self.witnesses.clone();
-        }
-
-        if !self.parent_units.is_empty() {
-            stripped_unit.last_ball = self.last_ball.clone();
-            stripped_unit.last_ball_unit = self.last_ball_unit.clone();
-        }
 
         get_base64_hash(&stripped_unit).expect("get_unit_hash failed")
     }
