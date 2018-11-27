@@ -389,11 +389,12 @@ impl JointData {
     }
 
     pub fn get_last_ball_mci(&self) -> Result<Level> {
-        let last_ball_unit = self
-            .unit
-            .last_ball_unit
-            .as_ref()
-            .ok_or_else(|| format_err!("no last ball unit"))?;
+        // only genesis has no last ball unit
+        let last_ball_unit = match self.unit.last_ball_unit.as_ref() {
+            Some(unit) => unit,
+            None => return Ok(Level::zero()),
+        };
+
         let last_ball_joint = SDAG_CACHE.get_joint(last_ball_unit)?.read()?;
         Ok(last_ball_joint.get_mci())
     }
