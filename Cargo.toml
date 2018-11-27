@@ -2,7 +2,7 @@
 description = "sdag rust implmentation"
 name = "sdag"
 version = "0.2.0"
-authors = ["Xudong Huang <huangxu008@hotmail.com>"]
+authors = ["SDAG TEAM"]
 license = "MIT"
 
 [dependencies]
@@ -13,8 +13,7 @@ rand = "0.6"
 chrono = "0.4"
 config = "0.9"
 failure = "0.1"
-indexmap = "1.0"
-num_cpus = "1"
+indexmap = "1"
 rcu_cell = "0.1"
 smallvec = "0.6"
 crossbeam = "0.5"
@@ -34,13 +33,9 @@ sha2 = "0.8"
 ripemd160 = "0.8"
 bit-vec = "0.5"
 
-#rust-embed = { version = "4", features = ["debug-embed"] }
-rust-embed = { git = "https://github.com/Xudong-Huang/rust-embed.git" }
-rusqlite ={ version = "0.14", features = ["bundled"] }
-
 [profile.release]
 lto = true
-# codegen-units = 1
+codegen-units = 1
 # panic = "abort"
 
 [workspace]

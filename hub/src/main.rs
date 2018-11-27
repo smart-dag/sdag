@@ -7,6 +7,7 @@ extern crate sdag;
 #[macro_use]
 extern crate may;
 extern crate may_signal;
+extern crate num_cpus;
 extern crate serde_json;
 
 mod timer;
@@ -96,8 +97,8 @@ fn main() -> Result<()> {
     };
     may::config()
         .set_stack_size(stack_size)
-        .set_io_workers(0)
-        .set_workers(1);
+        .set_io_workers(num_cpus::get())
+        .set_workers(2);
 
     log_init();
     config::show_config();

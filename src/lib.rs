@@ -3,7 +3,6 @@ extern crate log;
 #[macro_use]
 extern crate may;
 extern crate may_waiter;
-extern crate num_cpus;
 extern crate serde;
 extern crate smallvec;
 #[macro_use]
