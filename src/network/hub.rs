@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use super::network::{Sender, Server, WsConnection};
-use cache::SDAG_CACHE;
+use cache::{JointData, SDAG_CACHE};
 use catchup;
 use config;
 use crossbeam::atomic::ArcCell;
@@ -607,7 +607,8 @@ impl HubConn {
         let unit: String = serde_json::from_value(param)?;
 
         match SDAG_CACHE.get_joint(&unit).and_then(|j| j.read()) {
-            Ok(joint) => Ok(json!({ "joint": &**joint })),
+            Ok(joint) => Ok(json!({ "joint": clear_ball_after_min_retrievable_mci(&joint)?})),
+
             Err(e) => {
                 error!("read joint {} failed, err={}", unit, e);
                 Ok(json!({ "joint_not_found": unit }))
@@ -1231,8 +1232,7 @@ impl HubConn {
 
         // only send latest stable joints
         for joint in SDAG_CACHE.get_joints_by_mci(last_stable_mci)? {
-            let joint = joint.read()?;
-            self.send_joint(&**joint)?;
+            self.send_joint(&clear_ball_after_min_retrievable_mci(&*joint.read()?)?)?;
         }
 
         Ok(())
@@ -1614,4 +1614,18 @@ pub fn notify_watchers_about_stable_joints(mci: Level) -> Result<()> {
     }
 
     notify_light_clients_about_stable_joints(prev_last_ball_mci, last_ball_mci)
+}
+
+fn clear_ball_after_min_retrievable_mci(joint_data: &JointData) -> Result<Joint> {
+    let mut joint = (**joint_data).clone();
+
+    // min_retrievable mci is the mci of the last ball of the last stable joint
+    if joint_data.get_mci()
+        >= SDAG_CACHE.get_last_ball_mci_of_mci(::main_chain::get_last_stable_mci())?
+    {
+        joint.ball = None;
+        joint.skiplist_units = Vec::new();
+    }
+
+    Ok(joint)
 }
