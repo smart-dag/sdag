@@ -1404,19 +1404,19 @@ pub fn purge_temp_bad_free_joints(timeout: u64) -> Result<()> {
 }
 
 pub fn start_catchup(ws: Arc<HubConn>) -> Result<()> {
-    info!("catchup started");
+    error!("catchup started");
 
     // timely wait the hash tree ball consumed
     fn wait_hash_tree_ball_consumed(left_len: usize) {
         let mut wait_time = 0;
         while SDAG_CACHE.get_hash_tree_ball_len() > left_len {
             // at most we wait for 10 second
-            if wait_time >= 10 {
+            if wait_time >= 10000 {
                 return;
             }
             // every one second check again
             info!("wait for catchup data consumed!");
-            coroutine::sleep(Duration::from_secs(1));
+            coroutine::sleep(Duration::from_millis(10));
             wait_time += 1;
         }
     }
@@ -1446,7 +1446,7 @@ pub fn start_catchup(ws: Arc<HubConn>) -> Result<()> {
         catchup_chain_balls.pop();
 
         // wait the batch number below a value and then start another batch
-        wait_hash_tree_ball_consumed(30);
+        wait_hash_tree_ball_consumed(200);
     }
 
     // wait all the catchup done
@@ -1461,7 +1461,7 @@ pub fn start_catchup(ws: Arc<HubConn>) -> Result<()> {
     }
     WSS.request_free_joints_from_all_outbound_peers()?;
 
-    info!("catchup done");
+    error!("catchup done");
     Ok(())
 }
 

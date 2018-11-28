@@ -107,6 +107,36 @@ impl SubBusiness for UtxoCache {
         validate_payment_format(message)
     }
 
+    fn check_business(joint: &JointData, message_idx: usize) -> Result<()> {
+        let last_ball_unit = match joint.unit.last_ball_unit {
+            Some(ref unit) => unit,
+            None => return Ok(()), // genesis
+        };
+
+        let last_ball = SDAG_CACHE.get_joint(last_ball_unit)?.read()?;
+
+        let message = &joint.unit.messages[message_idx];
+
+        match message.payload {
+            Some(Payload::Payment(ref payment)) => {
+                for input in &payment.inputs {
+                    if input.kind.as_ref().unwrap_or(&"transfer".to_string()) == "transfer" {
+                        let src_joint =
+                            SDAG_CACHE.get_joint(input.unit.as_ref().unwrap())?.read()?;
+
+                        let is_included = *src_joint <= *last_ball;
+                        if !is_included {
+                            bail!("src output must be before last ball")
+                        }
+                    }
+                }
+            }
+            Some(_) => {}
+            _ => unreachable!(),
+        }
+        Ok(())
+    }
+
     fn validate_message(&self, joint: &JointData, message_idx: usize) -> Result<()> {
         let message = &joint.unit.messages[message_idx];
 

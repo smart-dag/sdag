@@ -25,9 +25,11 @@ lazy_static! {
 //---------------------------------------------------------------------------------------
 // TODO: use this trait in dynamic business registration
 pub trait SubBusiness {
-    /// validate business basics like format
+    /// validate business basics like format before put joint into cache
     fn validate_message_basic(message: &Message) -> Result<()>;
-    /// validate if the message/action is valid in current state
+    /// check sub business before normalize
+    fn check_business(joint: &JointData, message_idx: usize) -> Result<()>;
+    /// validate if the message/action is valid in current state after joint got stable
     fn validate_message(&self, joint: &JointData, message_idx: usize) -> Result<()>;
     /// apply the message/action to the current business state
     /// this is a specific business state transition
@@ -215,6 +217,17 @@ impl BusinessState {
         Ok(())
     }
 
+    fn check_business(joint: &JointData, message_idx: usize) -> Result<()> {
+        let message = &joint.unit.messages[message_idx];
+        match message.app.as_str() {
+            "payment" => utxo::UtxoCache::check_business(joint, message_idx)?,
+            "text" => text::TextCache::check_business(joint, message_idx)?,
+            "data_feed" => data_feed::TimerCache::check_business(joint, message_idx)?,
+            _ => bail!("unsupported business"),
+        }
+        Ok(())
+    }
+
     fn validate_message(&self, joint: &JointData, message_idx: usize) -> Result<()> {
         let message = &joint.unit.messages[message_idx];
         match message.app.as_str() {
@@ -392,6 +405,14 @@ pub fn validate_business_basic(unit: &Unit) -> Result<()> {
         BusinessState::validate_message_basic(message)?;
     }
 
+    Ok(())
+}
+
+pub fn check_business(joint: &JointData) -> Result<()> {
+    // for each message do business related validation
+    for i in 0..joint.unit.messages.len() {
+        BusinessState::check_business(joint, i)?;
+    }
     Ok(())
 }
 

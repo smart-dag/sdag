@@ -14,6 +14,11 @@ impl SubBusiness for TimerCache {
         validate_datafeed(message)
     }
 
+    fn check_business(_joint: &JointData, _message_idx: usize) -> Result<()> {
+        // TODO: check if the time is bigger than current saved time
+        Ok(())
+    }
+
     fn validate_message(&self, _joint: &JointData, _message_idx: usize) -> Result<()> {
         // we no longer need to check the basic things
         // since that already done in temp_validate_message

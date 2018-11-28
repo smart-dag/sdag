@@ -76,6 +76,8 @@ fn normal_validate(joint: &JointData) -> Result<()> {
         }
     }
 
+    business::check_business(joint)?;
+
     Ok(())
 }
 

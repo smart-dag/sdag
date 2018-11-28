@@ -15,6 +15,10 @@ impl SubBusiness for TextCache {
         Ok(())
     }
 
+    fn check_business(_joint: &JointData, _message_idx: usize) -> Result<()> {
+        Ok(())
+    }
+
     fn validate_message(&self, _joint: &JointData, _message_idx: usize) -> Result<()> {
         Ok(())
     }
