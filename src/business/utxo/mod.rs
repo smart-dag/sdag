@@ -1,6 +1,9 @@
+mod output;
+
 use std::cmp::Ordering;
 use std::collections::HashMap;
 
+use self::output::UtxOutput;
 use business::SubBusiness;
 use cache::JointData;
 use cache::SDAG_CACHE;
@@ -9,7 +12,6 @@ use error::Result;
 use joint::Level;
 use spec::*;
 
-use super::output::UtxOutput;
 //---------------------------------------------------------------------------------------
 // UtxoCache
 //---------------------------------------------------------------------------------------

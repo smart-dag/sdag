@@ -10,7 +10,6 @@ use object_hash;
 use spec::*;
 
 mod data_feed;
-mod output;
 mod text;
 mod utxo;
 

@@ -8,7 +8,7 @@ use joint::{JointSequence, Level};
 use object_hash;
 use spec::*;
 
-use super::utxo::*;
+use super::*;
 
 #[derive(Default)]
 pub struct UtxOutput {
