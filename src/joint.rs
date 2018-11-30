@@ -167,6 +167,9 @@ pub struct JointProperty {
     pub is_stable: bool,
     pub sequence: JointSequence,
     pub create_time: u64,
+    pub prev_stable_self_unit: String,
+    pub related_units: Vec<String>,
+    pub balance: i64,
 }
 
 impl Default for JointProperty {
@@ -184,6 +187,9 @@ impl Default for JointProperty {
             sequence: JointSequence::Good,
             best_parent_unit: String::new(),
             create_time: crate::time::now(),
+            prev_stable_self_unit: String::new(),
+            related_units: Vec::new(),
+            balance: 0,
         }
     }
 }

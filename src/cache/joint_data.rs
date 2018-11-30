@@ -305,6 +305,30 @@ impl JointData {
     pub fn get_create_time(&self) -> u64 {
         self.props.read().unwrap().create_time
     }
+
+    pub fn set_stable_prev_self_unit(&self, unit: String) {
+        self.props.write().unwrap().prev_stable_self_unit = unit;
+    }
+
+    pub fn get_stable_prev_self_unit(&self) -> String {
+        self.props.read().unwrap().prev_stable_self_unit.clone()
+    }
+
+    pub fn set_related_units(&self, units: Vec<String>) {
+        self.props.write().unwrap().related_units = units;
+    }
+
+    pub fn get_related_units(&self) -> Vec<String> {
+        self.props.read().unwrap().related_units.clone()
+    }
+
+    pub fn set_balance(&self, balance: i64) {
+        self.props.write().unwrap().balance = balance;
+    }
+
+    pub fn get_balance(&self) -> i64 {
+        self.props.read().unwrap().balance.clone()
+    }
 }
 
 impl JointData {

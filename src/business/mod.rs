@@ -139,27 +139,77 @@ pub struct GlobalState {
     // record author own last stable self joint that he last send
     // HashMap<Address, UnitHash>
     last_stable_self_joint: RwLock<HashMap<String, String>>,
+
+    // HahsMap<Address, output_unit_hash>
+    related_joints: RwLock<HashMap<String, Vec<String>>>,
 }
 
 impl GlobalState {
-    fn get_last_stable_self_joint(&self, address: &str) -> Option<CachedJoint> {
+    // return value: first is last_stable_self_unit, second is related_units
+    fn get_global_state(&self, address: &str) -> (Option<String>, Vec<String>) {
+        (
+            self.get_last_stable_self_joint(address),
+            self.get_related_joints(address),
+        )
+    }
+
+    fn get_last_stable_self_joint(&self, address: &str) -> Option<String> {
         self.last_stable_self_joint
             .read()
             .unwrap()
             .get(address)
-            .and_then(|unit| SDAG_CACHE.get_joint(unit).ok())
+            .cloned()
+    }
+
+    fn get_related_joints(&self, address: &str) -> Vec<String> {
+        match self.related_joints.read().unwrap().get(address) {
+            Some(joints) => joints.clone(),
+            None => Vec::new(),
+        }
+    }
+
+    // note: just support one author currently
+    fn update_global_state(&self, joint: &JointData) {
+        self.update_last_stable_self_joint(joint);
+
+        // clear self related joints
+        self.remove_related_joints(&joint.unit.authors[0].address);
+        // push other related joints
+        self.update_related_joints(joint);
     }
 
     fn update_last_stable_self_joint(&self, joint: &JointData) {
         let unit_hash = joint.get_unit_hash();
+        // just genesis has multi authors currently
         for author in &joint.unit.authors {
             self.last_stable_self_joint
                 .write()
                 .unwrap()
                 .entry(author.address.clone())
-                .and_modify(|v| *v = unit_hash.to_owned())
+                .and_modify(|v| *v = unit_hash.clone())
                 .or_insert(unit_hash.clone());
         }
+    }
+
+    /// get <to_addr, unit_has> from outputs, then update related_joints[to_addr]
+    fn update_related_joints(&self, joint: &JointData) {
+        let unit_hash = joint.get_unit_hash();
+        for msg in &joint.unit.messages {
+            if let Some(Payload::Payment(ref payment)) = msg.payload {
+                for output in &payment.outputs {
+                    self.related_joints
+                        .write()
+                        .unwrap()
+                        .entry(output.address.clone())
+                        .and_modify(|v| v.push(unit_hash.clone()))
+                        .or_insert(vec![unit_hash.clone()]);
+                }
+            }
+        }
+    }
+
+    fn remove_related_joints(&self, addr: &str) {
+        self.related_joints.write().unwrap().remove(addr);
     }
 
     /// rebuild from database
@@ -286,18 +336,17 @@ impl BusinessCache {
     /// validate if contains last stable self unit
     pub fn is_include_last_stable_self_joint(&self, joint: &JointData) -> Result<()> {
         for author in &joint.unit.authors {
-            match self
+            let last_stable_self_unit = self
                 .global_state
-                .get_last_stable_self_joint(&author.address)
-            {
-                None => continue,
-                Some(author_joint) => {
-                    // joint is not include author joint
-                    if !(joint > &*author_joint.read()?) {
-                        bail!("joint not include last stable self unit");
-                    }
+                .get_last_stable_self_joint(&author.address);
+
+            if let Some(ref unit) = last_stable_self_unit {
+                let author_joint = SDAG_CACHE.get_joint(unit)?.read()?;
+                // joint is not include author joint
+                if !(joint > &*author_joint) {
+                    bail!("joint not include last stable self unit");
                 }
-            };
+            }
         }
 
         Ok(())
@@ -349,12 +398,62 @@ impl BusinessCache {
         Ok(())
     }
 
+    // set joint properties {prev_self_unit, related_units, balance}
+    // note: just support one author currently
+    // note: genesis {prev_self_unit = None, related_units = vec![], balance = 0}
+    fn update_joint_balance_props(&self, joint: &JointData) -> Result<()> {
+        let addr = &joint.unit.authors[0].address;
+
+        let (last_stable_self_unit, related_units) = self.global_state.get_global_state(&addr);
+
+        let mut balance = joint.get_balance();
+
+        // reduce spend amount
+        for msg in &joint.unit.messages {
+            if let Some(Payload::Payment(ref payment)) = msg.payload {
+                for input in &payment.inputs {
+                    match input.kind {
+                        Some(ref kind) if kind != "transfer" => continue,
+                        _ => balance -= input.amount.unwrap_or(0),
+                    }
+                }
+            }
+        }
+
+        // add those related payment to us
+        for unit in &related_units {
+            let related_joint_date = SDAG_CACHE.get_joint(unit)?.read()?;
+            for msg in &related_joint_date.unit.messages {
+                if let Some(Payload::Payment(ref payment)) = msg.payload {
+                    // note: no mater what kind we should add output for balance
+                    for output in &payment.outputs {
+                        if &output.address == addr {
+                            balance += output.amount;
+                        }
+                    }
+                }
+            }
+        }
+
+        if let Some(unit) = last_stable_self_unit {
+            joint.set_stable_prev_self_unit(unit);
+        }
+        joint.set_related_units(related_units);
+        joint.set_balance(balance);
+
+        // note: the spendable utxo always before the last_stable_unit
+        // maybe not all of the balance can be used right now
+        Ok(())
+    }
+
     /// apply changes, save the new state
     fn apply_stable_joint(&self, joint: &JointData) -> Result<()> {
         // TODO: deduce the commission
 
-        // update global state
-        self.global_state.update_last_stable_self_joint(joint);
+        self.update_joint_balance_props(joint)?;
+
+        // update global state {last_stable_self_joint, related_joints}
+        self.global_state.update_global_state(joint);
 
         let mut business_state = self.business_state.write().unwrap();
 
