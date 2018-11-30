@@ -1,0 +1,22 @@
+[package]
+description = "sdag wallet cli rust implmentation"
+name = "sdg"
+version = "0.1.0"
+authors = ["smartDAG team"]
+license = "MIT"
+
+[dependencies]
+sdag = { path = ".."}
+sdag_wallet_base = { path = "../wallet_base" }
+clap = {version = "2", features = ["yaml"]}
+
+may = "0.3"
+log = "0.4"
+fern = "0.5"
+chrono = "0.4"
+failure = "0.1"
+
+serde = "1"
+serde_json = "1"
+serde_derive = "1"
+

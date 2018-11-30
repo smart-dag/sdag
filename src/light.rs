@@ -1,5 +1,4 @@
 use error::Result;
-use joint::Joint;
 use may::sync::Mutex;
 
 #[allow(dead_code)]
@@ -11,31 +10,43 @@ lazy_static! {
 
 #[derive(Serialize, Deserialize)]
 pub struct HistoryRequest {
-    pub witnesses: Vec<String>,
+    pub address: String,
     #[serde(default)]
-    pub addresses: Vec<String>,
+    pub known_stable_units: Option<String>,
     #[serde(default)]
-    pub known_stable_units: Vec<String>,
-    #[serde(default)]
-    pub requested_joints: Vec<String>,
+    pub limit: Option<usize>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct Transaction {
+    pub unit_hash: String,
+    pub from_addr: String,
+    pub to_addr: String,
+    pub amount: i64,
+    pub time: u64,
+}
+#[derive(Debug, Serialize, Deserialize)]
 pub struct HistoryResponse {
-    #[serde(default)]
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    unstable_mc_joints: Vec<Joint>,
-    #[serde(default)]
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    witness_change_and_definition_joints: Vec<Joint>,
-    #[serde(default)]
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    joints: Vec<Joint>,
-    // #[serde(default)]
-    // #[serde(skip_serializing_if = "Vec::is_empty")]
-    // proofchain_balls: Vec<ProofBalls>,
+    pub transaction_history: Vec<Transaction>,
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct InputsRequest {
+    pub address: String,
+    pub amount: usize,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct LightProps {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_stable_mc_ball: Option<String>,
+    pub last_stable_mc_ball_mci: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_stable_mc_ball_unit: Option<String>,
+    pub parent_units: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub witness_list_unit: Option<String>,
+}
 // #[derive(Debug, Serialize, Deserialize)]
 // struct ProofBalls {
 //     ball: String,

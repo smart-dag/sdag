@@ -1,0 +1,95 @@
+name: sdg
+version: "0.1"
+about: sdg wallet command line tool
+
+# AppSettings can be defined as a list and are **not** ascii case sensitive
+settings:
+    - ArgRequiredElseHelp
+
+args:
+    - verbose:
+        short: v
+        multiple: true
+        help: Sets the level of verbosity
+
+# All subcommands must be listed in the 'subcommand:' object, where the key to
+# the list is the name of the subcommand, and all settings for that command are
+# are part of a Hash object
+subcommands:
+    # The name of this subcommand will be 'subcmd' which can be accessed in your
+    # Rust code later
+    - init:
+        about: Create a ttt wallet
+        args:
+            - MNEMONIC:
+                help: init the wallet with the mnemonic
+                takes_value: true
+                required: false
+    - raw_post:
+        about: post a raw joint from specified json file
+        args:
+            - JOINT_FILE:
+                 help: the json file must contains a valid joint
+                 takes_value: true
+                 required: true
+    - send:
+        about: Pay TTT to an address
+        args:
+            - pay:
+                help: pay <AMOUNT> TTT to <ADDRESS>
+                short: p
+                long: pay
+                multiple: true
+                value_names:
+                    - ADDRESS
+                    - AMOUNT
+                takes_value: true
+                required: false
+            - text:
+                help: encode a text message in the unit to send
+                short: t
+                long: text
+                takes_value: true
+                required: false
+                
+    - log:
+        about: Show the history of this wallet account
+        args:
+            - v:
+                help: show details of specified history transaction
+                short: v
+                takes_value: true
+                required: false
+                value_name: INDEX
+            - u:
+                help: information behind of the unit to be shown
+                short: u
+                takes_value: true
+                required: false
+                default_value: "20"
+                value_name: UNIT
+            - n:
+                help: the maximum of transactions to be shown
+                short: n
+                takes_value: true
+                required: false
+                default_value: "20"
+                value_name: NUM
+    - info:
+        about: Show the wallet info
+    - balance:
+        about: Show the wallet balance
+        args:
+            - s:
+                help: show stable balance
+                short: s
+                takes_value: false
+                required: false
+            - p:
+                help: show pending balance
+                short: p
+                takes_value: false
+                required: false
+
+
+

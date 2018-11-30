@@ -11,7 +11,7 @@ use crossbeam::atomic::ArcCell;
 use error::Result;
 use failure::ResultExt;
 use joint::{Joint, JointSequence, Level};
-use light::{self, HistoryRequest, HistoryResponse};
+use light::*;
 use main_chain;
 use may::coroutine;
 use may::net::TcpStream;
@@ -471,9 +471,10 @@ impl Server<HubData> for HubData {
             "post_joint" => ws.on_post_joint(params)?,
             "light/get_history" => ws.on_get_history(params)?,
             "light/get_link_proofs" => ws.on_get_link_proofs(params)?,
-            "light/get_parents_and_last_ball_and_witness_list_unit" => {
-                ws.on_get_parents_and_last_ball_and_witness_list_unit(params)?
-            }
+            "light/inputs" => ws.on_get_inputs(params)?,
+            "balance" => ws.on_get_balance(params)?,
+            "light/light_props" => ws.on_get_light_props(params)?,
+
             command => bail!("on_request unknown command: {}", command),
         };
         Ok(response)
@@ -560,6 +561,25 @@ impl HubConn {
 
         info!("got peer version: {}", version);
         Ok(())
+    }
+
+    //TODO:
+    fn on_get_balance(&self, _param: Value) -> Result<Value> {
+        unimplemented!()
+    }
+
+    //TODO:
+    fn on_get_inputs(&self, _param: Value) -> Result<Value> {
+        unimplemented!()
+    }
+
+    //TODO:
+    fn on_get_light_props(&self, _param: Value) -> Result<Value> {
+        if !self.is_inbound() {
+            bail!("light clients have to be inbound");
+        }
+
+        unimplemented!()
     }
 
     fn on_heartbeat(&self, _: Value) -> Result<Value> {
@@ -773,26 +793,6 @@ impl HubConn {
         // Ok(serde_json::to_value(light::prepare_link_proofs(
         //     &units,
         // )?)?)
-        Ok(json![null])
-    }
-
-    fn on_get_parents_and_last_ball_and_witness_list_unit(&self, _param: Value) -> Result<Value> {
-        if !self.is_inbound() {
-            bail!("light clients have to be inbound");
-        }
-
-        // #[derive(Deserialize)]
-        // struct TempWitnesses {
-        //     witnesses: Vec<String>,
-        // }
-
-        // let witnesses: TempWitnesses = serde_json::from_value(param).context("no witnesses")?;
-
-        // let ret =
-        //     light::prepare_parents_and_last_ball_and_witness_list_unit(&witnesses.witnesses)
-        //         .context("failed to get parents_and_last_ball_and_witness_list_unit")?;
-
-        //Ok(serde_json::to_value(ret)?)
         Ok(json![null])
     }
 
@@ -1079,7 +1079,7 @@ impl HubConn {
     }
 
     fn handle_get_history(&self, history_request: HistoryRequest) -> Result<HistoryResponse> {
-        let ret = light::prepare_history(&history_request)?;
+        let ret = prepare_history(&history_request)?;
 
         // TODO: insert watched light address
         // let params_addresses = history_request.addresses;

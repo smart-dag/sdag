@@ -42,4 +42,5 @@ codegen-units = 1
 members = [
     "hub",
     "wallet_base",
+    "sdg",
 ]
