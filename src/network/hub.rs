@@ -1156,10 +1156,10 @@ impl HubConn {
         // let last_known_mci = storage::read_last_main_chain_index(db)?;
         let witnesses: &[String] = &::my_witness::MY_WITNESSES;
         let param = json!({
-                "witnesses": witnesses,
-                "last_stable_mci": last_stable_mci.value(),
-                "last_known_mci": last_stable_mci.value()
-            });
+            "witnesses": witnesses,
+            "last_stable_mci": last_stable_mci.value(),
+            "last_known_mci": last_stable_mci.value()
+        });
 
         let ret = self.send_request("catchup", &param).unwrap();
         if !ret["error"].is_null() {
@@ -1415,7 +1415,7 @@ pub fn start_catchup(ws: Arc<HubConn>) -> Result<()> {
                 return;
             }
             // every one second check again
-            info!("wait for catchup data consumed!");
+            debug!("wait for catchup data consumed!");
             coroutine::sleep(Duration::from_millis(10));
             wait_time += 1;
         }

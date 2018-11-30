@@ -135,49 +135,27 @@ fn start_business_worker(rx: mpsc::Receiver<CachedJoint>) -> JoinHandle<()> {
 //---------------------------------------------------------------------------------------
 #[derive(Default)]
 pub struct GlobalState {
+    // FIXME: this read lock is some what too heavy, we are only care about one address
     // record author own last stable self joint that he last send
     // HashMap<Address, UnitHash>
-    last_stable_self_joint: HashMap<String, String>,
+    last_stable_self_joint: RwLock<HashMap<String, String>>,
 }
 
 impl GlobalState {
-    fn validate_unstable_joint_serial(&self, joint: &JointData) -> Result<JointSequence> {
-        // check if include last stable self joint
-        if !self.is_include_last_stable_self_unit(joint)? {
-            return Ok(JointSequence::FinalBad);
-        }
-
-        // check unstable joints non serial
-        let cached_joint = SDAG_CACHE.try_get_joint(joint.get_unit_hash()).unwrap();
-
-        if crate::serial_check::is_unstable_joint_non_serial(cached_joint)? {
-            return Ok(JointSequence::NonserialBad);
-        }
-
-        Ok(JointSequence::Good)
+    fn get_last_stable_self_joint(&self, address: &str) -> Option<CachedJoint> {
+        self.last_stable_self_joint
+            .read()
+            .unwrap()
+            .get(address)
+            .and_then(|unit| SDAG_CACHE.get_joint(unit).ok())
     }
 
-    fn is_include_last_stable_self_unit(&self, joint: &JointData) -> Result<bool> {
-        for author in &joint.unit.authors {
-            let author_last_stable_unit = match self.last_stable_self_joint.get(&author.address) {
-                None => continue,
-                Some(unit) => unit,
-            };
-
-            let author_joint = SDAG_CACHE.get_joint(author_last_stable_unit)?.read()?;
-            // joint is not include author joint
-            if !(joint > &*author_joint) {
-                return Ok(false);
-            }
-        }
-
-        Ok(true)
-    }
-
-    fn update_last_stable_self_joint(&mut self, joint: &JointData) {
+    fn update_last_stable_self_joint(&self, joint: &JointData) {
         let unit_hash = joint.get_unit_hash();
         for author in &joint.unit.authors {
             self.last_stable_self_joint
+                .write()
+                .unwrap()
                 .entry(author.address.clone())
                 .and_modify(|v| *v = unit_hash.to_owned())
                 .or_insert(unit_hash.clone());
@@ -268,7 +246,7 @@ impl BusinessState {
 #[derive(Default)]
 pub struct BusinessCache {
     // TODO: lock global is not necessary for each address
-    global_state: RwLock<GlobalState>,
+    global_state: GlobalState,
     business_state: RwLock<BusinessState>,
     temp_business_state: RwLock<BusinessState>,
 }
@@ -305,18 +283,30 @@ impl BusinessCache {
         Ok(BusinessCache::default())
     }
 
-    fn unstable_joint_global_check(&self, joint: &JointData) -> Result<JointSequence> {
-        Ok(self
-            .global_state
-            .read()
-            .unwrap()
-            .validate_unstable_joint_serial(joint)?)
+    /// validate if contains last stable self unit
+    pub fn is_include_last_stable_self_joint(&self, joint: &JointData) -> Result<()> {
+        for author in &joint.unit.authors {
+            match self
+                .global_state
+                .get_last_stable_self_joint(&author.address)
+            {
+                None => continue,
+                Some(author_joint) => {
+                    // joint is not include author joint
+                    if !(joint > &*author_joint.read()?) {
+                        bail!("joint not include last stable self unit");
+                    }
+                }
+            };
+        }
+
+        Ok(())
     }
 
     /// validate unstable joint with no global order
     pub fn validate_unstable_joint(&self, joint: &JointData) -> Result<JointSequence> {
         // global check
-        let state = self.unstable_joint_global_check(joint)?;
+        let state = validate_unstable_joint_serial(joint)?;
         if state != JointSequence::Good {
             return Ok(state);
         }
@@ -351,17 +341,7 @@ impl BusinessCache {
             bail!("joint is already set to finalbad, unit={}", joint.unit.unit);
         }
 
-        if !self
-            .global_state
-            .read()
-            .unwrap()
-            .is_include_last_stable_self_unit(joint)?
-        {
-            bail!(
-                "the unit does not include last_self_stable, unit={}",
-                joint.unit.unit
-            )
-        }
+        self.is_include_last_stable_self_joint(joint)?;
 
         let business_state = self.business_state.read().unwrap();
         for i in 0..joint.unit.messages.len() {
@@ -376,10 +356,7 @@ impl BusinessCache {
         // TODO: deduce the commission
 
         // update global state
-        self.global_state
-            .write()
-            .unwrap()
-            .update_last_stable_self_joint(joint);
+        self.global_state.update_last_stable_self_joint(joint);
 
         let mut business_state = self.business_state.write().unwrap();
 
@@ -483,4 +460,15 @@ fn validate_message_format(msg: &Message) -> Result<()> {
     }
 
     Ok(())
+}
+
+fn validate_unstable_joint_serial(joint: &JointData) -> Result<JointSequence> {
+    // check unstable joints non serial
+    let cached_joint = SDAG_CACHE.try_get_joint(joint.get_unit_hash()).unwrap();
+
+    if crate::serial_check::is_unstable_joint_non_serial(cached_joint)? {
+        return Ok(JointSequence::NonserialBad);
+    }
+
+    Ok(JointSequence::Good)
 }

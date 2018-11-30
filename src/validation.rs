@@ -65,6 +65,11 @@ fn normal_validate(joint: &JointData) -> Result<()> {
 
     validate_authors(joint)?;
 
+    // check if inlude last self unit
+    business::BUSINESS_CACHE.is_include_last_stable_self_joint(joint)?;
+    // check sub businesses
+    business::check_business(joint)?;
+
     // save definition after validate success
     for author in joint.unit.authors.iter() {
         if !author.definition.is_null() {
@@ -75,8 +80,6 @@ fn normal_validate(joint: &JointData) -> Result<()> {
             );
         }
     }
-
-    business::check_business(joint)?;
 
     Ok(())
 }
