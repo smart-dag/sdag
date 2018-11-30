@@ -36,12 +36,12 @@ pub trait OutputOperation {
     ) -> Result<usize>;
 }
 
-pub fn get_output_by_unit(utxo_key: &UtxoKey) -> Result<Output> {
-    let joint = SDAG_CACHE.get_joint(&utxo_key.unit)?.read()?;
-    let message = &joint.unit.messages[utxo_key.message_index];
+pub fn get_output_by_unit(unit: &str, output_index: usize, message_index: usize) -> Result<Output> {
+    let joint = SDAG_CACHE.get_joint(unit)?.read()?;
+    let message = &joint.unit.messages[message_index];
 
     match message.payload {
-        Some(Payload::Payment(ref payment)) => Ok(payment.outputs[utxo_key.output_index].clone()),
+        Some(Payload::Payment(ref payment)) => Ok(payment.outputs[output_index].clone()),
 
         _ => bail!("address can't find from non payment message"),
     }
@@ -157,7 +157,6 @@ impl SubBusiness for UtxoCache {
             mci: joint.get_mci(),
             sub_mci: joint.get_sub_mci(),
             denomination: 1,
-            amount: None,
         };
         self.output
             .apply_payment(message, message_idx, &unit_hash, utxo_value)?;
@@ -170,7 +169,6 @@ impl SubBusiness for UtxoCache {
             mci: joint.get_mci(),
             sub_mci: joint.get_sub_mci(),
             denomination: 1,
-            amount: None,
         };
         let unit_hash = &joint.unit.unit;
         let message = &joint.unit.messages[message_idx];
@@ -187,10 +185,15 @@ pub struct UtxoKey {
     pub unit: String,
     pub output_index: usize,
     pub message_index: usize,
+    pub amount: usize,
 }
 
 impl Ord for UtxoKey {
     fn cmp(&self, other: &UtxoKey) -> Ordering {
+        match Ord::cmp(&self.amount, &other.amount) {
+            Ordering::Equal => {}
+            r => return r,
+        }
         match Ord::cmp(&self.unit, &other.unit) {
             Ordering::Equal => {}
             r => return r,
@@ -217,7 +220,6 @@ pub struct UtxoData {
     pub mci: Level,
     pub sub_mci: Level,
     pub denomination: u32,
-    pub amount: Option<usize>,
 }
 
 //---------------------------------------------------------------------------------------

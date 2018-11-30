@@ -33,17 +33,18 @@ impl UtxOutput {
                             unit: unit.to_owned(),
                             output_index,
                             message_index,
+                            amount: output.amount as usize,
                         },
                     )?;
                 }
 
                 // recovery output that have already spent
                 for input in &payment.inputs {
-                    let output = get_output_by_unit(&UtxoKey {
-                        unit: unit.to_owned(),
-                        output_index: input.output_index.unwrap() as usize,
-                        message_index: input.message_index.unwrap() as usize,
-                    })?;
+                    let output = get_output_by_unit(
+                        unit,
+                        input.output_index.unwrap() as usize,
+                        input.message_index.unwrap() as usize,
+                    )?;
 
                     self.insert_output(
                         output.address.clone(),
@@ -51,11 +52,9 @@ impl UtxOutput {
                             unit: input.unit.clone().unwrap(),
                             output_index: input.output_index.unwrap() as usize,
                             message_index: input.message_index.unwrap() as usize,
+                            amount: output.amount as usize,
                         },
-                        UtxoData {
-                            amount: Some(output.amount as usize),
-                            ..utxo_value
-                        },
+                        utxo_value,
                     )?;
                 }
             }
@@ -92,6 +91,13 @@ impl UtxOutput {
                 _ => {}
             }
 
+            let unit = input.unit.as_ref().unwrap();
+            let output_index = input.output_index.unwrap() as usize;
+            let message_index = input.message_index.unwrap() as usize;
+
+            let (address, amount, _) =
+                self.get_output_by_input(unit, output_index, message_index)?;
+
             let address_key = UtxoKey {
                 unit: input
                     .unit
@@ -105,13 +111,10 @@ impl UtxOutput {
                     .message_index
                     .ok_or_else(|| format_err!("decrease_output: input.message_index is none"))?
                     as usize,
+                amount: amount,
             };
 
-            let (address, _, _) = self.get_output_by_input(&address_key)?;
-
             self.remove_output(address, &address_key)?;
-
-            //self.modify_balance(input.address.clone().unwrap(), -input.amount.unwrap())?;
         }
         Ok(())
     }
@@ -128,15 +131,10 @@ impl UtxOutput {
                 unit: unit_hash.to_owned(),
                 output_index,
                 message_index,
+                amount: output.amount as usize,
             };
 
-            let value = UtxoData {
-                amount: Some(output.amount as usize),
-                ..utxo_value
-            };
-
-            self.insert_output(output.address.clone(), address_key, value)?;
-            //self.modify_balance(output.address.clone(), output.amount)?;
+            self.insert_output(output.address.clone(), address_key, utxo_value)?;
         }
 
         Ok(())
@@ -183,21 +181,27 @@ impl UtxOutput {
         Ok(())
     }
 
-    fn get_output_by_input(&self, utxo_key: &UtxoKey) -> Result<(String, usize, Level)> {
-        let address = get_output_by_unit(utxo_key)?.address;
+    fn get_output_by_input(
+        &self,
+        unit: &str,
+        output_index: usize,
+        message_index: usize,
+    ) -> Result<(String, usize, Level)> {
+        let output = get_output_by_unit(unit, output_index, message_index)?;
 
-        let output = self
+        let utxo_data = self
             .output
-            .get(&address)
-            .ok_or_else(|| format_err!("not found address in output: {:?}", address))?
-            .get(utxo_key)
-            .ok_or_else(|| format_err!("not found utxo about output: unit-{}", utxo_key.unit))?;
+            .get(&output.address)
+            .ok_or_else(|| format_err!("not found address in output: {:?}", output.address))?
+            .get(&UtxoKey {
+                unit: unit.to_string(),
+                output_index,
+                message_index,
+                amount: output.amount as usize,
+            })
+            .ok_or_else(|| format_err!("not found utxo about output: unit-{}", unit))?;
 
-        Ok((
-            address,
-            output.amount.ok_or_else(|| format_err!("amount is none"))? as usize,
-            output.mci,
-        ))
+        Ok((output.address, output.amount as usize, utxo_data.mci))
     }
 
     fn verify_transfer_of_input(
@@ -249,11 +253,11 @@ impl UtxOutput {
         }
         input_keys.insert(input_key);
 
-        let (output_address, output_amount, _output_mci) = self.get_output_by_input(&UtxoKey {
-            unit: input_unit.clone(),
-            message_index: input_message_index as usize,
-            output_index: input_output_index as usize,
-        })?;
+        let (output_address, output_amount, _output_mci) = self.get_output_by_input(
+            &input_unit.clone(),
+            input_output_index as usize,
+            input_message_index as usize,
+        )?;
 
         let joint = SDAG_CACHE.get_joint(input_unit)?.read()?;
         if joint.get_sequence() != JointSequence::Good {
