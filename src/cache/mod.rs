@@ -391,6 +391,11 @@ impl SDagCache {
             .unwrap()
             .purge_old_temp_bad_free_joints(now, timeout)
     }
+
+    pub fn get_joints_len(&self) -> usize {
+        self.joints.read().unwrap().get_normal_joints_len()
+    }
+
 }
 
 #[cfg(test)]

@@ -476,6 +476,7 @@ impl Server<HubData> for HubData {
             "get_balance" => ws.on_get_balance(params)?,
             "light/light_props" => ws.on_get_light_props(params)?,
             // apis for explorer
+            "get_network_info" => ws.on_get_network_info(params)?,
             "get_joints_by_mci" => ws.on_get_joints_by_mci(params)?,
             command => bail!("on_request unknown command: {}", command),
         };
@@ -926,6 +927,22 @@ impl HubConn {
         }
     }
 
+    fn on_get_network_info(&self, _param: Value) -> Result<Value> {
+        let version = config::VERSION;
+        let peers = WSS.get_inbound_peers().len();
+        let tps = 1050;
+        let last_mci = main_chain::get_last_stable_mci().value();
+        let total_units = SDAG_CACHE.get_joints_len();
+
+        Ok(json!({
+            "version": version,
+            "peers": peers,
+            "tps": tps,
+            "last_mci": last_mci,
+            "total_units": total_units,
+        }))
+    }
+
     fn on_get_joints_by_mci(&self, param: Value) -> Result<Value> {
         let mci = param
             .as_u64()
@@ -940,7 +957,7 @@ impl HubConn {
             .map(|j| (**j.unwrap()).clone())
             .collect();
 
-        Ok(serde_json::json!({ "joints": joints }))
+        Ok(json!({ "joints": joints }))
     }
 }
 

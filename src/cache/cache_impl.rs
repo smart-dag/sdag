@@ -265,4 +265,8 @@ impl SDagCacheInner {
         }
         Ok(())
     }
+
+    pub fn get_normal_joints_len(&self) -> usize {
+        self.normal_joints.len()
+    }
 }
