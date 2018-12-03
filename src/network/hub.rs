@@ -4,6 +4,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use super::network::{Sender, Server, WsConnection};
+use business::BUSINESS_CACHE;
 use cache::{JointData, SDAG_CACHE};
 use catchup;
 use config;
@@ -568,9 +569,16 @@ impl HubConn {
         unimplemented!()
     }
 
-    //TODO:
-    fn on_get_inputs(&self, _param: Value) -> Result<Value> {
-        unimplemented!()
+    fn on_get_inputs(&self, param: Value) -> Result<Value> {
+        let InputsRequest {
+            address,
+            amount,
+            send_all,
+        } = serde_json::from_value(param)?;
+        let (inputs, total_amount) =
+            BUSINESS_CACHE.get_inputs_for_amount(&address, amount, send_all)?;
+
+        Ok(serde_json::to_value((inputs, total_amount))?)
     }
 
     //TODO:

@@ -302,6 +302,19 @@ pub struct BusinessCache {
 }
 
 impl BusinessCache {
+    pub fn get_inputs_for_amount(
+        &self,
+        paying_address: &String,
+        required_amount: u64,
+        send_all: bool,
+    ) -> Result<(Vec<Input>, u64)> {
+        self.business_state
+            .read()
+            .unwrap()
+            .utxo
+            .pick_divisible_coins_for_amount(paying_address, required_amount, send_all)
+    }
+    
     /// build the state from genesis
     /// TODO: also need to rebuild temp state (same as state)
     pub fn rebuild_from_genesis() -> Result<Self> {

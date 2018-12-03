@@ -92,10 +92,14 @@ impl WalletConn {
         Ok(())
     }
 
-    pub fn get_inputs_from_hub(&self, address: String, amount: usize) -> Result<Vec<Input>> {
+    pub fn get_inputs_from_hub(&self, address: String, amount: u64) -> Result<Vec<Input>> {
         let inputs = self.send_request(
             "light/inputs",
-            &serde_json::to_value(InputsRequest { address, amount })?,
+            &serde_json::to_value(InputsRequest {
+                address,
+                amount,
+                send_all: false,
+            })?,
         )?;
 
         Ok(serde_json::from_value(inputs).unwrap())

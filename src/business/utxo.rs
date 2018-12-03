@@ -1,21 +1,59 @@
+use failure::ResultExt;
+use std::cmp::Ordering;
 use std::collections::{hash_map::Entry, BTreeMap, HashMap, HashSet};
 
+use business::SubBusiness;
+use cache::JointData;
 use cache::SDAG_CACHE;
 use config;
 use error::Result;
-use failure::ResultExt;
 use joint::{JointSequence, Level};
 use object_hash;
 use spec::*;
 
-use super::*;
-
+//---------------------------------------------------------------------------------------
+// UtxoCache
+//---------------------------------------------------------------------------------------
 #[derive(Default)]
-pub struct UtxOutput {
-    output: HashMap<String, BTreeMap<UtxoKey, UtxoData>>,
+pub struct UtxoCache {
+    //record money that address can spend
+    pub output: HashMap<String, BTreeMap<UtxoKey, UtxoData>>,
+    // save payload commission earnings  <Key, Amount> NOT USED YET
+    pub payload_commission_output: HashMap<PayloadCommissionOutputKey, usize>,
+    // save header commission earnings <Key, Amount> NOT USED YET
+    pub headers_commission_output: HashMap<HeadersCommissionOutputKey, usize>,
 }
 
-impl UtxOutput {
+fn get_output_by_unit(unit: &str, output_index: usize, message_index: usize) -> Result<Output> {
+    let joint = SDAG_CACHE.get_joint(unit)?.read()?;
+    if message_index >= joint.unit.messages.len() {
+        bail!(
+            "invlide message index for the input, unit={}, msg_idx={}",
+            unit,
+            message_index
+        );
+    }
+    let message = &joint.unit.messages[message_index];
+
+    match message.payload {
+        Some(Payload::Payment(ref payment)) => {
+            if output_index >= payment.outputs.len() {
+                bail!(
+                    "invlide output index for the input, unit={}, msg_idx={}, output_idx={}",
+                    unit,
+                    message_index,
+                    output_index
+                );
+            }
+            Ok(payment.outputs[output_index].clone())
+        }
+
+        _ => bail!("address can't find from non payment message"),
+    }
+}
+
+// basic function about output
+impl UtxoCache {
     pub fn revert_output(
         &mut self,
         message: &Message,
@@ -170,6 +208,46 @@ impl UtxOutput {
             }
         }
         Ok(())
+    }
+
+    pub fn pick_divisible_coins_for_amount(
+        &self,
+        paying_address: &String,
+        mut required_amount: u64,
+        send_all: bool,
+    ) -> Result<(Vec<Input>, u64)> {
+        let account = match self.output.get(paying_address) {
+            None => bail!("there is no output for address {}", paying_address),
+            Some(v) => v,
+        };
+
+        if send_all {
+            required_amount = u64::max_value();
+        }
+
+        let mut inputs: Vec<Input> = vec![];
+        let mut total_amount: u64 = 0;
+
+        for v in account.keys() {
+            total_amount += v.amount;
+
+            inputs.push(Input {
+                unit: Some(v.unit.clone()),
+                message_index: Some(v.message_index as u32),
+                output_index: Some(v.output_index as u32),
+                ..Default::default()
+            });
+
+            if total_amount >= required_amount {
+                break;
+            }
+        }
+
+        if !send_all && total_amount < required_amount {
+            bail!("there is not enough balance, address: {}", paying_address)
+        }
+
+        Ok((inputs, total_amount))
     }
 
     fn get_output_by_input(
@@ -337,7 +415,37 @@ impl UtxOutput {
     }
 }
 
-impl OutputOperation for UtxOutput {
+impl UtxoCache {
+    // TODO: impl spend header commission #57
+    // TODO: impl spend header commission #58
+    // TODO: refine Payment structure
+    // Note: in future we would use account model to record one usize balance for each address
+    // thus we don't need to save that in this big table
+    #[allow(dead_code)]
+    fn save_payload_commission(
+        &mut self,
+        address: String,
+        mci: Level,
+        amount: usize,
+    ) -> Result<()> {
+        let key = PayloadCommissionOutputKey { mci, address };
+        if let Some(_) = self.payload_commission_output.get(&key) {
+            bail!("already have key={:?} in payload commission output", key);
+        }
+        self.payload_commission_output.insert(key, amount);
+        Ok(())
+    }
+
+    #[allow(dead_code)]
+    fn save_header_commission(&mut self, address: String, mci: Level, amount: usize) -> Result<()> {
+        let key = HeadersCommissionOutputKey { mci, address };
+        if let Some(_) = self.headers_commission_output.get(&key) {
+            bail!("already have key={:?} in headers commission output", key);
+        }
+        self.headers_commission_output.insert(key, amount);
+        Ok(())
+    }
+
     fn verify_output(&self, outputs: &Vec<Output>) -> Result<u64> {
         let mut total_output = 0;
         let mut prev_address = String::new();
@@ -370,7 +478,6 @@ impl OutputOperation for UtxOutput {
     }
 
     //returned value: (output_address, output_amount, output_mci)
-
     fn verify_input(
         &self,
         inputs: &Vec<Input>,
@@ -407,4 +514,196 @@ impl OutputOperation for UtxOutput {
         }
         Ok(total_input)
     }
+
+    fn validate_payment_inputs_and_outputs(&self, payment: &Payment, unit: &Unit) -> Result<()> {
+        let author_addresses = unit.authors.iter().map(|a| &a.address).collect::<Vec<_>>();
+
+        let total_output = self.verify_output(&payment.outputs)?;
+        let total_input = self.verify_input(&payment.inputs, author_addresses, unit)?;
+
+        if total_input
+            != total_output
+                + unit.headers_commission.unwrap_or(0) as u64
+                + unit.payload_commission.unwrap_or(0) as u64
+        {
+            bail!(
+                "inputs and outputs do not balance: {} != {} + {} + {}",
+                total_input,
+                total_output,
+                unit.headers_commission.unwrap_or(0),
+                unit.payload_commission.unwrap_or(0)
+            )
+        }
+
+        Ok(())
+    }
+}
+
+impl SubBusiness for UtxoCache {
+    fn validate_message_basic(message: &Message) -> Result<()> {
+        validate_payment_format(message)
+    }
+
+    fn check_business(joint: &JointData, message_idx: usize) -> Result<()> {
+        let last_ball_unit = match joint.unit.last_ball_unit {
+            Some(ref unit) => unit,
+            None => return Ok(()), // genesis
+        };
+
+        let last_ball = SDAG_CACHE.get_joint(last_ball_unit)?.read()?;
+
+        let message = &joint.unit.messages[message_idx];
+
+        match message.payload {
+            Some(Payload::Payment(ref payment)) => {
+                for input in &payment.inputs {
+                    if input.kind.as_ref().unwrap_or(&"transfer".to_string()) == "transfer" {
+                        let src_joint =
+                            SDAG_CACHE.get_joint(input.unit.as_ref().unwrap())?.read()?;
+
+                        let is_included = *src_joint <= *last_ball;
+                        if !is_included {
+                            bail!("src output must be before last ball")
+                        }
+                    }
+                }
+            }
+            Some(_) => {}
+            _ => unreachable!(),
+        }
+        Ok(())
+    }
+
+    fn validate_message(&self, joint: &JointData, message_idx: usize) -> Result<()> {
+        let message = &joint.unit.messages[message_idx];
+
+        match message.payload {
+            Some(Payload::Payment(ref payment)) => {
+                self.validate_payment_inputs_and_outputs(payment, &joint.unit)
+            }
+            _ => bail!("validate_message end\npayload is not a payment"),
+        }
+    }
+
+    fn apply_message(&mut self, joint: &JointData, message_idx: usize) -> Result<()> {
+        let unit_hash = &joint.unit.unit;
+        let message = &joint.unit.messages[message_idx];
+        let utxo_value = UtxoData {
+            mci: joint.get_mci(),
+            sub_mci: joint.get_sub_mci(),
+        };
+        self.apply_payment(message, message_idx, &unit_hash, utxo_value)?;
+
+        Ok(())
+    }
+
+    fn revert_message(&mut self, joint: &JointData, message_idx: usize) -> Result<()> {
+        let utxo_value = UtxoData {
+            mci: joint.get_mci(),
+            sub_mci: joint.get_sub_mci(),
+        };
+        let unit_hash = &joint.unit.unit;
+        let message = &joint.unit.messages[message_idx];
+        self.revert_output(message, message_idx, unit_hash, utxo_value)
+    }
+}
+
+//---------------------------------------------------------------------------------------
+// UtxoKey
+//---------------------------------------------------------------------------------------
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct UtxoKey {
+    pub unit: String,
+    pub output_index: usize,
+    pub message_index: usize,
+    pub amount: u64,
+}
+
+impl Ord for UtxoKey {
+    fn cmp(&self, other: &UtxoKey) -> Ordering {
+        match Ord::cmp(&self.amount, &other.amount) {
+            Ordering::Equal => {}
+            r => return r,
+        }
+        match Ord::cmp(&self.unit, &other.unit) {
+            Ordering::Equal => {}
+            r => return r,
+        }
+        match Ord::cmp(&self.message_index, &other.message_index) {
+            Ordering::Equal => {}
+            r => return r,
+        }
+        Ord::cmp(&self.output_index, &other.output_index)
+    }
+}
+
+impl PartialOrd for UtxoKey {
+    fn partial_cmp(&self, other: &UtxoKey) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+//---------------------------------------------------------------------------------------
+// UtxoData
+//---------------------------------------------------------------------------------------
+#[derive(Clone, Debug, Copy)]
+pub struct UtxoData {
+    pub mci: Level,
+    pub sub_mci: Level,
+}
+
+//---------------------------------------------------------------------------------------
+// HeadersCommissionOutputKey
+//---------------------------------------------------------------------------------------
+#[derive(Debug, PartialEq, Eq, Hash)]
+pub struct HeadersCommissionOutputKey {
+    pub mci: Level,
+    pub address: String,
+}
+
+//---------------------------------------------------------------------------------------
+// PayloadCommissionOutputKey
+//---------------------------------------------------------------------------------------
+#[derive(Debug, PartialEq, Eq, Hash)]
+pub struct PayloadCommissionOutputKey {
+    pub mci: Level,
+    pub address: String,
+}
+
+//---------------------------------------------------------------------------------------
+// Global functions
+//---------------------------------------------------------------------------------------
+
+fn validate_payment_format(message: &Message) -> Result<()> {
+    if message.payload_location != "inline" {
+        bail!("payment location must be inline");
+    }
+
+    if !message.spend_proofs.is_empty() {
+        bail!("private payment not supported");
+    }
+
+    match message.payload {
+        Some(Payload::Payment(ref payment)) => {
+            if payment.asset.is_some() {
+                bail!("We do not handle assets for now")
+            }
+
+            if payment.address.is_some()
+                || payment.definition_chash.is_some()
+                || payment.denomination.is_some()
+            {
+                bail!("validate_payment_format: unknown fields in payment message")
+            }
+
+            if payment.inputs.len() > config::MAX_INPUTS_PER_PAYMENT_MESSAGE
+                || payment.outputs.len() > config::MAX_OUTPUTS_PER_PAYMENT_MESSAGE
+            {
+                bail!("too many inputs or output")
+            }
+        }
+        _ => bail!("validate_payment_format: not payment"),
+    }
+
+    Ok(())
 }
