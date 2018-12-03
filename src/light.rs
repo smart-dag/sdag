@@ -22,7 +22,7 @@ pub struct Transaction {
     pub unit_hash: String,
     pub from_addr: String,
     pub to_addr: String,
-    pub amount: i64,
+    pub amount: u64,
     pub time: u64,
 }
 #[derive(Debug, Serialize, Deserialize)]

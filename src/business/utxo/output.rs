@@ -33,7 +33,7 @@ impl UtxOutput {
                             unit: unit.to_owned(),
                             output_index,
                             message_index,
-                            amount: output.amount as usize,
+                            amount: output.amount,
                         },
                     )?;
                 }
@@ -52,7 +52,7 @@ impl UtxOutput {
                             unit: input.unit.clone().unwrap(),
                             output_index: input.output_index.unwrap() as usize,
                             message_index: input.message_index.unwrap() as usize,
-                            amount: output.amount as usize,
+                            amount: output.amount,
                         },
                         utxo_value,
                     )?;
@@ -99,19 +99,10 @@ impl UtxOutput {
                 self.get_output_by_input(unit, output_index, message_index)?;
 
             let address_key = UtxoKey {
-                unit: input
-                    .unit
-                    .clone()
-                    .ok_or_else(|| format_err!("decrease_output: input.unit is none"))?,
-                output_index: input
-                    .output_index
-                    .ok_or_else(|| format_err!("decrease_output: input.output_index is none"))?
-                    as usize,
-                message_index: input
-                    .message_index
-                    .ok_or_else(|| format_err!("decrease_output: input.message_index is none"))?
-                    as usize,
-                amount: amount,
+                unit: unit.to_owned(),
+                output_index,
+                message_index,
+                amount,
             };
 
             self.remove_output(address, &address_key)?;
@@ -131,7 +122,7 @@ impl UtxOutput {
                 unit: unit_hash.to_owned(),
                 output_index,
                 message_index,
-                amount: output.amount as usize,
+                amount: output.amount,
             };
 
             self.insert_output(output.address.clone(), address_key, utxo_value)?;
@@ -186,7 +177,7 @@ impl UtxOutput {
         unit: &str,
         output_index: usize,
         message_index: usize,
-    ) -> Result<(String, usize, Level)> {
+    ) -> Result<(String, u64, Level)> {
         let output = get_output_by_unit(unit, output_index, message_index)?;
 
         let utxo_data = self
@@ -197,11 +188,11 @@ impl UtxOutput {
                 unit: unit.to_string(),
                 output_index,
                 message_index,
-                amount: output.amount as usize,
+                amount: output.amount,
             })
             .ok_or_else(|| format_err!("not found utxo about output: unit-{}", unit))?;
 
-        Ok((output.address, output.amount as usize, utxo_data.mci))
+        Ok((output.address, output.amount, utxo_data.mci))
     }
 
     fn verify_transfer_of_input(
@@ -209,7 +200,7 @@ impl UtxOutput {
         input: &Input,
         author_addresses: &Vec<&String>,
         input_keys: &mut HashSet<String>,
-    ) -> Result<(usize)> {
+    ) -> Result<u64> {
         if input.address.is_some()
             || input.amount.is_some()
             || input.from_main_chain_index.is_some()
@@ -282,7 +273,7 @@ impl UtxOutput {
         author_addresses: &Vec<&String>,
         unit: &Unit,
         input_keys: &mut HashSet<String>,
-    ) -> Result<usize> {
+    ) -> Result<u64> {
         if index != 0 {
             bail!("issue must come first")
         }
@@ -342,18 +333,18 @@ impl UtxOutput {
         }
         input_keys.insert(input_key);
 
-        Ok(input.amount.unwrap() as usize)
+        Ok(input.amount.unwrap())
     }
 }
 
 impl OutputOperation for UtxOutput {
-    fn verify_output(&self, outputs: &Vec<Output>) -> Result<usize> {
+    fn verify_output(&self, outputs: &Vec<Output>) -> Result<u64> {
         let mut total_output = 0;
         let mut prev_address = String::new();
         let mut prev_amount = 0;
 
         for output in outputs {
-            if output.amount <= 0 {
+            if output.amount == 0 {
                 bail!("amount must be positive integer, found {:?}", output.amount)
             }
 
@@ -375,7 +366,7 @@ impl OutputOperation for UtxOutput {
 
             total_output += amount;
         }
-        Ok(total_output as usize)
+        Ok(total_output)
     }
 
     //returned value: (output_address, output_amount, output_mci)
@@ -385,10 +376,10 @@ impl OutputOperation for UtxOutput {
         inputs: &Vec<Input>,
         author_addresses: Vec<&String>,
         unit: &Unit,
-    ) -> Result<usize> {
+    ) -> Result<u64> {
         let transfer = String::from("transfer");
         let mut input_keys = HashSet::new();
-        let mut total_input: usize = 0;
+        let mut total_input: u64 = 0;
 
         for (index, input) in inputs.iter().enumerate() {
             let kind = input.kind.as_ref().unwrap_or(&transfer);

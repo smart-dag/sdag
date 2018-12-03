@@ -322,11 +322,11 @@ impl JointData {
         self.props.read().unwrap().related_units.clone()
     }
 
-    pub fn set_balance(&self, balance: i64) {
+    pub fn set_balance(&self, balance: u64) {
         self.props.write().unwrap().balance = balance;
     }
 
-    pub fn get_balance(&self) -> i64 {
+    pub fn get_balance(&self) -> u64 {
         self.props.read().unwrap().balance.clone()
     }
 }

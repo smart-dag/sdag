@@ -26,22 +26,39 @@ pub struct UtxoCache {
 }
 
 pub trait OutputOperation {
-    fn verify_output(&self, outputs: &Vec<Output>) -> Result<usize>;
+    fn verify_output(&self, outputs: &Vec<Output>) -> Result<u64>;
 
     fn verify_input(
         &self,
         inputs: &Vec<Input>,
         author_addresses: Vec<&String>,
         unit: &Unit,
-    ) -> Result<usize>;
+    ) -> Result<u64>;
 }
 
-pub fn get_output_by_unit(unit: &str, output_index: usize, message_index: usize) -> Result<Output> {
+fn get_output_by_unit(unit: &str, output_index: usize, message_index: usize) -> Result<Output> {
     let joint = SDAG_CACHE.get_joint(unit)?.read()?;
+    if message_index >= joint.unit.messages.len() {
+        bail!(
+            "invlide message index for the input, unit={}, msg_idx={}",
+            unit,
+            message_index
+        );
+    }
     let message = &joint.unit.messages[message_index];
 
     match message.payload {
-        Some(Payload::Payment(ref payment)) => Ok(payment.outputs[output_index].clone()),
+        Some(Payload::Payment(ref payment)) => {
+            if output_index >= payment.outputs.len() {
+                bail!(
+                    "invlide output index for the input, unit={}, msg_idx={}, output_idx={}",
+                    unit,
+                    message_index,
+                    output_index
+                );
+            }
+            Ok(payment.outputs[output_index].clone())
+        }
 
         _ => bail!("address can't find from non payment message"),
     }
@@ -88,8 +105,8 @@ impl UtxoCache {
 
         if total_input
             != total_output
-                + unit.headers_commission.unwrap_or(0) as usize
-                + unit.payload_commission.unwrap_or(0) as usize
+                + unit.headers_commission.unwrap_or(0) as u64
+                + unit.payload_commission.unwrap_or(0) as u64
         {
             bail!(
                 "inputs and outputs do not balance: {} != {} + {} + {}",
@@ -156,7 +173,6 @@ impl SubBusiness for UtxoCache {
         let utxo_value = UtxoData {
             mci: joint.get_mci(),
             sub_mci: joint.get_sub_mci(),
-            denomination: 1,
         };
         self.output
             .apply_payment(message, message_idx, &unit_hash, utxo_value)?;
@@ -168,7 +184,6 @@ impl SubBusiness for UtxoCache {
         let utxo_value = UtxoData {
             mci: joint.get_mci(),
             sub_mci: joint.get_sub_mci(),
-            denomination: 1,
         };
         let unit_hash = &joint.unit.unit;
         let message = &joint.unit.messages[message_idx];
@@ -185,7 +200,7 @@ pub struct UtxoKey {
     pub unit: String,
     pub output_index: usize,
     pub message_index: usize,
-    pub amount: usize,
+    pub amount: u64,
 }
 
 impl Ord for UtxoKey {
@@ -219,7 +234,6 @@ impl PartialOrd for UtxoKey {
 pub struct UtxoData {
     pub mci: Level,
     pub sub_mci: Level,
-    pub denomination: u32,
 }
 
 //---------------------------------------------------------------------------------------

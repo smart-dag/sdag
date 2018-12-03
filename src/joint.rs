@@ -169,7 +169,7 @@ pub struct JointProperty {
     pub create_time: u64,
     pub prev_stable_self_unit: String,
     pub related_units: Vec<String>,
-    pub balance: i64,
+    pub balance: u64,
 }
 
 impl Default for JointProperty {

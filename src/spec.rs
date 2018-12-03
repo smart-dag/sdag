@@ -30,7 +30,7 @@ pub struct Input {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub address: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub amount: Option<i64>,
+    pub amount: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub from_main_chain_index: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -68,7 +68,7 @@ pub struct Message {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Output {
     pub address: String,
-    pub amount: i64,
+    pub amount: u64,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
