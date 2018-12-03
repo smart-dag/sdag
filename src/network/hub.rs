@@ -475,7 +475,8 @@ impl Server<HubData> for HubData {
             "light/inputs" => ws.on_get_inputs(params)?,
             "balance" => ws.on_get_balance(params)?,
             "light/light_props" => ws.on_get_light_props(params)?,
-
+            // apis for explorer
+            "get_joints_by_mci" => ws.on_get_joints_by_mci(params)?,
             command => bail!("on_request unknown command: {}", command),
         };
         Ok(response)
@@ -917,6 +918,23 @@ impl HubConn {
                 }
             }
         }
+    }
+
+    fn on_get_joints_by_mci(&self, param: Value) -> Result<Value> {
+        let mci = param
+            .as_u64()
+            .ok_or_else(|| format_err!("not a valid mci"))? as usize;
+
+        let joints: Vec<Joint> = SDAG_CACHE
+            .get_joints_by_mci(Level::from(mci))?
+            .into_iter()
+            .map(|j| j.read())
+            // Skip those failed to read
+            .filter(|j| j.is_ok())
+            .map(|j| (**j.unwrap()).clone())
+            .collect();
+
+        Ok(serde_json::json!({ "joints": joints }))
     }
 }
 
