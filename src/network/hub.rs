@@ -473,7 +473,7 @@ impl Server<HubData> for HubData {
             "light/get_history" => ws.on_get_history(params)?,
             "light/get_link_proofs" => ws.on_get_link_proofs(params)?,
             "light/inputs" => ws.on_get_inputs(params)?,
-            "balance" => ws.on_get_balance(params)?,
+            "get_balance" => ws.on_get_balance(params)?,
             "light/light_props" => ws.on_get_light_props(params)?,
             // apis for explorer
             "get_joints_by_mci" => ws.on_get_joints_by_mci(params)?,
@@ -566,8 +566,14 @@ impl HubConn {
     }
 
     //TODO:
-    fn on_get_balance(&self, _param: Value) -> Result<Value> {
-        unimplemented!()
+    fn on_get_balance(&self, param: Value) -> Result<Value> {
+        let addr = param
+            .as_str()
+            .ok_or_else(|| format_err!("no address for get_balance"))?;
+
+        let balance = 500000000;
+
+        Ok(json!({"address": addr, "balance": balance}))
     }
 
     fn on_get_inputs(&self, param: Value) -> Result<Value> {
