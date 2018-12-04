@@ -193,16 +193,29 @@ impl GlobalState {
 
     /// get <to_addr, unit_has> from outputs, then update related_joints[to_addr]
     fn update_related_joints(&self, joint: &JointData) {
+        let address = if joint.unit.authors.len() > 1 {
+            "multi_address" // never match
+        } else {
+            &joint.unit.authors[0].address
+        };
+
         let unit_hash = joint.get_unit_hash();
         for msg in &joint.unit.messages {
             if let Some(Payload::Payment(ref payment)) = msg.payload {
                 for output in &payment.outputs {
-                    self.related_joints
-                        .write()
-                        .unwrap()
-                        .entry(output.address.clone())
-                        .and_modify(|v| v.push(unit_hash.clone()))
-                        .or_insert(vec![unit_hash.clone()]);
+                    // related_joints should not include changes
+                    if &output.address != address {
+                        self.related_joints
+                            .write()
+                            .unwrap()
+                            .entry(output.address.clone())
+                            .and_modify(|v| {
+                                if !v.contains(unit_hash) {
+                                    v.push(unit_hash.clone())
+                                }
+                            })
+                            .or_insert(vec![unit_hash.clone()]);
+                    }
                 }
             }
         }
