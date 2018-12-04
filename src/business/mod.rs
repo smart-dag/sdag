@@ -422,15 +422,18 @@ impl BusinessCache {
         let mut balance = joint.get_balance();
 
         // reduce spend amount
-        for msg in &joint.unit.messages {
-            if let Some(Payload::Payment(ref payment)) = msg.payload {
-                for input in &payment.inputs {
-                    match input.kind {
-                        Some(ref kind) if kind != "transfer" => continue,
-                        _ => balance -= input.amount.unwrap_or(0),
+        if !joint.unit.is_genesis_unit() {
+            for msg in &joint.unit.messages {
+                if let Some(Payload::Payment(ref payment)) = msg.payload {
+                    for output in &payment.outputs {
+                        if addr != &output.address {
+                            balance -= output.amount;
+                        }
                     }
                 }
             }
+            balance -= joint.unit.headers_commission.unwrap_or(0) as u64;
+            balance -= joint.unit.payload_commission.unwrap_or(0) as u64;
         }
 
         // add those related payment to us
