@@ -212,7 +212,7 @@ impl UtxoCache {
 
     pub fn pick_divisible_coins_for_amount(
         &self,
-        paying_address: &String,
+        paying_address: &str,
         mut required_amount: u64,
         send_all: bool,
     ) -> Result<(Vec<Input>, u64)> {

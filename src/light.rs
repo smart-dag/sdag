@@ -2,7 +2,7 @@ use error::Result;
 
 use business::BUSINESS_CACHE;
 use cache::SDAG_CACHE;
-use spec::{Payload, Unit};
+use spec::{Input, Payload, Unit};
 
 #[derive(Serialize, Deserialize)]
 pub struct HistoryRequest {
@@ -22,25 +22,44 @@ pub struct Transaction {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HistoryResponse {
-    pub transaction_history: Vec<Transaction>,
+    pub transactions: Vec<Transaction>,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct InputsRequest {
     pub address: String,
     pub amount: u64,
-    pub send_all: bool,
+    pub is_spend_all: bool,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct InputsResponse {
+    pub inputs: Vec<Input>,
+    pub amount: u64,
+}
+
+/// get valide inputs for the address
+pub fn get_inputs_for_amount(input_request: InputsRequest) -> Result<InputsResponse> {
+    let InputsRequest {
+        address,
+        amount,
+        is_spend_all,
+    } = input_request;
+
+    let (inputs, amount) = BUSINESS_CACHE.get_inputs_for_amount(&address, amount, is_spend_all)?;
+
+    Ok(InputsResponse { inputs, amount })
 }
 
 /// get history by address, return transactions
-pub fn prepare_latest_history(history_request: &HistoryRequest) -> Result<HistoryResponse> {
+pub fn get_latest_history(history_request: &HistoryRequest) -> Result<HistoryResponse> {
     // note: just support get stable history currently
     // let mut unstable_txs = get_unstable_history(history_request, history_request.num);
     // let mut stable_txs = get_stable_history(history_request, limit - unstable_txs.len());
     // unstable_txs.append(&mut stable_txs);
 
     Ok(HistoryResponse {
-        transaction_history: get_stable_history(history_request)?,
+        transactions: get_stable_history(history_request)?,
     })
 }
 

@@ -98,7 +98,7 @@ impl WalletConn {
             &serde_json::to_value(InputsRequest {
                 address,
                 amount,
-                send_all: false,
+                is_spend_all: false,
             })?,
         )?;
 

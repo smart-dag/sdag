@@ -4,7 +4,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use super::network::{Sender, Server, WsConnection};
-use business::BUSINESS_CACHE;
 use cache::{JointData, SDAG_CACHE};
 use catchup;
 use config;
@@ -12,7 +11,7 @@ use crossbeam::atomic::ArcCell;
 use error::Result;
 use failure::ResultExt;
 use joint::{Joint, JointSequence, Level};
-use light::*;
+use light;
 use main_chain;
 use may::coroutine;
 use may::net::TcpStream;
@@ -578,15 +577,11 @@ impl HubConn {
     }
 
     fn on_get_inputs(&self, param: Value) -> Result<Value> {
-        let InputsRequest {
-            address,
-            amount,
-            send_all,
-        } = serde_json::from_value(param)?;
-        let (inputs, total_amount) =
-            BUSINESS_CACHE.get_inputs_for_amount(&address, amount, send_all)?;
+        let inputs_request: light::InputsRequest = serde_json::from_value(param)?;
 
-        Ok(serde_json::to_value((inputs, total_amount))?)
+        let ret = light::get_inputs_for_amount(inputs_request)?;
+
+        Ok(serde_json::to_value(ret)?)
     }
 
     //TODO:
@@ -793,9 +788,9 @@ impl HubConn {
             bail!("light clients have to be inbound");
         }
 
-        let history_request: HistoryRequest = serde_json::from_value(param)?;
+        let history_request: light::HistoryRequest = serde_json::from_value(param)?;
 
-        let ret = self.handle_get_history(history_request)?;
+        let ret = light::get_latest_history(&history_request)?;
 
         Ok(serde_json::to_value(ret)?)
     }
@@ -1125,52 +1120,6 @@ impl HubConn {
 
         // Ok(())
         unimplemented!()
-    }
-
-    fn handle_get_history(&self, history_request: HistoryRequest) -> Result<HistoryResponse> {
-        let ret = prepare_latest_history(&history_request)?;
-
-        // TODO: insert watched light address
-        // let params_addresses = history_request.addresses;
-        // if !params_addresses.is_empty() {
-        //     let addresses = params_addresses
-        //         .iter()
-        //         .map(|s| format!("('{}','{}')", self.get_peer(), s))
-        //         .collect::<Vec<_>>()
-        //         .join(", ");
-
-        //     let sql = format!(
-        //         "INSERT OR IGNORE INTO watched_light_addresses (peer, address) VALUES {}",
-        //         addresses
-        //     );
-        //     let mut stmt = db.prepare(&sql)?;
-        //     stmt.execute(&[])?;
-        // }
-
-        // let params_requested_joints = history_request.requested_joints;
-        // if !params_requested_joints.is_empty() {
-        //     let rows = storage::slice_and_execute_query(
-        //         &db,
-        //         "SELECT unit FROM units WHERE main_chain_index >= ? AND unit IN({})",
-        //         &[&storage::get_min_retrievable_mci()],
-        //         &params_requested_joints,
-        //         |row| row.get(0),
-        //     )?;
-        //     if !rows.is_empty() {
-        //         let rows = rows
-        //             .into_iter()
-        //             .map(|s: String| format!("('{}','{}')", self.get_peer(), s))
-        //             .collect::<Vec<_>>()
-        //             .join(", ");
-        //         let sql = format!(
-        //             "INSERT OR IGNORE INTO watched_light_addresses (peer, address) VALUES {}",
-        //             rows
-        //         );
-        //         let mut stmt = db.prepare(&sql)?;
-        //         stmt.execute(&[])?;
-        //     }
-        // }
-        Ok(ret)
     }
 
     // record peer event in database

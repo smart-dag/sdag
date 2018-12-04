@@ -304,7 +304,7 @@ pub struct BusinessCache {
 impl BusinessCache {
     pub fn get_inputs_for_amount(
         &self,
-        paying_address: &String,
+        paying_address: &str,
         required_amount: u64,
         send_all: bool,
     ) -> Result<(Vec<Input>, u64)> {

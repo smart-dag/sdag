@@ -153,11 +153,11 @@ fn show_history(
 
     if let Some(index) = index {
         // show special unit's detail information
-        if index == 0 || index > history.transaction_history.len() {
+        if index == 0 || index > history.transactions.len() {
             bail!("invalid transaction index");
         }
 
-        let history = &history.transaction_history[index - 1];
+        let history = &history.transactions[index - 1];
         if history.amount > 0 {
             println!("FROM     : {}", history.from_addr);
         } else {
@@ -172,7 +172,7 @@ fn show_history(
                 .naive_local()
         );
     } else {
-        for (id, transaction) in history.transaction_history.iter().enumerate() {
+        for (id, transaction) in history.transactions.iter().enumerate() {
             if id > num - 1 {
                 break;
             }
