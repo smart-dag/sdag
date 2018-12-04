@@ -25,6 +25,7 @@ pub struct SpendProof {
 }
 
 // TODO: Input struct is from type
+// only used for utxo: issue | transfer
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct Input {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -99,12 +100,6 @@ pub struct HeaderCommissionShare {
     pub earned_headers_commission_share: u32,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Ball {
-    // TODO: need a real definition
-    pub unit: String,
-}
-
 // TODO: use specific struct for address and hash
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Unit {
@@ -142,26 +137,46 @@ pub struct Unit {
     pub witness_list_unit: Option<String>,
 }
 
-#[derive(Debug, Clone)]
-/// internally used struct
-pub struct StaticUnitProperty {
-    pub level: u32,
-    pub witnessed_level: u32,
-    pub best_parent_unit: Option<String>,
-    pub witness_list_unit: Option<String>,
+#[derive(Serialize)]
+struct NakedMessage<'a> {
+    app: &'a str,
+    payload_hash: &'a str,
+    payload_location: &'a str,
 }
 
-#[derive(Debug, Clone)]
-/// internally used struct
-pub struct UnitProps {
-    pub unit: String,
-    pub level: u32,
-    pub witnessed_level: Option<u32>,
-    pub latest_included_mc_index: Option<u32>,
-    pub main_chain_index: Option<u32>,
-    pub is_on_main_chain: u32,
-    pub is_free: u32,
-    pub is_stable: u32,
+#[derive(Serialize)]
+struct NakedAuthor<'a> {
+    address: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    authentifiers: Option<&'a HashMap<String, String>>,
+    #[serde(skip_serializing_if = "Value::is_null")]
+    definition: &'a Value,
+}
+
+#[derive(Serialize)]
+struct NakedUnit<'a> {
+    alt: &'a str,
+    version: &'a str,
+    authors: Vec<NakedAuthor<'a>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    content_hash: &'a Option<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
+    earned_headers_commission_recipients: &'a Vec<HeaderCommissionShare>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    last_ball: &'a Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    last_ball_unit: &'a Option<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    messages: Vec<NakedMessage<'a>>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
+    parent_units: &'a Vec<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
+    witnesses: &'a Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    witness_list_unit: &'a Option<String>,
 }
 
 #[inline]
@@ -187,72 +202,87 @@ impl Unit {
         is_genesis_unit(&self.unit)
     }
 
-    fn get_naked_unit(&self) -> Unit {
-        let mut naked_unit: Unit = self.clone();
-        naked_unit.unit = String::new();
-        naked_unit.headers_commission = None;
-        naked_unit.payload_commission = None;
-        naked_unit.main_chain_index = None;
-        naked_unit.timestamp = None;
-
-        for message in &mut naked_unit.messages {
-            message.payload = None;
-            message.payload_uri = None;
+    fn get_naked_unit<'a>(&'a self) -> NakedUnit<'a> {
+        NakedUnit {
+            alt: &self.alt,
+            version: &self.version,
+            authors: self
+                .authors
+                .iter()
+                .map(|a| NakedAuthor {
+                    address: &a.address,
+                    authentifiers: Some(&a.authentifiers),
+                    definition: &a.definition,
+                })
+                .collect(),
+            content_hash: &self.content_hash,
+            earned_headers_commission_recipients: &self.earned_headers_commission_recipients,
+            last_ball: &self.last_ball,
+            last_ball_unit: &self.last_ball_unit,
+            messages: self
+                .messages
+                .iter()
+                .map(|m| NakedMessage {
+                    app: &m.app,
+                    payload_hash: &m.payload_hash,
+                    payload_location: &m.payload_location,
+                })
+                .collect(),
+            parent_units: &self.parent_units,
+            witnesses: &self.witnesses,
+            witness_list_unit: &self.witness_list_unit,
         }
-
-        naked_unit
     }
 
     pub fn get_unit_content_hash(&self) -> String {
         get_base64_hash(&self.get_naked_unit()).expect("get_unit_content_hash failed")
     }
 
-    // FIXME: this func may be optimized
     pub fn calc_unit_hash(&self) -> String {
         if self.content_hash.is_some() {
             return get_base64_hash(&self.get_naked_unit()).expect("get_unit_hash naked failed");
         }
 
         #[derive(Debug, Serialize)]
-        struct Address {
-            address: String,
+        struct Address<'a> {
+            address: &'a str,
         }
 
         #[derive(Debug, Serialize)]
-        struct StrippedUnit {
-            alt: String,
+        struct StrippedUnit<'a> {
+            alt: &'a str,
             #[serde(skip_serializing_if = "Vec::is_empty")]
-            authors: Vec<Address>,
+            authors: Vec<Address<'a>>,
             content_hash: String,
             #[serde(skip_serializing_if = "Option::is_none")]
-            last_ball: Option<String>,
+            last_ball: &'a Option<String>,
             #[serde(skip_serializing_if = "Option::is_none")]
-            last_ball_unit: Option<String>,
+            last_ball_unit: &'a Option<String>,
             #[serde(skip_serializing_if = "Vec::is_empty")]
-            parent_units: Vec<String>,
-            version: String,
+            parent_units: &'a Vec<String>,
+            version: &'a str,
             #[serde(skip_serializing_if = "Vec::is_empty")]
-            witnesses: Vec<String>,
+            witnesses: &'a Vec<String>,
             #[serde(skip_serializing_if = "Option::is_none")]
-            witness_list_unit: Option<String>,
+            witness_list_unit: &'a Option<String>,
         }
 
         let stripped_unit = StrippedUnit {
-            alt: self.alt.clone(),
+            alt: &self.alt,
             authors: self
                 .authors
                 .iter()
                 .map(|a| Address {
-                    address: a.address.clone(),
+                    address: &a.address,
                 })
                 .collect::<Vec<_>>(),
             content_hash: self.get_unit_content_hash(),
-            last_ball: self.last_ball.clone(),
-            last_ball_unit: self.last_ball_unit.clone(),
-            parent_units: self.parent_units.clone(),
-            version: self.version.clone(),
-            witnesses: self.witnesses.clone(),
-            witness_list_unit: self.witness_list_unit.clone(),
+            last_ball: &self.last_ball,
+            last_ball_unit: &self.last_ball_unit,
+            parent_units: &self.parent_units,
+            version: &self.version,
+            witnesses: &self.witnesses,
+            witness_list_unit: &self.witness_list_unit,
         };
 
         get_base64_hash(&stripped_unit).expect("get_unit_hash failed")
@@ -263,7 +293,7 @@ impl Unit {
 
         let mut naked_unit = self.get_naked_unit();
         for author in &mut naked_unit.authors {
-            author.authentifiers.clear();
+            author.authentifiers = None;
         }
 
         let obj_str = obj_ser::to_string(&naked_unit).expect("naked_unit to string failed");
