@@ -41,7 +41,7 @@ fn init_connection(ws: &Arc<WalletConn>) -> Result<()> {
         if ws.get_last_recv_tm().elapsed() < Duration::from_secs(5) {
             continue;
         }
-        // heartbeat failed so just close the connnection
+        // heartbeat failed so just close the connection
         let rsp = ws.send_heartbeat();
         if rsp.is_err() {
             error!("heartbeat err= {}", rsp.unwrap_err());
@@ -111,19 +111,10 @@ impl WalletConn {
         Ok(serde_json::from_value(amount).unwrap())
     }
 
-    pub fn get_history(
-        &self,
-        address: String,
-        known_stable_units: Option<String>,
-        limit: Option<usize>,
-    ) -> Result<HistoryResponse> {
+    pub fn get_latest_history(&self, address: String, num: usize) -> Result<HistoryResponse> {
         let response = self.send_request(
             "light/get_history",
-            &serde_json::to_value(HistoryRequest {
-                address,
-                known_stable_units,
-                limit,
-            })?,
+            &serde_json::to_value(HistoryRequest { address, num })?,
         )?;
 
         Ok(serde_json::from_value(response).unwrap())

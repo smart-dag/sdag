@@ -307,10 +307,10 @@ impl JointData {
     }
 
     pub fn set_stable_prev_self_unit(&self, unit: String) {
-        self.props.write().unwrap().prev_stable_self_unit = unit;
+        self.props.write().unwrap().prev_stable_self_unit = Some(unit);
     }
 
-    pub fn get_stable_prev_self_unit(&self) -> String {
+    pub fn get_stable_prev_self_unit(&self) -> Option<String> {
         self.props.read().unwrap().prev_stable_self_unit.clone()
     }
 

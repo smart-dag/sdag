@@ -146,11 +146,10 @@ fn info(ws: &Arc<WalletConn>, wallet_info: &WalletInfo) -> Result<()> {
 fn show_history(
     ws: &Arc<WalletConn>,
     address: &String,
-    unit_hash: Option<String>,
     index: Option<usize>,
-    limit: Option<usize>,
+    num: usize,
 ) -> Result<()> {
-    let history = ws.get_history(address.clone(), unit_hash, limit)?;
+    let history = ws.get_latest_history(address.clone(), num)?;
 
     if let Some(index) = index {
         // show special unit's detail information
@@ -168,18 +167,22 @@ fn show_history(
         println!("AMOUNT   : {:.6} MN", history.amount as f64 / 1_000_000.0);
         println!(
             "DATE     : {}",
-            Local.timestamp(history.time as i64, 0).naive_local()
+            Local
+                .timestamp(history.time.unwrap_or(0) as i64, 0)
+                .naive_local()
         );
     } else {
         for (id, transaction) in history.transaction_history.iter().enumerate() {
-            if limit.is_some() && id > limit.unwrap() - 1 {
+            if id > num - 1 {
                 break;
             }
             println!(
                 "#{:<4} {:>10.6} MN  \t{}",
                 id + 1,
                 transaction.amount as f64 / 1_000_000.0,
-                Local.timestamp(transaction.time as i64, 0).naive_local()
+                Local
+                    .timestamp(transaction.time.unwrap_or(0) as i64, 0)
+                    .naive_local()
             );
         }
     }
@@ -244,18 +247,17 @@ fn main() -> Result<()> {
 
     //Log
     if let Some(log) = m.subcommand_matches("log") {
-        let unit_hash = value_t!(log.value_of("unit"), String).ok();
         let index = value_t!(log.value_of("v"), usize).ok();
 
         match value_t!(log.value_of("n"), usize) {
-            Ok(limit) => {
-                return show_history(&ws, &wallet_info._00_address, unit_hash, index, Some(limit));
+            Ok(num) => {
+                return show_history(&ws, &wallet_info._00_address, index, num);
             }
             Err(clap::Error {
                 kind: clap::ErrorKind::ArgumentNotFound,
                 ..
             }) => {
-                return show_history(&ws, &wallet_info._00_address, unit_hash, index, None);
+                return show_history(&ws, &wallet_info._00_address, index, 5);
             }
             Err(e) => e.exit(),
         }

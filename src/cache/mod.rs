@@ -395,7 +395,6 @@ impl SDagCache {
     pub fn get_joints_len(&self) -> usize {
         self.joints.read().unwrap().get_normal_joints_len()
     }
-
 }
 
 #[cfg(test)]

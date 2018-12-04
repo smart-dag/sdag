@@ -153,7 +153,7 @@ impl GlobalState {
         )
     }
 
-    fn get_last_stable_self_joint(&self, address: &str) -> Option<String> {
+    pub fn get_last_stable_self_joint(&self, address: &str) -> Option<String> {
         self.last_stable_self_joint
             .read()
             .unwrap()
@@ -161,7 +161,7 @@ impl GlobalState {
             .cloned()
     }
 
-    fn get_related_joints(&self, address: &str) -> Vec<String> {
+    pub fn get_related_joints(&self, address: &str) -> Vec<String> {
         match self.related_joints.read().unwrap().get(address) {
             Some(joints) => joints.clone(),
             None => Vec::new(),
@@ -296,7 +296,7 @@ impl BusinessState {
 #[derive(Default)]
 pub struct BusinessCache {
     // TODO: lock global is not necessary for each address
-    global_state: GlobalState,
+    pub global_state: GlobalState,
     business_state: RwLock<BusinessState>,
     temp_business_state: RwLock<BusinessState>,
 }
@@ -314,7 +314,7 @@ impl BusinessCache {
             .utxo
             .pick_divisible_coins_for_amount(paying_address, required_amount, send_all)
     }
-    
+
     /// build the state from genesis
     /// TODO: also need to rebuild temp state (same as state)
     pub fn rebuild_from_genesis() -> Result<Self> {

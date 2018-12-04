@@ -1128,7 +1128,7 @@ impl HubConn {
     }
 
     fn handle_get_history(&self, history_request: HistoryRequest) -> Result<HistoryResponse> {
-        let ret = prepare_history(&history_request)?;
+        let ret = prepare_latest_history(&history_request)?;
 
         // TODO: insert watched light address
         // let params_addresses = history_request.addresses;
