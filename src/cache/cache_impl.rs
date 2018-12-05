@@ -83,6 +83,14 @@ impl SDagCacheInner {
             .collect()
     }
 
+    pub fn get_free_bad_joints(&self) -> Vec<CachedJoint> {
+        self.free_joints
+            .values()
+            .filter(|v| v.read().unwrap().get_sequence() == JointSequence::TempBad)
+            .cloned()
+            .collect()
+    }
+
     /// query if joint is in unhandled joints
     pub fn is_known_unhandled_joint(&self, key: &str) -> bool {
         self.unhandled_joints.contains_key(key)

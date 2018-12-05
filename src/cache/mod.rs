@@ -134,6 +134,10 @@ impl SDagCache {
         self.joints.read().unwrap().get_free_joints()
     }
 
+    pub fn get_free_bad_joints(&self) -> Vec<CachedJoint> {
+        self.joints.read().unwrap().get_free_bad_joints()
+    }
+
     /// check if the joint is new, only new joint will be handled
     pub fn check_new_joint(&self, joint: &str) -> Result<()> {
         let cache = self.joints.read().unwrap();

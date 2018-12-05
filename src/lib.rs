@@ -97,6 +97,7 @@ pub mod light;
 pub mod main_chain;
 mod obj_ser;
 pub mod object_hash;
+pub mod parent_composer;
 pub mod signature;
 pub mod time;
 pub mod validation;
