@@ -396,26 +396,3 @@ impl SDagCache {
         self.joints.read().unwrap().get_normal_joints_len()
     }
 }
-
-#[cfg(test)]
-mod test {
-    // use super::*;
-
-    // TODO: add some tests
-    #[test]
-    fn it_works() {
-        assert_eq!(1, 1);
-
-        // let a = SDAG_CACHE.get_joint().unwrap();
-
-        // // how to read
-        // let level = a.read()?.props.level;
-
-        // // how to update
-        // if let Some(g) = a.try_lock() {
-        //     let data = g.as_ref();
-        //     let new_data = fasdf(data);
-        //     g.update(Some(new_data));
-        // }
-    }
-}

@@ -94,7 +94,6 @@ lazy_static! {
     static ref UNIT_IN_WORK: MapLock<String> = MapLock::new();
     static ref JOINT_IN_REQ: MapLock<String> = MapLock::new();
     static ref IS_CATCHING_UP: AtomicLock = AtomicLock::new();
-    static ref COMING_ONLINE_TIME: AtomicUsize = AtomicUsize::new(::time::now() as usize);
     static ref SUBSCRIPTION_ID: RwLock<String> = RwLock::new(object_hash::gen_random_string(30));
 }
 
@@ -1311,10 +1310,7 @@ impl HubConn {
             // if the joint is in request, just ignore
             let g = JOINT_IN_REQ.try_lock(vec![unit.to_owned()]);
             if g.is_none() {
-                println!(
-                    "\n\nrequest_joint lock failed!!!!!!!!!!!!!!!!!: {}\n\n",
-                    unit
-                );
+                debug!("already request_joint: {}", unit);
                 return Ok(());
             }
 
@@ -1449,9 +1445,6 @@ pub fn start_catchup(ws: Arc<HubConn>) -> Result<()> {
 
     // wait all the catchup done
     wait_hash_tree_ball_consumed(0);
-
-    // now we are done the catchup
-    COMING_ONLINE_TIME.store(::time::now() as usize, Ordering::Relaxed);
 
     // wait until there is no more working
     while UNIT_IN_WORK.get_waiter_num() != 0 {

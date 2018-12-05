@@ -376,7 +376,7 @@ pub struct Definition<'a> {
 impl<'a> Definition<'a> {
     pub fn from_value(value: &'a Value) -> Result<Self> {
         if !value.is_array() {
-            println!("definition={:?}", value);
+            debug!("definition={:?}", value);
             bail!("definition must be array");
         }
 

@@ -38,16 +38,11 @@ impl UnitProps {
         // 3) self.mci < earlier_unit.mci;
         // 4) self.limci < earlier_unit.limci
         // 5) self.is_stable && !earlier_unit.is_stable;
-        if self.level <= other.level
+        self.level <= other.level
             || self.wl < other.wl
             || self.mci < other.mci
             || self.limci < other.limci
             || self.is_stable && !other.is_stable
-        {
-            true
-        } else {
-            false
-        }
     }
 
     /// return true if any given joint include or equal the current one
