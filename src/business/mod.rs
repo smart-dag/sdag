@@ -180,12 +180,13 @@ impl GlobalState {
 
     fn update_last_stable_self_joint(&self, joint: &JointData) {
         let unit_hash = &joint.unit.unit;
-        // just genesis has multi authors currently
-        for author in &joint.unit.authors {
+        // only genesis has multi authors currently
+        // joints which have multi authors should not belong any author
+        if joint.unit.authors.len() == 1 {
             self.last_stable_self_joint
                 .write()
                 .unwrap()
-                .entry(author.address.clone())
+                .entry(joint.unit.authors[0].address.clone())
                 .and_modify(|v| *v = unit_hash.clone())
                 .or_insert(unit_hash.clone());
         }
