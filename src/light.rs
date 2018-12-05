@@ -94,14 +94,23 @@ fn get_stable_history(history_request: &HistoryRequest) -> Result<Vec<Transactio
         .get_last_stable_self_joint(&address);
 
     while let Some(last_self_unit) = self_unit {
-        let self_joint_date = SDAG_CACHE.get_joint(&last_self_unit)?.read()?;
+        let self_joint_data = SDAG_CACHE.get_joint(&last_self_unit)?.read()?;
 
-        if address != &self_joint_date.unit.authors[0].address {
+        fn is_authored_by_address(unit: &Unit, address: &str) -> bool {
+            for author in unit.authors.iter() {
+                if &author.address == address {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        if !is_authored_by_address(&self_joint_data.unit, address) {
             panic!("last self unit first author is not address {}", address);
         }
 
         // send money to others
-        for msg in &self_joint_date.unit.messages {
+        for msg in &self_joint_data.unit.messages {
             if let Some(Payload::Payment(ref payment)) = msg.payload {
                 for output in &payment.outputs {
                     // skip ourself change
@@ -114,7 +123,7 @@ fn get_stable_history(history_request: &HistoryRequest) -> Result<Vec<Transactio
                         from_addr: address.clone(),
                         to_addr: output.address.clone(),
                         amount: output.amount,
-                        time: self_joint_date.unit.timestamp,
+                        time: self_joint_data.unit.timestamp,
                     });
 
                     if transactions.len() >= num {
@@ -123,8 +132,9 @@ fn get_stable_history(history_request: &HistoryRequest) -> Result<Vec<Transactio
                 }
             }
         }
+
         // receive money from others
-        let related_units = self_joint_date.get_related_units();
+        let related_units = self_joint_data.get_related_units();
         for unit in related_units {
             let related_joint_data = SDAG_CACHE.get_joint(&unit)?.read()?;
             if get_receive_tx(&related_joint_data.unit, address, num, &mut transactions) {
@@ -132,7 +142,7 @@ fn get_stable_history(history_request: &HistoryRequest) -> Result<Vec<Transactio
             }
         }
 
-        self_unit = self_joint_date.get_stable_prev_self_unit();
+        self_unit = self_joint_data.get_stable_prev_self_unit();
     }
 
     Ok(transactions)

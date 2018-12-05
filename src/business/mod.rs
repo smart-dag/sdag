@@ -432,22 +432,10 @@ impl BusinessCache {
 
         let (last_stable_self_unit, related_units) = self.global_state.get_global_state(&addr);
 
-        let mut balance = joint.get_balance();
-
-        // reduce spend amount
-        if !joint.unit.is_genesis_unit() {
-            for msg in &joint.unit.messages {
-                if let Some(Payload::Payment(ref payment)) = msg.payload {
-                    for output in &payment.outputs {
-                        if addr != &output.address {
-                            balance -= output.amount;
-                        }
-                    }
-                }
-            }
-            balance -= joint.unit.headers_commission.unwrap_or(0) as u64;
-            balance -= joint.unit.payload_commission.unwrap_or(0) as u64;
-        }
+        let mut balance = match last_stable_self_unit {
+            Some(ref unit) => SDAG_CACHE.get_joint(unit)?.read()?.get_balance(),
+            None => 0,
+        };
 
         // add those related payment to us
         for unit in &related_units {
@@ -462,6 +450,21 @@ impl BusinessCache {
                     }
                 }
             }
+        }
+
+        // reduce spend amount
+        if !joint.unit.is_genesis_unit() {
+            for msg in &joint.unit.messages {
+                if let Some(Payload::Payment(ref payment)) = msg.payload {
+                    for output in &payment.outputs {
+                        if addr != &output.address {
+                            balance -= output.amount;
+                        }
+                    }
+                }
+            }
+            balance -= joint.unit.headers_commission.unwrap_or(0) as u64;
+            balance -= joint.unit.payload_commission.unwrap_or(0) as u64;
         }
 
         if let Some(unit) = last_stable_self_unit {
