@@ -179,7 +179,7 @@ impl GlobalState {
     }
 
     fn update_last_stable_self_joint(&self, joint: &JointData) {
-        let unit_hash = joint.get_unit_hash();
+        let unit_hash = &joint.unit.unit;
         // just genesis has multi authors currently
         for author in &joint.unit.authors {
             self.last_stable_self_joint
@@ -199,7 +199,7 @@ impl GlobalState {
             &joint.unit.authors[0].address
         };
 
-        let unit_hash = joint.get_unit_hash();
+        let unit_hash = &joint.unit.unit;
         for msg in &joint.unit.messages {
             if let Some(Payload::Payment(ref payment)) = msg.payload {
                 for output in &payment.outputs {
@@ -593,7 +593,7 @@ fn validate_message_format(msg: &Message) -> Result<()> {
 
 fn validate_unstable_joint_serial(joint: &JointData) -> Result<JointSequence> {
     // check unstable joints non serial
-    let cached_joint = SDAG_CACHE.try_get_joint(joint.get_unit_hash()).unwrap();
+    let cached_joint = SDAG_CACHE.try_get_joint(&joint.unit.unit).unwrap();
 
     if crate::serial_check::is_unstable_joint_non_serial(cached_joint)? {
         return Ok(JointSequence::NonserialBad);

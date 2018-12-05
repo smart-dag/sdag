@@ -1027,7 +1027,7 @@ impl HubConn {
 
         // // clear the main chain index
         // joint.unit.main_chain_index = None;
-        // let unit = joint.get_unit_hash();
+        // let unit = &joint.unit.unit;
         // // check if unit is in work, when g is dropped unlock the unit
         // let g = UNIT_IN_WORK.try_lock(vec![unit.to_owned()]);
         // if g.is_none() {
@@ -1406,10 +1406,10 @@ pub fn start_catchup(ws: Arc<HubConn>) -> Result<()> {
         while SDAG_CACHE.get_hash_tree_ball_len() > left_len {
             // at most we wait for 10 second
             if wait_time >= 10000 {
+                warn!("wait for catchup data consumed timeout!");
                 return;
             }
             // every one second check again
-            debug!("wait for catchup data consumed!");
             coroutine::sleep(Duration::from_millis(10));
             wait_time += 1;
         }

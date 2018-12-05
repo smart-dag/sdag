@@ -101,7 +101,7 @@ pub fn process_catchup_chain(catchup_chain: CatchupChain) -> Result<Vec<String>>
 
     let first_stable_joint = &catchup_chain.stable_last_ball_joints[0];
 
-    let mut last_ball_unit = first_stable_joint.get_unit_hash();
+    let mut last_ball_unit = &first_stable_joint.unit.unit;
     ensure!(
         last_ball_units.contains(last_ball_unit),
         "first stable unit is not last ball unit of any unstable unit"
@@ -116,11 +116,8 @@ pub fn process_catchup_chain(catchup_chain: CatchupChain) -> Result<Vec<String>>
     let mut chain_balls = Vec::<String>::new();
     for joint in &catchup_chain.stable_last_ball_joints {
         ensure!(joint.ball.is_some(), "stable but no ball");
-        ensure!(joint.has_valid_hashes(), "invalid hash");
-        ensure!(
-            joint.get_unit_hash() == last_ball_unit,
-            "not the last ball unit"
-        );
+        ensure!(joint.unit.has_valid_hashes(), "invalid hash");
+        ensure!(&joint.unit.unit == last_ball_unit, "not the last ball unit");
         ensure!(joint.ball.as_ref() == Some(last_ball), "not the last ball");
 
         let unit = &joint.unit;

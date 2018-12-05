@@ -173,7 +173,7 @@ impl JointData {
             let mci_ptr = &self.joint.unit.main_chain_index as *const _ as *mut Option<u32>;
             mci_ptr.replace(Some(mci.value() as u32));
         }
-        debug!("Joint {} mci is set {:?}", self.get_unit_hash(), self.props);
+        debug!("Joint {} mci is set {:?}", self.unit.unit, self.props);
     }
 
     pub fn get_sub_mci(&self) -> Level {
@@ -221,7 +221,7 @@ impl JointData {
 
     pub fn set_stable(&self) {
         self.props.write().unwrap().is_stable = true;
-        debug!("Joint {} is stable {:?}", self.get_unit_hash(), self.props);
+        debug!("Joint {} is stable {:?}", self.unit.unit, self.props);
     }
 
     pub fn is_wl_increased(&self) -> bool {
@@ -258,7 +258,7 @@ impl JointData {
                 joint_data.children = Default::default();
 
                 CachedJoint {
-                    key: Arc::new(self.get_unit_hash().to_owned()),
+                    key: Arc::new(self.unit.unit.to_owned()),
                     data: RcuCell::new(Some(joint_data)),
                 }
             }
@@ -279,7 +279,7 @@ impl JointData {
     pub fn get_missing_parents<'a>(&'a self) -> Result<impl Iterator<Item = &'a String>> {
         let mut missing_parents: HashSet<_> = self.unit.parent_units.iter().collect();
         for parent in self.parents.iter() {
-            missing_parents.remove(parent.read()?.get_unit_hash());
+            missing_parents.remove(&parent.read()?.unit.unit);
         }
         Ok(missing_parents.into_iter())
     }
@@ -472,7 +472,7 @@ impl JointData {
             return self_prop.level < other_prop.level;
         }
 
-        self.get_unit_hash() < other.get_unit_hash()
+        self.unit.unit < other.unit.unit
     }
 }
 

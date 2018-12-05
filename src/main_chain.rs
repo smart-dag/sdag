@@ -375,7 +375,7 @@ fn calc_min_wl_included_by_later_joints(
         }
 
         //Collect witness joints
-        if joint_data.is_authored_by_witness() {
+        if joint_data.unit.is_authored_by_witness() {
             witness_joints.push(joint_data);
         }
     }

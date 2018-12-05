@@ -169,7 +169,7 @@ impl SDagCache {
     /// we use the returned cached joint for further validation
     pub fn add_new_joint(&self, joint: Joint) -> Result<CachedJoint> {
         // first check if joint is already known
-        let key = HashKey::new(joint.get_unit_hash());
+        let key = HashKey::new(&joint.unit.unit);
         self.check_new_joint(&key)?;
 
         if let Err(e) = validation::basic_validate(&joint) {

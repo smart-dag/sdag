@@ -128,9 +128,9 @@ pub fn process_witness_proof(
 
     for joint in unstable_mc_joints {
         let unit = &joint.unit;
-        let unit_hash = joint.get_unit_hash();
+        let unit_hash = &joint.unit.unit;
         ensure!(joint.ball.is_none(), "unstable mc but has ball");
-        ensure!(joint.has_valid_hashes(), "invalid hash");
+        ensure!(joint.unit.has_valid_hashes(), "invalid hash");
         if !parent_units.is_empty() {
             ensure!(parent_units.contains(unit_hash), "not in parents");
         }
@@ -191,11 +191,11 @@ fn process_witness_change_and_definition(
             "witness_change_and_definition_joints: joint without ball"
         );
         ensure!(
-            joint.has_valid_hashes(),
+            joint.unit.has_valid_hashes(),
             "witness_change_and_definition_joints: invalid hash"
         );
 
-        if !joint.is_authored_by_witness() {
+        if !joint.unit.is_authored_by_witness() {
             bail!("not authored by my witness");
         }
     }
@@ -210,7 +210,7 @@ fn process_witness_change_and_definition(
     }
 
     for joint in witness_change_and_definition {
-        let unit_hash = joint.get_unit_hash();
+        let unit_hash = &joint.unit.unit;
         if from_current {
             // already known and stable - skip it
             if let Ok(joint) = SDAG_CACHE.get_joint(unit_hash) {

@@ -50,8 +50,7 @@ pub fn is_unstable_joint_non_serial(joint: CachedJoint) -> Result<bool> {
         {
             info!(
                 "joint [{}] detect non serial with unit [{}]",
-                joint_data.get_unit_hash(),
-                j_data.get_unit_hash()
+                joint_data.unit.unit, j_data.unit.unit
             );
             return Ok(true);
         }

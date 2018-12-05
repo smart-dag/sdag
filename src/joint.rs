@@ -1,7 +1,6 @@
 use std::cmp;
 
 use may::sync::Mutex;
-use serde_json;
 use spec::*;
 
 lazy_static! {
@@ -207,43 +206,6 @@ pub struct Joint {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub unsigned: Option<bool>,
     pub unit: Unit,
-}
-
-// TODO: remove all of the method, we will not use them in memory based version
-impl Joint {
-    #[inline]
-    pub fn get_unit_hash(&self) -> &String {
-        &self.unit.unit
-    }
-
-    pub fn has_valid_hashes(&self) -> bool {
-        let unit = &self.unit;
-        if unit.unit.is_empty() {
-            return false;
-        }
-
-        self.get_unit_hash() == &unit.calc_unit_hash()
-    }
-
-    pub fn calc_joint_hash(&self) -> String {
-        use base64;
-        use sha2::{Digest, Sha256};
-        base64::encode(&Sha256::digest(
-            &serde_json::to_vec(self).expect("joint to json failed"),
-        ))
-    }
-
-    pub fn is_authored_by_witness(&self) -> bool {
-        use my_witness::MY_WITNESSES;
-
-        for author in &self.unit.authors {
-            if MY_WITNESSES.contains(&author.address) {
-                return true;
-            }
-        }
-
-        false
-    }
 }
 
 #[test]

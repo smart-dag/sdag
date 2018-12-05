@@ -80,7 +80,7 @@ impl SDagCacheInner {
             for child in joint.children.iter() {
                 let child_data = child.read()?;
                 if child_data.get_sequence() == JointSequence::Good
-                    || child_data.is_authored_by_witness()
+                    || child_data.unit.is_authored_by_witness()
                 {
                     return Ok(false);
                 }
@@ -96,7 +96,7 @@ impl SDagCacheInner {
             let joint_data = joint.read()?;
             let key = joint.key.clone();
             if joint_data.get_sequence() == JointSequence::Good
-                || joint_data.is_authored_by_witness()
+                || joint_data.unit.is_authored_by_witness()
             {
                 if is_all_children_bad(&joint_data)? {
                     free_joints.push(joint);
@@ -255,7 +255,7 @@ impl SDagCacheInner {
             .remove(joint)
             .expect("purge_free_joint not found")
             .raw_read();
-        let unit = joint.get_unit_hash();
+        let unit = &joint.unit.unit;
         for parent in joint.parents.iter() {
             // remove the child for the parent
             // if the parent becomes free just add back to free list

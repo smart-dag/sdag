@@ -120,7 +120,7 @@ fn validate_ball(joint: &JointData) -> Result<()> {
     }
 
     let ball = joint.ball.as_ref().unwrap();
-    let unit_hash = joint.get_unit_hash();
+    let unit_hash = &joint.unit.unit;
 
     // at this point the ball should only exist in the hash tree ball
     let hash_tree_unit = SDAG_CACHE.get_hash_tree_unit(ball);
@@ -137,7 +137,7 @@ fn validate_ball(joint: &JointData) -> Result<()> {
         let parent_joint = parent.read()?;
         // FIXME: it's not protected for the two source data, we may get bail!
         let parent_ball = match parent_joint.ball {
-            None => match SDAG_CACHE.get_hash_tree_ball(parent_joint.get_unit_hash()) {
+            None => match SDAG_CACHE.get_hash_tree_ball(&parent_joint.unit.unit) {
                 None => bail!("some parents ball not found"),
                 Some(ball) => ball,
             },
@@ -153,7 +153,7 @@ fn validate_ball(joint: &JointData) -> Result<()> {
         let skiplist_joint = SDAG_CACHE.get_joint(unit)?.read()?;
         // FIXME: it's not protected for the two source data, we may get bail!
         let skiplist_ball = match skiplist_joint.ball {
-            None => match SDAG_CACHE.get_hash_tree_ball(skiplist_joint.get_unit_hash()) {
+            None => match SDAG_CACHE.get_hash_tree_ball(&skiplist_joint.unit.unit) {
                 None => bail!("some skiplist ball not found"),
                 Some(ball) => ball,
             },

@@ -343,6 +343,23 @@ impl Unit {
             }
         }
     }
+
+    #[inline]
+    pub fn has_valid_hashes(&self) -> bool {
+        self.unit == self.calc_unit_hash()
+    }
+
+    pub fn is_authored_by_witness(&self) -> bool {
+        use my_witness::MY_WITNESSES;
+
+        for author in &self.authors {
+            if MY_WITNESSES.contains(&author.address) {
+                return true;
+            }
+        }
+
+        false
+    }
 }
 
 impl Default for Unit {
