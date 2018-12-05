@@ -130,12 +130,8 @@ impl SDagCache {
     }
 
     /// get all the free joints
-    pub fn get_free_joints(&self) -> Vec<CachedJoint> {
+    pub fn get_free_joints(&self) -> Result<Vec<CachedJoint>> {
         self.joints.read().unwrap().get_free_joints()
-    }
-
-    pub fn get_free_bad_joints(&self) -> Vec<CachedJoint> {
-        self.joints.read().unwrap().get_free_bad_joints()
     }
 
     /// check if the joint is new, only new joint will be handled
@@ -305,6 +301,7 @@ impl SDagCache {
 
         while let Some(joint) = queue.pop_front() {
             let joint_data = joint.read()?;
+            let key = joint.key.clone();
             if joint_data.get_mci() == mci {
                 let sub_mci = joint_data.get_sub_mci();
                 joints.push((sub_mci, joint));
@@ -312,8 +309,8 @@ impl SDagCache {
                 continue;
             }
 
-            if !visited.contains(&joint_data.unit.unit) {
-                visited.insert(joint_data.unit.unit.clone());
+            if !visited.contains(&key) {
+                visited.insert(key);
                 for parent in joint_data.parents.iter() {
                     queue.push_back(parent.clone());
                 }

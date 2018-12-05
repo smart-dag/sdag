@@ -265,7 +265,7 @@ fn update_stable_main_chain(
 }
 
 fn calc_last_stable_joint(cache: &SDagCache) -> Result<CachedJoint> {
-    let free_joints = cache.get_free_joints();
+    let free_joints = cache.get_free_joints()?;
 
     if free_joints.is_empty() {
         // here we create a fake joint
@@ -470,7 +470,7 @@ pub fn is_stable_in_later_joints(
 
 /// Returns current unstable main chain from the best free joint
 pub fn build_unstable_main_chain() -> Result<Vec<CachedJoint>> {
-    let free_joints = SDAG_CACHE.get_free_joints();
+    let free_joints = SDAG_CACHE.get_free_joints()?;
     if let Some(main_chain_free_joint) = find_best_joint(free_joints.iter())? {
         let (_, unstable_main_chain) = build_unstable_main_chain_from_joint(main_chain_free_joint)?;
         Ok(unstable_main_chain)

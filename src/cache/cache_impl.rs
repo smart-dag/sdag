@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 
 use cache::{CachedData, CachedJoint, HashKey, JointData, ReadyJointEvent};
@@ -74,21 +74,46 @@ impl SDagCacheInner {
     }
 
     /// get all the good free joints
-    pub fn get_free_joints(&self) -> Vec<CachedJoint> {
-        self.free_joints
-            .values()
-            // free joints must be in cache so that we can safely unwrap it
-            .filter(|v| v.read().unwrap().get_sequence() == JointSequence::Good)
-            .cloned()
-            .collect()
-    }
+    pub fn get_free_joints(&self) -> Result<Vec<CachedJoint>> {
+        // judage if the joint has all bad children
+        fn is_all_children_bad(joint: &JointData) -> Result<bool> {
+            for child in joint.children.iter() {
+                let child_data = child.read()?;
+                if child_data.get_sequence() == JointSequence::Good
+                    || child_data.is_authored_by_witness()
+                {
+                    return Ok(false);
+                }
+            }
+            Ok(true)
+        }
 
-    pub fn get_free_bad_joints(&self) -> Vec<CachedJoint> {
-        self.free_joints
-            .values()
-            .filter(|v| v.read().unwrap().get_sequence() == JointSequence::TempBad)
-            .cloned()
-            .collect()
+        let mut free_joints = Vec::new();
+        let mut joints = self.free_joints.values().cloned().collect::<VecDeque<_>>();
+        let mut visited = HashSet::new();
+
+        while let Some(joint) = joints.pop_front() {
+            let joint_data = joint.read()?;
+            let key = joint.key.clone();
+            if joint_data.get_sequence() == JointSequence::Good
+                || joint_data.is_authored_by_witness()
+            {
+                if is_all_children_bad(&joint_data)? {
+                    free_joints.push(joint);
+                }
+                continue;
+            }
+
+            // the joint is now temp-bad
+            if !visited.contains(&key) {
+                visited.insert(key);
+                for parent in joint_data.parents.iter() {
+                    joints.push_back(parent.clone());
+                }
+            }
+        }
+
+        Ok(free_joints)
     }
 
     /// query if joint is in unhandled joints

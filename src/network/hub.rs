@@ -1236,7 +1236,7 @@ impl HubConn {
     }
 
     fn send_free_joints(&self) -> Result<()> {
-        let joints = SDAG_CACHE.get_free_joints();
+        let joints = SDAG_CACHE.get_free_joints()?;
         for joint in joints {
             let joint = joint.read()?;
             self.send_joint(&**joint)?;
