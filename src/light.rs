@@ -16,7 +16,7 @@ pub struct Transaction {
     pub unit_hash: String,
     pub from_addr: String,
     pub to_addr: String,
-    pub amount: u64,
+    pub amount: i64,
     pub time: Option<u64>,
 }
 
@@ -122,7 +122,7 @@ fn get_stable_history(history_request: &HistoryRequest) -> Result<Vec<Transactio
                         unit_hash: last_self_unit.clone(),
                         from_addr: address.clone(),
                         to_addr: output.address.clone(),
-                        amount: output.amount,
+                        amount: output.amount as i64,
                         time: self_joint_data.unit.timestamp,
                     });
 
@@ -164,7 +164,7 @@ fn get_receive_tx(
                         unit_hash: unit.unit.clone(),
                         from_addr: unit.authors[0].address.clone(), // just support one author currently
                         to_addr: address.clone(),
-                        amount: output.amount,
+                        amount: output.amount as i64,
                         time: unit.timestamp,
                     });
 

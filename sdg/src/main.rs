@@ -158,13 +158,16 @@ fn show_history(
         }
 
         let history = &history.transactions[index - 1];
-        if history.amount > 0 {
+        let mut amount;
+        if &history.to_addr == address {
             println!("FROM     : {}", history.from_addr);
+            amount = history.amount;
         } else {
             println!("TO       : {}", history.to_addr);
+            amount = 0 - history.amount;
         }
         println!("UNIT     : {}", history.unit_hash);
-        println!("AMOUNT   : {:.6} MN", history.amount as f64 / 1_000_000.0);
+        println!("AMOUNT   : {:.6} MN", amount as f64 / 1_000_000.0);
         println!(
             "DATE     : {}",
             Local
@@ -176,10 +179,16 @@ fn show_history(
             if id > num - 1 {
                 break;
             }
+            let amount = if &transaction.to_addr == address {
+                transaction.amount
+            } else {
+                0 - transaction.amount
+            };
+
             println!(
                 "#{:<4} {:>10.6} MN  \t{}",
                 id + 1,
-                transaction.amount as f64 / 1_000_000.0,
+                amount as f64 / 1_000_000.0,
                 Local
                     .timestamp(transaction.time.unwrap_or(0) as i64, 0)
                     .naive_local()
