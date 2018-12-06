@@ -166,6 +166,7 @@ fn calc_skiplist(joint_data: &JointData) -> Result<(Vec<String>)> {
             .ok_or_else(|| format_err!("no unit hash for mci {}", target_mci))?;
         skiplist.push(skiplist_unit);
     }
+    skiplist.sort();
 
     Ok(skiplist)
 }
