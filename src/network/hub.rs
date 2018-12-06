@@ -1401,18 +1401,20 @@ pub fn start_catchup(ws: Arc<HubConn>) -> Result<()> {
     error!("catchup started");
 
     // timely wait the hash tree ball consumed
-    fn wait_hash_tree_ball_consumed(left_len: usize) {
+    // return false if timeout
+    fn wait_hash_tree_ball_consumed(left_len: usize) -> bool {
         let mut wait_time = 0;
         while SDAG_CACHE.get_hash_tree_ball_len() > left_len {
             // at most we wait for 10 second
-            if wait_time >= 10000 {
+            if wait_time >= 1000 {
                 warn!("wait for catchup data consumed timeout!");
-                return;
+                return false;
             }
             // every one second check again
             coroutine::sleep(Duration::from_millis(10));
             wait_time += 1;
         }
+        true
     }
 
     // before a catchup the hash_tree_ball should be clear
@@ -1440,11 +1442,15 @@ pub fn start_catchup(ws: Arc<HubConn>) -> Result<()> {
         catchup_chain_balls.pop();
 
         // wait the batch number below a value and then start another batch
-        wait_hash_tree_ball_consumed(200);
+        if !wait_hash_tree_ball_consumed(200) {
+            bail!("catchup wait hash tree ball timed out!");
+        }
     }
 
     // wait all the catchup done
-    wait_hash_tree_ball_consumed(0);
+    if !wait_hash_tree_ball_consumed(0) {
+        bail!("catchup wait last hash tree ball timed out!");
+    }
 
     // wait until there is no more working
     while UNIT_IN_WORK.get_waiter_num() != 0 {
