@@ -965,7 +965,7 @@ impl HubConn {
         SDAG_CACHE
             .get_joint(&unit)
             .and_then(|j| j.read())
-            .and_then(|j| Ok(json!({ "joint": (**j).clone()})))
+            .and_then(|j| Ok(json!({ "joint": (**j).clone(), "property": j.get_props()})))
     }
 }
 
