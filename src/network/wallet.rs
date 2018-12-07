@@ -8,7 +8,7 @@ use error::Result;
 use joint::Joint;
 use may::coroutine;
 use may::net::TcpStream;
-use spec::Input;
+use spec::Unit;
 
 use light::*;
 use serde_json::{self, Value};
@@ -92,17 +92,24 @@ impl WalletConn {
         Ok(())
     }
 
-    pub fn get_inputs_from_hub(&self, address: String, amount: u64) -> Result<Vec<Input>> {
-        let inputs = self.send_request(
+    pub fn get_inputs_from_hub(
+        &self,
+        naked_unit: &Unit,
+        transaction_amount: u64,
+        is_spend_all: bool,
+    ) -> Result<InputsResponse> {
+        let inputs_response = self.send_request(
             "light/inputs",
             &serde_json::to_value(InputsRequest {
-                address,
-                amount,
-                is_spend_all: false,
+                paid_address: naked_unit.authors[0].address.clone(),
+                naked_payload_commission: naked_unit.payload_commission.unwrap() as u64,
+                headers_commission: naked_unit.headers_commission.unwrap() as u64,
+                transaction_amount,
+                is_spend_all,
             })?,
         )?;
 
-        Ok(serde_json::from_value(inputs).unwrap())
+        Ok(serde_json::from_value(inputs_response).unwrap())
     }
     //returned spendable the number of coins
     pub fn get_balance(&self, address: &String) -> Result<u64> {
@@ -121,6 +128,12 @@ impl WalletConn {
         )?;
 
         Ok(serde_json::from_value(response).unwrap())
+    }
+
+    pub fn get_light_props(&self, address: &String) -> Result<LightProps> {
+        let light_prop = self.send_request("light/light_props", &serde_json::to_value(address)?)?;
+
+        Ok(serde_json::from_value(light_prop).unwrap())
     }
 }
 

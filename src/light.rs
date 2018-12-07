@@ -1,8 +1,18 @@
 use error::Result;
+use serde_json::Value;
 
 use business::BUSINESS_CACHE;
 use cache::SDAG_CACHE;
 use spec::{Input, Payload, Unit};
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct LightProps {
+    pub last_ball: String,
+    pub last_ball_unit: String,
+    pub parent_units: Vec<String>,
+    pub witness_list_unit: String,
+    pub definition: Option<Value>,
+}
 
 #[derive(Serialize, Deserialize)]
 pub struct HistoryRequest {
@@ -27,9 +37,11 @@ pub struct HistoryResponse {
 
 #[derive(Serialize, Deserialize)]
 pub struct InputsRequest {
-    pub address: String,
-    pub amount: u64,
+    pub paid_address: String,
+    pub transaction_amount: u64,
     pub is_spend_all: bool,
+    pub naked_payload_commission: u64,
+    pub headers_commission: u64,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -37,16 +49,19 @@ pub struct InputsResponse {
     pub inputs: Vec<Input>,
     pub amount: u64,
 }
-
-/// get valide inputs for the address
 pub fn get_inputs_for_amount(input_request: InputsRequest) -> Result<InputsResponse> {
     let InputsRequest {
-        address,
-        amount,
+        paid_address,
+        transaction_amount,
         is_spend_all,
+        naked_payload_commission,
+        headers_commission,
     } = input_request;
 
-    let (inputs, amount) = BUSINESS_CACHE.get_inputs_for_amount(&address, amount, is_spend_all)?;
+    let amount = transaction_amount + naked_payload_commission + headers_commission;
+
+    let (inputs, amount) =
+        BUSINESS_CACHE.get_inputs_for_amount(&paid_address, amount, is_spend_all)?;
 
     Ok(InputsResponse { inputs, amount })
 }

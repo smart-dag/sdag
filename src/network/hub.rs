@@ -7,6 +7,7 @@ use super::network::{Sender, Server, WsConnection};
 use business::BUSINESS_CACHE;
 use cache::{JointData, SDAG_CACHE};
 use catchup;
+use composer::*;
 use config;
 use crossbeam::atomic::ArcCell;
 use error::Result;
@@ -587,13 +588,30 @@ impl HubConn {
         Ok(serde_json::to_value(ret)?)
     }
 
-    //TODO:
-    fn on_get_light_props(&self, _param: Value) -> Result<Value> {
+    fn on_get_light_props(&self, param: Value) -> Result<Value> {
         if !self.is_inbound() {
             bail!("light clients have to be inbound");
         }
+        let address: String = serde_json::from_value(param)?;
+        let ParentsAndLastBall {
+            parents,
+            last_ball,
+            last_ball_unit,
+        } = pick_parents_and_last_ball(&address)?;
 
-        unimplemented!()
+        let light_props = light::LightProps {
+            last_ball,
+            last_ball_unit,
+            parent_units: parents,
+            witness_list_unit: config::get_genesis_unit(),
+            definition: if let Some(value) = SDAG_CACHE.get_definition(&address) {
+                Some(value.1)
+            } else {
+                None
+            },
+        };
+
+        Ok(serde_json::to_value(light_props)?)
     }
 
     fn on_heartbeat(&self, _: Value) -> Result<Value> {
@@ -654,7 +672,7 @@ impl HubConn {
         let joint: Joint = serde_json::from_value(param)?;
         info!("receive a joint: {:?}", joint);
         ensure!(!joint.unit.unit.is_empty(), "no unit");
-        self.handle_online_joint(joint)
+        self.handle_online_joint(&joint)
     }
 
     fn on_catchup(&self, param: Value) -> Result<Value> {
@@ -756,6 +774,10 @@ impl HubConn {
     fn on_post_joint(&self, param: Value) -> Result<Value> {
         let joint: Joint = serde_json::from_value(param)?;
         info!("receive a posted joint: {:?}", joint);
+
+        self.handle_online_joint(&joint)?;
+
+        WSS.broadcast_joint(&joint)?;
         Ok(Value::from("accepted"))
     }
 
@@ -942,7 +964,7 @@ impl HubConn {
 }
 
 impl HubConn {
-    fn handle_online_joint(&self, joint: Joint) -> Result<()> {
+    fn handle_online_joint(&self, joint: &Joint) -> Result<()> {
         // clear the main chain index, main chain index is used by light only
         // joint.unit.main_chain_index = None;
 
@@ -1221,7 +1243,7 @@ impl HubConn {
                 return ws.send_error(Value::from(err));
             }
 
-            ws.handle_online_joint(joint)
+            ws.handle_online_joint(&joint)
         }
 
         for unit in units {

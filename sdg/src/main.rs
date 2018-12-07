@@ -20,13 +20,15 @@ mod config;
 use chrono::{Local, TimeZone};
 use clap::App;
 use failure::ResultExt;
+use spec::Output;
 use std::sync::Arc;
 
+use composer::*;
+use light::*;
 use sdag::network::wallet::WalletConn;
+use sdag::signature::Signer;
 use sdag::*;
 use sdag_wallet_base::{Base64KeyExt, ExtendedPrivKey, ExtendedPubKey, Mnemonic};
-
-use sdag::signature::Signer;
 
 struct WalletInfo {
     #[allow(dead_code)]
@@ -199,14 +201,69 @@ fn show_history(
     Ok(())
 }
 
-//TODO:
 fn send_payment(
-    _ws: &Arc<WalletConn>,
-    _text: Option<String>,
-    _address_amount: &Vec<(String, f64)>,
-    _wallet_info: &WalletInfo,
+    ws: &Arc<WalletConn>,
+    text: Option<String>,
+    address_amount: Vec<(String, f64)>,
+    wallet_info: &WalletInfo,
 ) -> Result<()> {
-    unimplemented!()
+    let messages = if text.is_some() {
+        vec![composer::create_text_message(text.as_ref().unwrap())?]
+    } else {
+        vec![]
+    };
+    let light_props = ws.get_light_props(&wallet_info._00_address)?;
+
+    let outputs = address_amount
+        .iter()
+        .map(|(address, amount)| Output {
+            address: address.clone(),
+            amount: (amount * 1_000_000.0).round() as u64,
+        })
+        .collect::<Vec<_>>();
+
+    let total_amount = outputs.iter().fold(0, |acc, x| acc + x.amount);
+
+    let compose_info = ComposeInfo {
+        paid_address: wallet_info._00_address.clone(),
+        change_address: wallet_info._00_address.clone(),
+        outputs,
+        messages,
+        transaction_amount: total_amount,
+        is_spend_all: false,
+        light_props,
+        pubk: wallet_info._00_address_pubk.to_base64_key(),
+    };
+
+    let unit = compose_naked_joint(compose_info.clone())?;
+
+    let input_response: InputsResponse =
+        ws.get_inputs_from_hub(&unit, total_amount, compose_info.is_spend_all)?;
+
+    let joint = compose_joint(unit, input_response, compose_info, wallet_info)?;
+
+    if let Err(e) = ws.post_joint(&joint) {
+        eprintln!("post_joint err={}", e);
+        return Err(e);
+    }
+
+    println!("FROM  : {}", wallet_info._00_address);
+    println!("TO    : ");
+    for (address, amount) in address_amount {
+        println!("      address : {}, amount : {}", address, amount);
+    }
+    println!("UNIT  : {}", joint.unit.unit);
+
+    if text.is_some() {
+        println!("TEXT  : {}", text.unwrap_or("".to_string()));
+    }
+
+    println!(
+        "DATE  : {}",
+        Local.timestamp_millis(time::now() as i64).naive_local()
+    );
+
+    Ok(())
 }
 
 fn main() -> Result<()> {
@@ -292,10 +349,10 @@ fn main() -> Result<()> {
         }
 
         if let Some(text) = send.value_of("text") {
-            return send_payment(&ws, Some(text.to_string()), &address_amount, &wallet_info);
+            return send_payment(&ws, Some(text.to_string()), address_amount, &wallet_info);
+        } else {
+            return send_payment(&ws, None, address_amount, &wallet_info);
         }
-
-        return send_payment(&ws, None, &address_amount, &wallet_info);
     }
 
     if let Some(balance) = m.subcommand_matches("balance") {
