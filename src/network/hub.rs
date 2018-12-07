@@ -477,6 +477,7 @@ impl Server<HubData> for HubData {
             // apis for explorer
             "get_network_info" => ws.on_get_network_info(params)?,
             "get_joints_by_mci" => ws.on_get_joints_by_mci(params)?,
+            "get_joint_by_unit_hash" => ws.on_get_joint_by_unit_hash(params)?,
             command => bail!("on_request unknown command: {}", command),
         };
         Ok(response)
@@ -956,6 +957,15 @@ impl HubConn {
             .collect();
 
         Ok(json!({ "joints": joints }))
+    }
+
+    fn on_get_joint_by_unit_hash(&self, param: Value) -> Result<Value> {
+        let unit: String = serde_json::from_value(param)?;
+
+        SDAG_CACHE
+            .get_joint(&unit)
+            .and_then(|j| j.read())
+            .and_then(|j| Ok(json!({ "joint": (**j).clone()})))
     }
 }
 
