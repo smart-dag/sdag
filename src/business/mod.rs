@@ -226,6 +226,33 @@ impl GlobalState {
         self.related_joints.write().unwrap().remove(addr);
     }
 
+    /// get balance from stable joints
+    pub fn get_stable_balance(&self, address: &str) -> Result<u64> {
+        let (last_stable_self_unit, related_units) = self.get_global_state(address);
+
+        let mut balance = match last_stable_self_unit {
+            Some(ref unit) => SDAG_CACHE.get_joint(unit)?.read()?.get_balance(),
+            None => 0,
+        };
+
+        // add those related payment to us
+        for unit in &related_units {
+            let related_joint_date = SDAG_CACHE.get_joint(unit)?.read()?;
+            for msg in &related_joint_date.unit.messages {
+                if let Some(Payload::Payment(ref payment)) = msg.payload {
+                    // note: no mater what kind we should add output for balance
+                    for output in &payment.outputs {
+                        if &output.address == address {
+                            balance += output.amount;
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(balance)
+    }
+
     /// rebuild from database
     /// TODO: rebuild from database
     /// NOTE: need also update global state and temp business state
@@ -433,26 +460,7 @@ impl BusinessCache {
 
         let (last_stable_self_unit, related_units) = self.global_state.get_global_state(&addr);
 
-        let mut balance = match last_stable_self_unit {
-            Some(ref unit) => SDAG_CACHE.get_joint(unit)?.read()?.get_balance(),
-            None => 0,
-        };
-
-        // add those related payment to us
-        for unit in &related_units {
-            let related_joint_date = SDAG_CACHE.get_joint(unit)?.read()?;
-            for msg in &related_joint_date.unit.messages {
-                if let Some(Payload::Payment(ref payment)) = msg.payload {
-                    // note: no mater what kind we should add output for balance
-                    for output in &payment.outputs {
-                        if &output.address == addr {
-                            balance += output.amount;
-                        }
-                    }
-                }
-            }
-        }
-
+        let mut balance = self.global_state.get_stable_balance(addr)?;
         // reduce spend amount
         if !joint.unit.is_genesis_unit() {
             for msg in &joint.unit.messages {

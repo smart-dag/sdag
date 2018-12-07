@@ -4,6 +4,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use super::network::{Sender, Server, WsConnection};
+use business::BUSINESS_CACHE;
 use cache::{JointData, SDAG_CACHE};
 use catchup;
 use config;
@@ -569,8 +570,7 @@ impl HubConn {
         let addr = param
             .as_str()
             .ok_or_else(|| format_err!("no address for get_balance"))?;
-
-        let balance = 500000000;
+        let balance = BUSINESS_CACHE.global_state.get_stable_balance(addr)?;
 
         Ok(json!({"address": addr, "balance": balance}))
     }

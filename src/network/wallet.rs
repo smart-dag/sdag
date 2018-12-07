@@ -105,10 +105,13 @@ impl WalletConn {
         Ok(serde_json::from_value(inputs).unwrap())
     }
     //returned spendable the number of coins
-    pub fn get_balance(&self, address: &String) -> Result<usize> {
-        let amount = self.send_request("balance", &serde_json::to_value(address)?)?;
+    pub fn get_balance(&self, address: &String) -> Result<u64> {
+        let response = self.send_request("get_balance", &serde_json::to_value(address)?)?;
+        let balance = response["balance"]
+            .as_u64()
+            .ok_or_else(|| format_err!("get balance failed"))?;
 
-        Ok(serde_json::from_value(amount).unwrap())
+        Ok(balance)
     }
 
     pub fn get_latest_history(&self, address: String, num: usize) -> Result<HistoryResponse> {
