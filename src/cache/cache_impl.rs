@@ -162,9 +162,7 @@ impl SDagCacheInner {
         }
 
         // add the new free joints
-        if joint_data.is_free() {
-            self.free_joints.insert(HashKey(joint.key.clone()), joint);
-        }
+        self.free_joints.insert(HashKey(joint.key.clone()), joint);
     }
 
     /// remove the bad parent and all it's desendants
