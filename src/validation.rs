@@ -532,6 +532,11 @@ fn validate_witnesses(joint: &JointData) -> Result<()> {
 fn validate_authors(joint: &JointData) -> Result<()> {
     for author in &joint.unit.authors {
         if !author.definition.is_null() {
+            // only first joint need take definition
+            if SDAG_CACHE.get_definition(&author.address).is_some() {
+                bail!("duplicate definition");
+            }
+
             let address = object_hash::get_chash(&author.definition)?;
             if author.address != address {
                 bail!(
