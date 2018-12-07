@@ -175,4 +175,6 @@ impl Server<WalletData> for WalletData {
         };
         Ok(response)
     }
+
+    fn close(_ws: Arc<WalletConn>) {}
 }

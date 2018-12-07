@@ -19,6 +19,7 @@ use tungstenite::{Message, WebSocket};
 pub trait Server<T> {
     fn on_message(ws: Arc<WsConnection<T>>, subject: String, body: Value) -> Result<()>;
     fn on_request(ws: Arc<WsConnection<T>>, command: String, params: Value) -> Result<Value>;
+    fn close(ws: Arc<WsConnection<T>>);
 }
 
 pub trait Sender {
@@ -161,7 +162,7 @@ impl<T> WsConnection<T> {
                 let msg = match reader.read_message() {
                     Ok(msg) => msg,
                     Err(e) => {
-                        error!("{}", e.to_string());
+                        error!("WebSocket read_message err={}", e.to_string());
                         break;
                     }
                 };
@@ -252,6 +253,11 @@ impl<T> WsConnection<T> {
                         continue;
                     }
                 }
+            }
+
+            // close the connection if any error happened
+            if let Some(c) = ws_1.upgrade() {
+                T::close(c);
             }
         });
 

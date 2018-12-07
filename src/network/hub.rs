@@ -481,6 +481,10 @@ impl Server<HubData> for HubData {
         };
         Ok(response)
     }
+
+    fn close(ws: Arc<HubConn>) {
+        ws.close()
+    }
 }
 
 // internal state access
@@ -1278,12 +1282,15 @@ impl HubConn {
 
     fn send_subscribe(&self) -> Result<()> {
         let last_mci = main_chain::get_last_stable_mci();
-        self.send_request(
+
+        match self.send_request(
             "subscribe",
             &json!({ "subscription_id": *SUBSCRIPTION_ID.read().unwrap(), "last_mci": last_mci.value()}),
-        )?;
+        ) {
+            Ok(_) => self.set_source(),
+            Err(e) => warn!("send subscribe failed, err={}, peer={}", e, self.get_peer()),
+        }
 
-        self.set_source();
         Ok(())
     }
 
