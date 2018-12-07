@@ -1,8 +1,8 @@
 {
     "hub_url": [
-        "192.168.56.103:6615"
+        "10.168.3.131:6616"
     ],
-    "hub_server_port": 6616,
+    "hub_server_port": 6615,
     "genesis_unit": "9AXarZlxv7/CgumgfLEmd1tQjyEnyW9JYPXFZUBWrJg=",
     "witnesses": [
         "3JX4UBJW463VJFBNEO2WOJFTPK2WLI5A",
