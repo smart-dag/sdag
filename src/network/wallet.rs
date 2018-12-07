@@ -142,7 +142,7 @@ impl WalletConn {
     fn on_hub_challenge(&self, param: Value) -> Result<()> {
         // TODO: add special wallet logic here
         // this is hub, we do nothing here
-        // only wallet would save the challenge and save the challenge
+        // only wallet would save the challenge
         // for next login and match
         info!("peer is a hub, challenge = {}", param);
         Ok(())

@@ -31,6 +31,6 @@ pub fn start_global_timers() {
     go!(move || loop {
         coroutine::sleep(Duration::from_secs(30));
         info!("auto connect to other peers");
-        t!(hub::auto_connection());
+        hub::auto_connection();
     });
 }

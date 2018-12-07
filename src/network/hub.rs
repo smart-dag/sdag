@@ -81,7 +81,7 @@ pub struct HubData {
     is_source: AtomicBool,
     is_inbound: AtomicBool,
     is_login_completed: AtomicBool,
-    challenge: ArcCell<Option<String>>,
+    challenge: ArcCell<String>,
     device_address: ArcCell<Option<String>>,
 }
 
@@ -95,7 +95,7 @@ lazy_static! {
     static ref UNIT_IN_WORK: MapLock<String> = MapLock::new();
     static ref JOINT_IN_REQ: MapLock<String> = MapLock::new();
     static ref IS_CATCHING_UP: AtomicLock = AtomicLock::new();
-    static ref SUBSCRIPTION_ID: RwLock<String> = RwLock::new(object_hash::gen_random_string(30));
+    static ref CHALLENGE_ID: String = object_hash::gen_random_string(30);
 }
 
 pub struct NewJointEvent;
@@ -236,24 +236,31 @@ impl WsConnections {
         self.get_next_outbound().or_else(|| self.get_next_inbound())
     }
 
-    fn get_peers_from_remote(&self) -> Result<Vec<String>> {
+    fn get_peers_from_remote(&self) -> Vec<String> {
         let mut peers: Vec<String> = Vec::new();
-
+        let challenge = Value::from(CHALLENGE_ID.as_str());
         let out_bound_peers = self.outbound.read().unwrap().to_vec();
         for out_bound_peer in out_bound_peers {
-            let mut tmp: Vec<String> =
-                serde_json::from_value(out_bound_peer.send_request("get_peers", &Value::Null)?)?;
-            peers.append(&mut tmp);
+            if let Ok(value) = out_bound_peer.send_request("get_peers", &challenge) {
+                if let Ok(mut tmp) = serde_json::from_value(value) {
+                    peers.append(&mut tmp);
+                }
+            }
         }
 
         let in_bound_peers = self.inbound.read().unwrap().to_vec();
         for in_bound_peer in in_bound_peers {
-            let mut tmp: Vec<String> =
-                serde_json::from_value(in_bound_peer.send_request("get_peers", &Value::Null)?)?;
-            peers.append(&mut tmp);
+            if let Ok(value) = in_bound_peer.send_request("get_peers", &challenge) {
+                if let Ok(mut tmp) = serde_json::from_value(value) {
+                    peers.append(&mut tmp);
+                }
+            }
         }
 
-        Ok(peers)
+        peers.sort();
+        peers.dedup();
+
+        peers
     }
 
     pub fn get_connection_by_name(&self, peer: &str) -> Option<Arc<HubConn>> {
@@ -314,11 +321,13 @@ impl WsConnections {
         Ok(())
     }
 
-    pub fn get_outbound_peers(&self) -> Vec<String> {
+    pub fn get_outbound_peers(&self, challenge: &str) -> Vec<String> {
+        // filter out the connection with the same challenge
         self.outbound
             .read()
             .unwrap()
             .iter()
+            .filter(|c| c.get_challenge() != challenge)
             .map(|c| c.get_peer().to_owned())
             .collect()
     }
@@ -357,68 +366,60 @@ impl WsConnections {
     }
 }
 
-fn get_unconnected_peers_in_config() -> Result<Vec<String>> {
-    let config_peers = config::get_remote_hub_url();
-    Ok(config_peers
+fn get_unconnected_peers_in_config() -> Vec<String> {
+    config::get_remote_hub_url()
         .into_iter()
         .filter(|peer| !WSS.contains(peer))
-        .collect::<Vec<_>>())
+        .collect::<Vec<_>>()
 }
 
-fn get_unconnected_peers_in_db() -> Result<Vec<String>> {
+fn get_unconnected_peers_in_db() -> Vec<String> {
     // TODO: impl
-    Ok(Vec::new())
+    Vec::new()
 }
 
-pub fn get_unconnected_remote_peers() -> Result<Vec<String>> {
-    let peers = WSS.get_peers_from_remote()?;
-
-    Ok(peers
+pub fn get_unconnected_remote_peers() -> Vec<String> {
+    WSS.get_peers_from_remote()
         .into_iter()
         .filter(|peer| !WSS.contains(peer))
-        .collect::<Vec<_>>())
+        .collect::<Vec<_>>()
 }
 
-pub fn auto_connection() -> Result<()> {
+pub fn auto_connection() {
     let mut counts = WSS.get_needed_outbound_peers();
     if counts == 0 {
-        return Ok(());
+        return;
     }
 
-    if let Ok(peers) = get_unconnected_peers_in_config() {
-        for peer in peers {
-            if create_outbound_conn(peer).is_ok() {
-                counts -= 1;
-                if counts == 0 {
-                    return Ok(());
-                }
+    let peers = get_unconnected_peers_in_config();
+    for peer in peers {
+        if create_outbound_conn(peer).is_ok() {
+            counts -= 1;
+            if counts == 0 {
+                return;
             }
         }
     }
 
-    if let Ok(peers) = get_unconnected_remote_peers() {
-        for peer in peers {
-            if create_outbound_conn(peer).is_ok() {
-                counts -= 1;
-                if counts == 0 {
-                    return Ok(());
-                }
+    let peers = get_unconnected_remote_peers();
+    for peer in peers {
+        if create_outbound_conn(peer).is_ok() {
+            counts -= 1;
+            if counts == 0 {
+                return;
             }
         }
     }
 
-    if let Ok(peers) = get_unconnected_peers_in_db() {
-        for peer in peers {
-            if create_outbound_conn(peer).is_ok() {
-                counts -= 1;
-                if counts == 0 {
-                    return Ok(());
-                }
+    let peers = get_unconnected_peers_in_db();
+    for peer in peers {
+        if create_outbound_conn(peer).is_ok() {
+            counts -= 1;
+            if counts == 0 {
+                return;
             }
         }
     }
-
-    Ok(())
 }
 
 impl Default for HubData {
@@ -428,7 +429,7 @@ impl Default for HubData {
             is_source: AtomicBool::new(false),
             is_inbound: AtomicBool::new(false),
             is_login_completed: AtomicBool::new(false),
-            challenge: ArcCell::new(Arc::new(None)),
+            challenge: ArcCell::new(Arc::new("unknown".to_owned())),
             device_address: ArcCell::new(Arc::new(None)),
         }
     }
@@ -463,8 +464,6 @@ impl Server<HubData> for HubData {
             "get_joint" => ws.on_get_joint(params)?,
             "catchup" => ws.on_catchup(params)?,
             "get_hash_tree" => ws.on_get_hash_tree(params)?,
-            // bellow is wallet used command
-            "get_bots" => ws.on_get_bots(params)?,
             "hub/temp_pubkey" => ws.on_hub_temp_pubkey(params)?,
             "get_peers" => ws.on_get_peers(params)?,
             "get_witnesses" => ws.on_get_witnesses(params)?,
@@ -530,14 +529,14 @@ impl HubConn {
         data.is_login_completed.store(true, Ordering::Relaxed);
     }
 
-    pub fn get_challenge(&self) -> Arc<Option<String>> {
+    pub fn get_challenge(&self) -> String {
         let data = self.get_data();
-        data.challenge.get()
+        data.challenge.get().to_string()
     }
 
     pub fn set_challenge(&self, challenge: &str) {
         let data = self.get_data();
-        data.challenge.set(Arc::new(Some(challenge.to_owned())));
+        data.challenge.set(Arc::new(challenge.to_owned()));
     }
 
     pub fn get_device_address(&self) -> Arc<Option<String>> {
@@ -605,12 +604,7 @@ impl HubConn {
         let subscription_id = param["subscription_id"]
             .as_str()
             .ok_or_else(|| format_err!("no subscription_id"))?;
-        if subscription_id == *SUBSCRIPTION_ID.read().unwrap() {
-            // TODO: mark self connection
-            // let db = db::DB_POOL.get_connection();
-            // let mut stmt = db.prepare_cached("UPDATE peers SET is_self=1 WHERE peer=?")?;
-            // stmt.execute(&[self.get_peer()])?;
-
+        if subscription_id == *CHALLENGE_ID {
             self.close();
             return Err(format_err!("self-connect"));
         }
@@ -632,9 +626,14 @@ impl HubConn {
 
     fn on_hub_challenge(&self, param: Value) -> Result<()> {
         // this is hub, we do nothing here
-        // only wallet would save the challenge and save the challenge
+        // only wallet would save the challenge
         // for next login and match
         info!("peer is a hub, challenge = {}", param);
+        let challenge = param
+            .as_str()
+            .ok_or_else(|| format_err!("no challenge id"))?;
+        // we save the peer's challenge to distingue who it is
+        self.set_challenge(challenge);
         Ok(())
     }
 
@@ -743,34 +742,9 @@ impl HubConn {
         unimplemented!()
     }
 
-    fn on_get_bots(&self, _param: Value) -> Result<Value> {
-        // let db = db::DB_POOL.get_connection();
-        // let mut stmt = db.prepare_cached(
-        //     "SELECT id, name, pairing_cod, description FROM bots ORDER BY rank DESC, id",
-        // )?;
-
-        // #[derive(Serialize)]
-        // struct Bot {
-        //     id: u32,
-        //     name: String,
-        //     pairing_cod: String,
-        //     description: String,
-        // };
-
-        // let bots = stmt
-        //     .query_map(&[], |row| Bot {
-        //         id: row.get(0),
-        //         name: row.get(1),
-        //         pairing_cod: row.get(2),
-        //         description: row.get(3),
-        //     })?
-        //     .collect::<::std::result::Result<Vec<_>, _>>()?;
-        // Ok(serde_json::to_value(bots)?)
-        unimplemented!()
-    }
-
-    fn on_get_peers(&self, _param: Value) -> Result<Value> {
-        let peers = WSS.get_outbound_peers();
+    fn on_get_peers(&self, param: Value) -> Result<Value> {
+        let challenge = param.as_str();
+        let peers = WSS.get_outbound_peers(challenge.unwrap_or("unkown"));
         Ok(serde_json::to_value(peers)?)
     }
 
@@ -782,8 +756,6 @@ impl HubConn {
     fn on_post_joint(&self, param: Value) -> Result<Value> {
         let joint: Joint = serde_json::from_value(param)?;
         info!("receive a posted joint: {:?}", joint);
-        ensure!(!joint.unit.unit.is_empty(), "no unit");
-        self.handle_posted_joint(joint)?;
         Ok(Value::from("accepted"))
     }
 
@@ -819,7 +791,7 @@ impl HubConn {
             }
             Ok(device_message) => {
                 if let DeviceMessage::Login(ref login) = &device_message {
-                    if Some(&login.challenge) != (*self.get_challenge()).as_ref() {
+                    if login.challenge != *CHALLENGE_ID {
                         return self.send_error(Value::from("wrong challenge"));
                     }
 
@@ -1035,106 +1007,6 @@ impl HubConn {
         Ok(())
     }
 
-    fn handle_posted_joint(&self, mut _joint: Joint) -> Result<()> {
-        // use joint_storage::CheckNewResult;
-        // use validation::{ValidationError, ValidationOk};
-
-        // // clear the main chain index
-        // joint.unit.main_chain_index = None;
-        // let unit = &joint.unit.unit;
-        // // check if unit is in work, when g is dropped unlock the unit
-        // let g = UNIT_IN_WORK.try_lock(vec![unit.to_owned()]);
-        // if g.is_none() {
-        //     // the unit is in work, do nothing
-        //     return Ok(());
-        // }
-
-        // match joint_storage::check_new_joint(db, &joint)? {
-        //     CheckNewResult::New => {
-        //         // do nothing here, proceed to valid
-        //     }
-        //     CheckNewResult::Known => {
-        //         if joint.unsigned == Some(true) {
-        //             bail!("known unsigned");
-        //         }
-        //         self.write_event(db, "know_good")?;
-        //         bail!("known");
-        //     }
-        //     CheckNewResult::KnownBad => {
-        //         self.write_event(db, "know_bad")?;
-        //         bail!("known bad");
-        //     }
-
-        //     CheckNewResult::KnownUnverified => {
-        //         bail!("known unverified");
-        //     }
-        // }
-
-        // match validation::validate(db, &joint) {
-        //     Ok(ok) => match ok {
-        //         ValidationOk::Unsigned(_) => {
-        //             if joint.unsigned != Some(true) {
-        //                 bail!("ifOkUnsigned() signed");
-        //             }
-        //             bail!("you can't send unsigned units");
-        //         }
-        //         ValidationOk::Signed(validate_state, lock) => {
-        //             if joint.unsigned == Some(true) {
-        //                 bail!("ifOk() unsigned");
-        //             }
-        //             joint.save(validate_state, false)?;
-        //             drop(lock);
-
-        //             if !IS_CATCHING_UP.is_locked() {
-        //                 WSS.forward_joint(self, &joint)?;
-        //                 // trigger new joint event
-        //                 ::utils::event::emit_event(NewJointEvent);
-        //             }
-        //             notify_watchers(db, &joint, self)?;
-        //         }
-        //     },
-        //     Err(err) => match err {
-        //         ValidationError::OtherError { err } => {
-        //             bail!("validation other err={}, unit={}", err, unit);
-        //         }
-
-        //         ValidationError::UnitError { err } => {
-        //             error!("error = {}", err);
-        //             self.purge_joint_and_dependencies_and_notify_peers(db, &joint, &err)?;
-        //             if !err.contains("authentifier verification failed")
-        //                 && !err.contains("bad merkle proof at path")
-        //             {
-        //                 self.write_event(db, "invalid")?;
-        //             }
-        //             bail!("{} validation failed: {}", unit, err);
-        //         }
-        //         ValidationError::JointError { err } => {
-        //             self.write_event(db, "invalid")?;
-        //             let mut stmt = db.prepare_cached(
-        //                 "INSERT INTO known_bad_joints (joint, json, error) VALUES (?,?,?)",
-        //             )?;
-        //             stmt.execute(&[
-        //                 &object_hash::get_base64_hash(&joint)?,
-        //                 &serde_json::to_string(&joint)?,
-        //                 &err,
-        //             ])?;
-        //             bail!("{}", err);
-        //         }
-        //         ValidationError::NeedHashTree => {
-        //             info!("need hash tree for unit {}", unit);
-        //             if joint.unsigned == Some(true) {
-        //                 bail!("need hash tree unsigned");
-        //             }
-        //             bail!("need hash tree");
-        //         }
-        //         ValidationError::NeedParentUnits(_) => bail!("unknown parents"),
-        //     },
-        // }
-
-        // Ok(())
-        unimplemented!()
-    }
-
     // record peer event in database
     #[allow(dead_code)]
     fn write_event(&self, _event: &str) -> Result<()> {
@@ -1284,9 +1156,7 @@ impl HubConn {
     }
 
     fn send_hub_challenge(&self) -> Result<()> {
-        let challenge = object_hash::gen_random_string(30);
-        self.set_challenge(&challenge);
-        self.send_just_saying("hub/challenge", Value::from(challenge))?;
+        self.send_just_saying("hub/challenge", Value::from(CHALLENGE_ID.to_owned()))?;
         Ok(())
     }
 
@@ -1295,7 +1165,7 @@ impl HubConn {
 
         match self.send_request(
             "subscribe",
-            &json!({ "subscription_id": *SUBSCRIPTION_ID.read().unwrap(), "last_mci": last_mci.value()}),
+            &json!({ "subscription_id": *CHALLENGE_ID, "last_mci": last_mci.value()}),
         ) {
             Ok(_) => self.set_source(),
             Err(e) => warn!("send subscribe failed, err={}, peer={}", e, self.get_peer()),
