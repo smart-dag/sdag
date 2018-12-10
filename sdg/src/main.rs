@@ -17,17 +17,13 @@ extern crate serde_json;
 
 mod config;
 
+use std::sync::Arc;
+
 use chrono::{Local, TimeZone};
 use clap::App;
 use failure::ResultExt;
-use spec::Output;
-use std::sync::Arc;
-
-use composer::*;
-use light::*;
+use sdag::error::Result;
 use sdag::network::wallet::WalletConn;
-use sdag::signature::Signer;
-use sdag::*;
 use sdag_wallet_base::{Base64KeyExt, ExtendedPrivKey, ExtendedPubKey, Mnemonic};
 
 struct WalletInfo {
@@ -65,7 +61,7 @@ impl WalletInfo {
     }
 }
 
-impl Signer for WalletInfo {
+impl sdag::signature::Signer for WalletInfo {
     fn sign(&self, hash: &[u8], address: &str) -> Result<String> {
         if address != self._00_address {
             bail!("invalid address for wallet to sign");
@@ -117,7 +113,7 @@ fn init(verbosity: u64) -> Result<()> {
 
 fn connect_to_remote(peers: &[String]) -> Result<Arc<WalletConn>> {
     for peer in peers {
-        match network::wallet::create_outbound_conn(&peer) {
+        match sdag::network::wallet::create_outbound_conn(&peer) {
             Err(e) => {
                 error!(" fail to connected: {}, err={}", peer, e);
                 continue;
@@ -203,44 +199,46 @@ fn show_history(
 
 fn send_payment(
     ws: &Arc<WalletConn>,
-    text: Option<String>,
+    text: Option<&str>,
     address_amount: Vec<(String, f64)>,
     wallet_info: &WalletInfo,
 ) -> Result<()> {
-    let messages = if text.is_some() {
-        vec![composer::create_text_message(text.as_ref().unwrap())?]
-    } else {
-        vec![]
+    let text_message = match text {
+        Some(msg) => Some(sdag::composer::create_text_message(msg)?),
+        None => None,
     };
+
     let light_props = ws.get_light_props(&wallet_info._00_address)?;
 
     let outputs = address_amount
         .iter()
-        .map(|(address, amount)| Output {
+        .map(|(address, amount)| sdag::spec::Output {
             address: address.clone(),
             amount: (amount * 1_000_000.0).round() as u64,
         })
         .collect::<Vec<_>>();
 
-    let total_amount = outputs.iter().fold(0, |acc, x| acc + x.amount);
+    // at most we need another 1000 sdg (usually 431 + 197)
+    let total_amount = outputs.iter().fold(1000, |acc, x| acc + x.amount);
 
-    let compose_info = ComposeInfo {
+    let inputs: sdag::light::InputsResponse = ws.get_inputs_from_hub(
+        &wallet_info._00_address,
+        total_amount,
+        false, // is_spend_all
+    )?;
+
+    let compose_info = sdag::composer::ComposeInfo {
         paid_address: wallet_info._00_address.clone(),
         change_address: wallet_info._00_address.clone(),
         outputs,
-        messages,
+        text_message,
+        inputs,
         transaction_amount: total_amount,
-        is_spend_all: false,
         light_props,
         pubk: wallet_info._00_address_pubk.to_base64_key(),
     };
 
-    let unit = compose_naked_joint(compose_info.clone())?;
-
-    let input_response: InputsResponse =
-        ws.get_inputs_from_hub(&unit, total_amount, compose_info.is_spend_all)?;
-
-    let joint = compose_joint(unit, input_response, compose_info, wallet_info)?;
+    let joint = sdag::composer::compose_joint(compose_info, wallet_info)?;
 
     if let Err(e) = ws.post_joint(&joint) {
         eprintln!("post_joint err={}", e);
@@ -255,12 +253,14 @@ fn send_payment(
     println!("UNIT  : {}", joint.unit.unit);
 
     if text.is_some() {
-        println!("TEXT  : {}", text.unwrap_or("".to_string()));
+        println!("TEXT  : {}", text.unwrap_or(""));
     }
 
     println!(
         "DATE  : {}",
-        Local.timestamp_millis(time::now() as i64).naive_local()
+        Local
+            .timestamp_millis(sdag::time::now() as i64)
+            .naive_local()
     );
 
     Ok(())
@@ -335,7 +335,7 @@ fn main() -> Result<()> {
         if let Some(pay) = send.values_of("pay") {
             let v = pay.collect::<Vec<_>>();
             for arg in v.chunks(2) {
-                if !::object_hash::is_chash_valid(arg[0]) {
+                if !sdag::object_hash::is_chash_valid(arg[0]) {
                     eprintln!("invalid address, please check");
                     return Ok(());
                 }
@@ -348,11 +348,8 @@ fn main() -> Result<()> {
             }
         }
 
-        if let Some(text) = send.value_of("text") {
-            return send_payment(&ws, Some(text.to_string()), address_amount, &wallet_info);
-        } else {
-            return send_payment(&ws, None, address_amount, &wallet_info);
-        }
+        let text = send.value_of("text");
+        return send_payment(&ws, text, address_amount, &wallet_info);
     }
 
     if let Some(balance) = m.subcommand_matches("balance") {

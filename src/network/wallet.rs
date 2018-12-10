@@ -6,11 +6,9 @@ use super::network::{Sender, Server, WsConnection};
 use config;
 use error::Result;
 use joint::Joint;
+use light;
 use may::coroutine;
 use may::net::TcpStream;
-use spec::Unit;
-
-use light::*;
 use serde_json::{self, Value};
 use tungstenite::client::client;
 use tungstenite::handshake::client::Request;
@@ -94,17 +92,15 @@ impl WalletConn {
 
     pub fn get_inputs_from_hub(
         &self,
-        naked_unit: &Unit,
-        transaction_amount: u64,
+        paid_address: &str,
+        total_amount: u64,
         is_spend_all: bool,
-    ) -> Result<InputsResponse> {
+    ) -> Result<light::InputsResponse> {
         let inputs_response = self.send_request(
             "light/inputs",
-            &serde_json::to_value(InputsRequest {
-                paid_address: naked_unit.authors[0].address.clone(),
-                naked_payload_commission: naked_unit.payload_commission.unwrap() as u64,
-                headers_commission: naked_unit.headers_commission.unwrap() as u64,
-                transaction_amount,
+            &serde_json::to_value(light::InputsRequest {
+                paid_address: paid_address.to_owned(),
+                total_amount,
                 is_spend_all,
             })?,
         )?;
@@ -112,7 +108,7 @@ impl WalletConn {
         Ok(serde_json::from_value(inputs_response).unwrap())
     }
     //returned spendable the number of coins
-    pub fn get_balance(&self, address: &String) -> Result<u64> {
+    pub fn get_balance(&self, address: &str) -> Result<u64> {
         let response = self.send_request("get_balance", &serde_json::to_value(address)?)?;
         let balance = response["balance"]
             .as_u64()
@@ -121,16 +117,20 @@ impl WalletConn {
         Ok(balance)
     }
 
-    pub fn get_latest_history(&self, address: String, num: usize) -> Result<HistoryResponse> {
+    pub fn get_latest_history(
+        &self,
+        address: String,
+        num: usize,
+    ) -> Result<light::HistoryResponse> {
         let response = self.send_request(
             "light/get_history",
-            &serde_json::to_value(HistoryRequest { address, num })?,
+            &serde_json::to_value(light::HistoryRequest { address, num })?,
         )?;
 
         Ok(serde_json::from_value(response).unwrap())
     }
 
-    pub fn get_light_props(&self, address: &String) -> Result<LightProps> {
+    pub fn get_light_props(&self, address: &str) -> Result<light::LightProps> {
         let light_prop = self.send_request("light/light_props", &serde_json::to_value(address)?)?;
 
         Ok(serde_json::from_value(light_prop).unwrap())

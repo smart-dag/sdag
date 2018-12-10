@@ -1,5 +1,4 @@
 use error::Result;
-use serde_json::Value;
 
 use business::BUSINESS_CACHE;
 use cache::SDAG_CACHE;
@@ -11,7 +10,7 @@ pub struct LightProps {
     pub last_ball_unit: String,
     pub parent_units: Vec<String>,
     pub witness_list_unit: String,
-    pub definition: Option<Value>,
+    pub has_definition: bool,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -22,7 +21,7 @@ pub struct HistoryRequest {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct Transaction {
+pub struct TransactionInfo {
     pub unit_hash: String,
     pub from_addr: String,
     pub to_addr: String,
@@ -32,16 +31,14 @@ pub struct Transaction {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HistoryResponse {
-    pub transactions: Vec<Transaction>,
+    pub transactions: Vec<TransactionInfo>,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct InputsRequest {
     pub paid_address: String,
-    pub transaction_amount: u64,
+    pub total_amount: u64,
     pub is_spend_all: bool,
-    pub naked_payload_commission: u64,
-    pub headers_commission: u64,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -52,16 +49,12 @@ pub struct InputsResponse {
 pub fn get_inputs_for_amount(input_request: InputsRequest) -> Result<InputsResponse> {
     let InputsRequest {
         paid_address,
-        transaction_amount,
+        total_amount,
         is_spend_all,
-        naked_payload_commission,
-        headers_commission,
     } = input_request;
 
-    let amount = transaction_amount + naked_payload_commission + headers_commission;
-
     let (inputs, amount) =
-        BUSINESS_CACHE.get_inputs_for_amount(&paid_address, amount, is_spend_all)?;
+        BUSINESS_CACHE.get_inputs_for_amount(&paid_address, total_amount, is_spend_all)?;
 
     Ok(InputsResponse { inputs, amount })
 }
@@ -82,12 +75,12 @@ pub fn get_latest_history(history_request: &HistoryRequest) -> Result<HistoryRes
 fn _get_unstable_history(
     _history_request: &HistoryRequest,
     _need_tx_count: usize,
-) -> Vec<Transaction> {
+) -> Vec<TransactionInfo> {
     unimplemented!()
 }
 
 /// get transactions from stable joints
-fn get_stable_history(history_request: &HistoryRequest) -> Result<Vec<Transaction>> {
+fn get_stable_history(history_request: &HistoryRequest) -> Result<Vec<TransactionInfo>> {
     let address = &history_request.address;
     let num = history_request.num;
 
@@ -133,7 +126,7 @@ fn get_stable_history(history_request: &HistoryRequest) -> Result<Vec<Transactio
                         continue;
                     }
 
-                    transactions.push(Transaction {
+                    transactions.push(TransactionInfo {
                         unit_hash: last_self_unit.clone(),
                         from_addr: address.clone(),
                         to_addr: output.address.clone(),
@@ -169,13 +162,13 @@ fn get_receive_tx(
     unit: &Unit,
     address: &String,
     need_tx_count: usize,
-    txs: &mut Vec<Transaction>,
+    txs: &mut Vec<TransactionInfo>,
 ) -> bool {
     for msg in &unit.messages {
         if let Some(Payload::Payment(ref payment)) = msg.payload {
             for output in &payment.outputs {
                 if &output.address == address {
-                    txs.push(Transaction {
+                    txs.push(TransactionInfo {
                         unit_hash: unit.unit.clone(),
                         from_addr: unit.authors[0].address.clone(), // just support one author currently
                         to_addr: address.clone(),

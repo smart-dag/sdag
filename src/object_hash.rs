@@ -11,7 +11,7 @@ use std::collections::HashSet;
 
 pub fn get_base64_hash<T>(object: &T) -> Result<String>
 where
-    T: Serialize,
+    T: Serialize + ?Sized,
 {
     Ok(base64::encode(&Sha256::digest(
         to_string(object)?.as_bytes(),

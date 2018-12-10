@@ -213,17 +213,13 @@ impl UtxoCache {
     pub fn pick_divisible_coins_for_amount(
         &self,
         paying_address: &str,
-        mut required_amount: u64,
+        required_amount: u64,
         send_all: bool,
     ) -> Result<(Vec<Input>, u64)> {
         let account = match self.output.get(paying_address) {
             None => bail!("there is no output for address {}", paying_address),
             Some(v) => v,
         };
-
-        if send_all {
-            required_amount = u64::max_value();
-        }
 
         let mut inputs: Vec<Input> = vec![];
         let mut total_amount: u64 = 0;
@@ -238,12 +234,12 @@ impl UtxoCache {
                 ..Default::default()
             });
 
-            if total_amount >= required_amount {
+            if !send_all && total_amount >= required_amount {
                 break;
             }
         }
 
-        if !send_all && total_amount < required_amount {
+        if total_amount < required_amount {
             bail!("there is not enough balance, address: {}", paying_address)
         }
 

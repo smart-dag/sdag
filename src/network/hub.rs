@@ -604,11 +604,7 @@ impl HubConn {
             last_ball_unit,
             parent_units: parents,
             witness_list_unit: config::get_genesis_unit(),
-            definition: if let Some(value) = SDAG_CACHE.get_definition(&address) {
-                Some(value.1)
-            } else {
-                None
-            },
+            has_definition: SDAG_CACHE.get_definition(&address).is_some(),
         };
 
         Ok(serde_json::to_value(light_props)?)

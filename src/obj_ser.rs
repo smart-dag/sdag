@@ -62,7 +62,7 @@ pub struct MapSerializer<'a> {
 // This basic serializer supports only `to_string`.
 pub fn to_string<T>(value: &T) -> Result<String>
 where
-    T: Serialize,
+    T: Serialize + ?Sized,
 {
     let mut serializer = Serializer {
         output: Vec::new(),

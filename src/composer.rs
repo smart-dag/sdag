@@ -17,14 +17,14 @@ pub struct ParentsAndLastBall {
     pub last_ball_unit: String,
 }
 
-#[derive(Debug, Serialize, Clone, Deserialize, Default)]
+#[derive(Serialize, Deserialize)]
 pub struct ComposeInfo {
+    pub paid_address: String,
     pub change_address: String,
     pub outputs: Vec<Output>,
-    pub paid_address: String,
+    pub inputs: InputsResponse,
     pub transaction_amount: u64,
-    pub is_spend_all: bool,
-    pub messages: Vec<Message>,
+    pub text_message: Option<Message>,
     pub light_props: LightProps,
     pub pubk: String,
 }
@@ -50,7 +50,8 @@ pub fn pick_parents_and_last_ball(_address: &str) -> Result<ParentsAndLastBall> 
     bail!("fail to choose parents")
 }
 
-pub fn create_text_message(text: &String) -> Result<Message> {
+/// create a pure text message
+pub fn create_text_message(text: &str) -> Result<Message> {
     Ok(Message {
         app: String::from("text"),
         payload_location: String::from("inline"),
@@ -60,18 +61,20 @@ pub fn create_text_message(text: &String) -> Result<Message> {
     })
 }
 
-pub fn compose_naked_joint(composer_info: ComposeInfo) -> Result<Unit> {
+pub fn compose_joint<T: Signer>(composer_info: ComposeInfo, signer: &T) -> Result<Joint> {
     let ComposeInfo {
-        change_address,
-        mut outputs,
-        light_props,
         paid_address,
-        messages,
-        ..
+        change_address,
+        transaction_amount,
+        mut outputs,
+        mut inputs,
+        light_props,
+        text_message,
+        pubk,
     } = composer_info;
 
     let mut unit = Unit {
-        messages,
+        messages: text_message.into_iter().collect::<Vec<_>>(),
         ..Default::default()
     };
 
@@ -80,12 +83,11 @@ pub fn compose_naked_joint(composer_info: ComposeInfo) -> Result<Unit> {
     unit.witness_list_unit = Some(light_props.witness_list_unit);
     unit.parent_units = light_props.parent_units;
 
-    //TODO: how to set definition
-    // let definition = if let Some(value) = light_props.definition {
-    //     value
-    // } else {
-    //     json!(["sig", { "pubkey": pubk }])
-    // };
+    let definition = if light_props.has_definition {
+        Value::Null
+    } else {
+        json!(["sig", { "pubkey": pubk }])
+    };
     let authors = vec![Author {
         address: paid_address,
         authentifiers: {
@@ -94,13 +96,13 @@ pub fn compose_naked_joint(composer_info: ComposeInfo) -> Result<Unit> {
             sign.insert("r".to_string(), "-".repeat(config::SIG_LENGTH));
             sign
         },
-        definition: Value::Null,
+        definition,
     }];
 
     unit.authors = authors;
 
     outputs.push(Output {
-        address: change_address,
+        address: change_address.clone(),
         amount: 0,
     });
 
@@ -123,28 +125,10 @@ pub fn compose_naked_joint(composer_info: ComposeInfo) -> Result<Unit> {
 
     unit.messages.push(payment_message);
     unit.headers_commission = Some(unit.calc_header_size());
-    unit.payload_commission = Some(unit.calc_payload_size());
-    info!("naked unit payload by {}", unit.payload_commission.unwrap());
-
-    Ok(unit)
-}
-
-pub fn compose_joint<T: Signer>(
-    mut unit: Unit,
-    mut input_respond: InputsResponse,
-    composer_info: ComposeInfo,
-    signer: &T,
-) -> Result<Joint> {
-    let ComposeInfo {
-        change_address,
-        is_spend_all,
-        transaction_amount,
-        ..
-    } = composer_info;
 
     match unit.messages.last_mut().unwrap().payload {
         Some(Payload::Payment(ref mut x)) => {
-            x.inputs.append(&mut input_respond.inputs);
+            x.inputs.append(&mut inputs.inputs);
         }
         _ => {}
     }
@@ -155,15 +139,12 @@ pub fn compose_joint<T: Signer>(
         unit.payload_commission.unwrap()
     );
 
-    let change = input_respond.amount as i64
+    let change = inputs.amount as i64
         - transaction_amount as i64
         - unit.headers_commission.unwrap() as i64
         - unit.payload_commission.unwrap() as i64;
 
-    if change <= 0 {
-        if !is_spend_all {
-            bail!("change = {}", change);
-        }
+    if change < 0 {
         bail!(
             "NOT_ENOUGH_FUNDS: address {} not enough spendable funds for fees",
             unit.authors[0].address
