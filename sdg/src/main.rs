@@ -218,13 +218,12 @@ fn send_payment(
         })
         .collect::<Vec<_>>();
 
-    // at most we need another 1000 sdg (usually 431 + 197)
-    let total_amount = outputs.iter().fold(1000, |acc, x| acc + x.amount);
+    let total_amount = outputs.iter().fold(0, |acc, x| acc + x.amount);
 
     let inputs: sdag::light::InputsResponse = ws.get_inputs_from_hub(
         &wallet_info._00_address,
-        total_amount,
-        false, // is_spend_all
+        total_amount + 1000, // we need another 1000 sdg (usually 431 + 197)
+        false,               // is_spend_all
     )?;
 
     let compose_info = sdag::composer::ComposeInfo {
