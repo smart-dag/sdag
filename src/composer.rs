@@ -66,12 +66,18 @@ pub fn compose_joint<T: Signer>(composer_info: ComposeInfo, signer: &T) -> Resul
         paid_address,
         change_address,
         transaction_amount,
-        mut outputs,
         mut inputs,
+        mut outputs,
         light_props,
         text_message,
         pubk,
     } = composer_info;
+
+    let mut new_outputs = vec![Output {
+        address: change_address.clone(),
+        amount: 0,
+    }];
+    new_outputs.append(&mut outputs);
 
     let mut unit = Unit {
         messages: text_message.into_iter().collect::<Vec<_>>(),
@@ -101,11 +107,6 @@ pub fn compose_joint<T: Signer>(composer_info: ComposeInfo, signer: &T) -> Resul
 
     unit.authors = authors;
 
-    outputs.push(Output {
-        address: change_address.clone(),
-        amount: 0,
-    });
-
     let payment_message = Message {
         app: "payment".to_string(),
         payload_location: "inline".to_string(),
@@ -116,7 +117,7 @@ pub fn compose_joint<T: Signer>(composer_info: ComposeInfo, signer: &T) -> Resul
             definition_chash: None,
             denomination: None,
             inputs: vec![],
-            outputs: outputs,
+            outputs: new_outputs,
         })),
         payload_uri: None,
         payload_uri_hash: None,
@@ -155,10 +156,10 @@ pub fn compose_joint<T: Signer>(composer_info: ComposeInfo, signer: &T) -> Resul
         let payment_message = unit.messages.last_mut().unwrap();
         match payment_message.payload {
             Some(Payload::Payment(ref mut x)) => {
-                for output in x.outputs.iter_mut() {
-                    if change_address == output.address {
-                        output.amount = change as u64;
-                    }
+                if let Some(change_output) = x.outputs.first_mut() {
+                    change_output.amount = change as u64;
+                } else {
+                    bail!("compose output error")
                 }
 
                 x.outputs.sort_by(|a, b| {
