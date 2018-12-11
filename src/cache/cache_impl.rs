@@ -244,26 +244,37 @@ impl SDagCacheInner {
     }
 
     // remove the free joint from normal joints
-    // remote the free joint from free joints
+    // remove the free joint from free joints
     // add it's parent back to free joints if possible
     fn purge_free_joint(&mut self, joint: &str) -> Result<()> {
-        self.free_joints.remove(joint);
-        let joint = self
-            .normal_joints
-            .remove(joint)
-            .expect("purge_free_joint not found")
-            .raw_read();
-        let unit = &joint.unit.unit;
-        for parent in joint.parents.iter() {
-            // remove the child for the parent
-            // if the parent becomes free just add back to free list
-            let parent_joint = parent.read()?;
-            parent_joint.children.remove_with(|j| &*j.key == unit);
-            if parent_joint.is_free() {
-                self.free_joints
-                    .insert(HashKey(parent.key.clone()), parent.clone());
+        let mut stack = vec![joint.to_owned()];
+
+        while let Some(ref joint) = stack.pop() {
+            self.free_joints.remove(joint);
+            let joint = self
+                .normal_joints
+                .remove(joint)
+                .expect("purge_free_joint not found")
+                .raw_read();
+
+            let unit = &joint.unit.unit;
+            for parent in joint.parents.iter() {
+                // remove the child for the parent
+                // if the parent becomes free just add back to free list
+                let parent_joint = parent.read()?;
+                parent_joint.children.remove_with(|j| &*j.key == unit);
+                if parent_joint.is_free() {
+                    if parent_joint.get_sequence() != JointSequence::Good {
+                        // remove this "bad" "free" parent
+                        stack.push(parent_joint.unit.unit.to_owned());
+                    } else {
+                        self.free_joints
+                            .insert(HashKey(parent.key.clone()), parent.clone());
+                    }
+                }
             }
         }
+
         Ok(())
     }
 
