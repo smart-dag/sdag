@@ -43,4 +43,5 @@ members = [
     "hub",
     "wallet_base",
     "sdg",
+    "witness",
 ]

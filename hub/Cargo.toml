@@ -1,8 +1,8 @@
 [package]
-description = "sdag hub beta rust implmentation"
+description = "sdag hub rust implmentation"
 name = "sdag_hub"
 version = "0.1.0"
-authors = ["Xudong Huang <huangxu008@hotmail.com>"]
+authors = ["SDAG TEAM"]
 license = "MIT"
 
 [dependencies]

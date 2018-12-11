@@ -1,0 +1,24 @@
+[package]
+description = "sdag witness rust implmentation"
+name = "sdag_witness"
+version = "0.1.0"
+authors = ["SDAG TEAM"]
+license = "MIT"
+
+[dependencies]
+sdag = { path = ".."}
+sdag_wallet_base = { path = "../wallet_base" }
+
+may = "0.3"
+log = "0.4"
+fern = "0.5"
+chrono = "0.4"
+failure = "0.1"
+serde = "1"
+serde_json = "1"
+serde_derive = "1"
+lazy_static = "1"
+rand = "0.6"
+
+may_signal = {git = "https://github.com/Xudong-Huang/may_signal.git"}
+

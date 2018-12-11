@@ -65,7 +65,7 @@ fn normal_validate(joint: &JointData) -> Result<()> {
 
     validate_authors(joint)?;
 
-    // check if inlude last self unit
+    // check if include last self unit
     business::BUSINESS_CACHE.is_include_last_stable_self_joint(joint)?;
     // check sub businesses
     business::check_business(joint)?;

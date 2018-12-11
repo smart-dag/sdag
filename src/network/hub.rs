@@ -768,7 +768,7 @@ impl HubConn {
 
     fn on_get_peers(&self, param: Value) -> Result<Value> {
         let challenge = param.as_str();
-        let peers = WSS.get_outbound_peers(challenge.unwrap_or("unkown"));
+        let peers = WSS.get_outbound_peers(challenge.unwrap_or("unknown"));
         Ok(serde_json::to_value(peers)?)
     }
 
