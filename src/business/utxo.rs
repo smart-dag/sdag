@@ -210,40 +210,8 @@ impl UtxoCache {
         Ok(())
     }
 
-    pub fn pick_divisible_coins_for_amount(
-        &self,
-        paying_address: &str,
-        required_amount: u64,
-        send_all: bool,
-    ) -> Result<(Vec<Input>, u64)> {
-        let account = match self.output.get(paying_address) {
-            None => bail!("there is no output for address {}", paying_address),
-            Some(v) => v,
-        };
-
-        let mut inputs: Vec<Input> = vec![];
-        let mut total_amount: u64 = 0;
-
-        for v in account.keys() {
-            total_amount += v.amount;
-
-            inputs.push(Input {
-                unit: Some(v.unit.clone()),
-                message_index: Some(v.message_index as u32),
-                output_index: Some(v.output_index as u32),
-                ..Default::default()
-            });
-
-            if !send_all && total_amount >= required_amount {
-                break;
-            }
-        }
-
-        if total_amount < required_amount {
-            bail!("there is not enough balance, address: {}", paying_address)
-        }
-
-        Ok((inputs, total_amount))
+    pub fn pick_coins(&self, paying_address: &str) -> Option<&BTreeMap<UtxoKey, UtxoData>> {
+        self.output.get(paying_address)
     }
 
     fn get_output_by_input(
