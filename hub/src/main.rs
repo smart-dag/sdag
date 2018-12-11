@@ -47,7 +47,7 @@ fn start_ws_server() -> Result<::may::coroutine::JoinHandle<()>> {
 
     let server = WsServer::start(("0.0.0.0", port), |c| {
         WSS.add_inbound(c);
-    });
+    })?;
     println!("Websocket server running on ws://0.0.0.0:{}", port);
 
     Ok(server)
@@ -82,7 +82,7 @@ fn register_event_handlers() {
 // the hub server logic that run in coroutine context
 fn run_hub_server() -> Result<()> {
     register_event_handlers();
-    let _server = start_ws_server();
+    let _server = start_ws_server()?;
     connect_to_remote()?;
     timer::start_global_timers();
     Ok(())
@@ -104,8 +104,9 @@ fn main() -> Result<()> {
     config::show_config();
 
     // uncomment it to test read joint from db
-    // test_read_joint()?;
-    go!(|| run_hub_server().unwrap()).join().unwrap();
+    go!(|| run_hub_server())
+        .join()
+        .expect("panic inside run_hub_server")?;
     // wait user input a ctrl_c to exit
     may_signal::ctrl_c().recv().unwrap();
 

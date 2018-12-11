@@ -303,7 +303,7 @@ pub struct WsServer<T>(PhantomData<T>);
 
 impl<T> WsServer<T> {
     // f is used to save the connection globally
-    pub fn start<A, F>(address: A, f: F) -> JoinHandle<()>
+    pub fn start<A, F>(address: A, f: F) -> Result<JoinHandle<()>>
     where
         A: ToSocketAddrs,
         F: Fn(Arc<WsConnection<T>>) + Send + 'static,
@@ -315,8 +315,12 @@ impl<T> WsServer<T> {
             .next()
             .expect("can't resolve address");
 
-        go!(move || {
-            let listener = TcpListener::bind(address).unwrap();
+        let listener = match TcpListener::bind(address) {
+            Ok(listener) => listener,
+            Err(e) => bail!("can't bind to address {}, err={}", address, e),
+        };
+
+        Ok(go!(move || {
             // for stream in listener.incoming() {
             while let Ok((stream, _)) = listener.accept() {
                 let peer = match stream.peer_addr() {
@@ -327,6 +331,6 @@ impl<T> WsServer<T> {
                 let ws = t_c!(WsConnection::new(ws, T::default(), peer, Role::Server));
                 f(ws);
             }
-        })
+        }))
     }
 }
