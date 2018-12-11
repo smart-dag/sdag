@@ -25,7 +25,7 @@ use tungstenite::client::client;
 use tungstenite::handshake::client::Request;
 use tungstenite::protocol::Role;
 use url::Url;
-use utils::{AtomicLock, MapLock};
+use utils::{AtomicLock, FifoCache, MapLock};
 use validation;
 
 #[derive(Serialize, Deserialize)]
@@ -97,6 +97,7 @@ lazy_static! {
     static ref JOINT_IN_REQ: MapLock<String> = MapLock::new();
     static ref IS_CATCHING_UP: AtomicLock = AtomicLock::new();
     static ref CHALLENGE_ID: String = object_hash::gen_random_string(30);
+    static ref BAD_CONNECTION: FifoCache<String, ()> = FifoCache::with_capacity(10);
 }
 
 pub struct NewJointEvent;
@@ -394,6 +395,9 @@ pub fn auto_connection() {
 
     let peers = get_unconnected_peers_in_config();
     for peer in peers {
+        if let Some(_) = BAD_CONNECTION.get(&peer) {
+            continue;
+        }
         if create_outbound_conn(peer).is_ok() {
             counts -= 1;
             if counts == 0 {
@@ -404,6 +408,9 @@ pub fn auto_connection() {
 
     let peers = get_unconnected_remote_peers();
     for peer in peers {
+        if let Some(_) = BAD_CONNECTION.get(&peer) {
+            continue;
+        }
         if create_outbound_conn(peer).is_ok() {
             counts -= 1;
             if counts == 0 {
@@ -414,6 +421,9 @@ pub fn auto_connection() {
 
     let peers = get_unconnected_peers_in_db();
     for peer in peers {
+        if let Some(_) = BAD_CONNECTION.get(&peer) {
+            continue;
+        }
         if create_outbound_conn(peer).is_ok() {
             counts -= 1;
             if counts == 0 {
@@ -1186,7 +1196,11 @@ impl HubConn {
             &json!({ "subscription_id": *CHALLENGE_ID, "last_mci": last_mci.value()}),
         ) {
             Ok(_) => self.set_source(),
-            Err(e) => warn!("send subscribe failed, err={}, peer={}", e, self.get_peer()),
+            Err(e) => {
+                warn!("send subscribe failed, err={}, peer={}", e, self.get_peer());
+                // save the peer address to avoid connect to it again
+                BAD_CONNECTION.insert(self.get_peer().clone(), ());
+            }
         }
 
         Ok(())
