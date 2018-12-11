@@ -145,7 +145,16 @@ fn network_cleanup() {
     network::hub::WSS.close_all();
 }
 
+fn check_witness(address: &String) -> Result<()> {
+    if sdag::my_witness::MY_WITNESSES.contains(address) {
+        return Ok(());
+    }
+    bail!("address {} is not witness");
+}
+
 fn main() -> Result<()> {
+    check_witness(&WALLET_INFO._00_address)?;
+
     init()?;
 
     connect_to_remote()?;

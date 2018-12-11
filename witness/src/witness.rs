@@ -19,6 +19,7 @@ use WALLET_INFO;
 lazy_static! {
     static ref IS_WITNESSING: AtomicLock = AtomicLock::new();
     static ref EVENT_TIMER: Arc<RwLock<Option<Instant>>> = Arc::new(RwLock::new(None));
+    pub static ref WALLET_PUBK: String = WALLET_INFO._00_address_pubk.to_base64_key();
 }
 
 const THRESHOLD_DISTANCE: i32 = 8;
@@ -252,12 +253,12 @@ fn witness() -> Result<()> {
         transaction_amount: amount,
         text_message: None,
         light_props: light_props,
-        pubk: WALLET_INFO._00_address_pubk.to_base64_key(),
+        pubk: WALLET_PUBK.clone(),
     };
 
     if sdag::config::get_need_post_timestamp() {
         let time_stamp = TimeStamp {
-            timestamp: sdag::time::now() / 1000,
+            timestamp: sdag::time::now() / 1_000,
         };
         let data_feed_msg = sdag::spec::Message {
             app: "data_feed".to_string(),
@@ -288,11 +289,13 @@ fn witness() -> Result<()> {
         joint_data.set_sequence(JointSequence::FinalBad);
     }
 
-    if !joint_data.is_missing_parent()
-        && sdag::validation::validate_ready_joint(cached_joint).is_ok()
+    if joint_data.is_missing_parent()
+        || sdag::validation::validate_ready_joint(cached_joint).is_err()
     {
-        sdag::network::hub::WSS.broadcast_joint(&joint)?;
+        bail!("compose new joint is invalid, joint is [{:?}]", &joint);
     }
+
+    sdag::network::hub::WSS.broadcast_joint(&joint)?;
 
     Ok(())
 }
