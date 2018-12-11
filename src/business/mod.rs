@@ -1,5 +1,10 @@
-use std::collections::{HashMap, HashSet};
+mod data_feed;
+mod text;
+mod utxo;
 
+use std::collections::{BTreeMap, HashMap};
+
+use self::utxo::{UtxoData, UtxoKey};
 use cache::{CachedJoint, JointData, SDAG_CACHE};
 use config;
 use error::Result;
@@ -8,12 +13,6 @@ use may::coroutine::JoinHandle;
 use may::sync::{mpsc, RwLock};
 use object_hash;
 use spec::*;
-
-mod data_feed;
-mod text;
-mod utxo;
-
-use self::utxo::UtxoKey;
 
 lazy_static! {
     pub static ref BUSINESS_WORKER: BusinessWorker = BusinessWorker::default();
@@ -276,52 +275,10 @@ pub struct BusinessState {
 }
 
 impl BusinessState {
-    fn contains_input(&self, address: &str, input: &UtxoKey) -> bool {
-        if let Some(v) = self.utxo.pick_coins(address) {
-            v.contains_key(input)
-        } else {
-            false
-        }
-    }
-
-    fn pick_divisible_coins_for_amount(
-        &self,
-        paying_address: &str,
-        required_amount: u64,
-        send_all: bool,
-        unstable_outputs: &HashSet<UtxoKey>,
-    ) -> Result<(Vec<UtxoKey>, u64)> {
-        let account = match self.utxo.pick_coins(paying_address) {
-            None => bail!("there is no output for address {}", paying_address),
-            Some(v) => v,
-        };
-
-        let mut inputs: Vec<UtxoKey> = vec![];
-        let mut total_amount: u64 = 0;
-        println!("address={:?} : keys {:?}", paying_address, account.keys());
-        println!(
-            "address={:?} : spents_units {:?}",
-            paying_address, unstable_outputs
-        );
-        for v in account.keys() {
-            if unstable_outputs.contains(v) {
-                continue;
-            }
-
-            total_amount += v.amount;
-
-            inputs.push(v.clone());
-            if !send_all && total_amount >= required_amount {
-                break;
-            }
-        }
-
-        println!("address={:?} : inputs {:?}", paying_address, inputs);
-        if total_amount < required_amount {
-            bail!("there is not enough balance, address: {}", paying_address)
-        }
-
-        Ok((inputs, total_amount))
+    fn get_utxos_by_address(&self, address: &str) -> Result<&BTreeMap<UtxoKey, UtxoData>> {
+        self.utxo
+            .get_utxos_by_address(address)
+            .ok_or_else(|| format_err!("there is no output for address {}", address))
     }
 
     fn validate_message_basic(message: &Message) -> Result<()> {
@@ -400,53 +357,42 @@ impl BusinessCache {
     pub fn get_inputs_for_amount(
         &self,
         paying_address: &str,
-        mut required_amount: u64,
+        required_amount: u64,
         send_all: bool,
     ) -> Result<(Vec<Input>, u64)> {
-        let mut unstable_outputs: HashSet<UtxoKey> = HashSet::new();
-        let mut last_inputs: Vec<Input> = Vec::new();
-        let mut total_picked_amount = 0;
-        loop {
-            let (inputs, mut picked_amount) = self
-                .temp_business_state
-                .read()
-                .unwrap()
-                .pick_divisible_coins_for_amount(
-                    paying_address,
-                    required_amount,
-                    send_all,
-                    &unstable_outputs,
-                )?;
+        let temp_state = self.temp_business_state.read().unwrap();
+        let temp_outputs = temp_state.get_utxos_by_address(paying_address)?;
 
-            for input in inputs.iter() {
-                if !self
-                    .business_state
-                    .read()
-                    .unwrap()
-                    .contains_input(paying_address, input)
-                {
-                    unstable_outputs.insert(input.clone());
-                    picked_amount -= input.amount;
-                    continue;
-                }
+        let stable_state = self.business_state.read().unwrap();
+        let stable_outputs = stable_state.get_utxos_by_address(paying_address)?;
 
-                last_inputs.push(Input {
-                    unit: Some(input.unit.clone()),
-                    message_index: Some(input.message_index as u32),
-                    output_index: Some(input.output_index as u32),
-                    ..Default::default()
-                });
+        let mut inputs = vec![];
+        let mut total_amount: u64 = 0;
+        for v in temp_outputs.keys() {
+            // we can't use unit.is_stable() here, it's may not stable yet
+            if !stable_outputs.contains_key(v) {
+                continue;
             }
 
-            total_picked_amount += picked_amount;
-            if picked_amount < required_amount {
-                required_amount -= picked_amount;
-            } else {
+            total_amount += v.amount;
+
+            inputs.push(Input {
+                unit: Some(v.unit.clone()),
+                message_index: Some(v.message_index as u32),
+                output_index: Some(v.output_index as u32),
+                ..Default::default()
+            });
+
+            if !send_all && total_amount >= required_amount {
                 break;
             }
         }
 
-        Ok((last_inputs, total_picked_amount))
+        if total_amount < required_amount {
+            bail!("there is not enough balance, address: {}", paying_address);
+        }
+
+        Ok((inputs, total_amount))
     }
 
     /// build the state from genesis

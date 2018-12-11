@@ -210,7 +210,11 @@ impl UtxoCache {
         Ok(())
     }
 
-    pub fn pick_coins(&self, paying_address: &str) -> Option<&BTreeMap<UtxoKey, UtxoData>> {
+    /// return all available utxo for an address
+    pub fn get_utxos_by_address(
+        &self,
+        paying_address: &str,
+    ) -> Option<&BTreeMap<UtxoKey, UtxoData>> {
         self.output.get(paying_address)
     }
 
