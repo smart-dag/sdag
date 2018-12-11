@@ -1339,26 +1339,24 @@ pub fn start_catchup(ws: Arc<HubConn>) -> Result<()> {
     // before a catchup the hash_tree_ball should be clear
     assert_eq!(SDAG_CACHE.get_hash_tree_ball_len(), 0);
     let mut catchup_chain_balls = ws.request_catchup()?;
+    catchup_chain_balls.reverse();
 
-    loop {
-        let len = catchup_chain_balls.len();
-        // we have done
-        if len < 2 {
-            break;
-        }
-
+    for batch in catchup_chain_balls.windows(2) {
+        let start = batch[0].clone();
+        let end = batch[1].clone();
+        let ws = ws.clone();
         // request a new batch
-        let batch_balls = ws
-            .request_next_hash_tree(&catchup_chain_balls[len - 1], &catchup_chain_balls[len - 2])?;
+        try_go!(move || {
+            let batch_balls = ws.request_next_hash_tree(&start, &end)?;
 
-        // check last ball is next item
-        if batch_balls.last().map(|p| &p.ball) != Some(&catchup_chain_balls[len - 2]) {
-            bail!("batch last ball not match to ball!");
-        }
-        catchup::process_hash_tree(&batch_balls)?;
+            // check last ball is next item
+            if batch_balls.last().map(|p| &p.ball) != Some(&end) {
+                bail!("batch last ball not match to ball!");
+            }
+            catchup::process_hash_tree(&batch_balls)?;
 
-        ws.request_new_missing_joints(batch_balls.iter().map(|j| &j.unit))?;
-        catchup_chain_balls.pop();
+            ws.request_new_missing_joints(batch_balls.iter().map(|j| &j.unit))
+        });
 
         // wait the batch number below a value and then start another batch
         if !wait_hash_tree_ball_consumed(200) {

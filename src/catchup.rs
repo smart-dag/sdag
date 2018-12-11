@@ -300,22 +300,8 @@ pub fn prepare_hash_tree(hash_tree_req: HashTreeReq) -> Result<Vec<BallProps>> {
 }
 
 pub fn process_hash_tree(balls: &[BallProps]) -> Result<()> {
-    use object_hash;
-
-    if balls.is_empty() {
-        return Ok(());
-    }
-
     for ball_prop in balls {
-        if !::spec::is_genesis_unit(&ball_prop.unit) {
-            if ball_prop.parent_balls.is_empty() {
-                bail!("no parents");
-            }
-        } else if !ball_prop.parent_balls.is_empty() {
-            bail!("genesis with parents?");
-        }
-
-        let ball = object_hash::calc_ball_hash(
+        let ball = ::object_hash::calc_ball_hash(
             &ball_prop.unit,
             &ball_prop.parent_balls,
             &ball_prop.skiplist_balls,
@@ -328,30 +314,6 @@ pub fn process_hash_tree(balls: &[BallProps]) -> Result<()> {
                 ball_prop.unit,
                 ball_prop.ball
             );
-        }
-
-        // process parent balls
-        for ball in &ball_prop.parent_balls {
-            if SDAG_CACHE.is_ball_in_hash_tree(ball) {
-                continue;
-            }
-
-            match SDAG_CACHE.get_ball_unit_hash(ball)? {
-                Some(_) => continue,
-                None => bail!("parent ball {} is missing", ball),
-            }
-        }
-
-        // process skiplist balls
-        for ball in &ball_prop.skiplist_balls {
-            if SDAG_CACHE.is_ball_in_hash_tree(ball) {
-                continue;
-            }
-
-            match SDAG_CACHE.get_ball_unit_hash(ball)? {
-                Some(_) => continue,
-                None => bail!("skiplist ball {} is missing", ball),
-            }
         }
 
         SDAG_CACHE.add_hash_tree_ball(ball, ball_prop.unit.clone());
