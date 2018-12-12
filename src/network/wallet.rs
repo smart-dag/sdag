@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use super::network::{Sender, Server, WsConnection};
+use cache::UnitProps;
 use config;
 use error::Result;
 use joint::Joint;
@@ -112,6 +113,7 @@ impl WalletConn {
 
         Ok(serde_json::from_value(inputs_response).unwrap())
     }
+
     //returned spendable the number of coins
     pub fn get_balance(&self, address: &str) -> Result<u64> {
         let response = self.send_request("get_balance", &serde_json::to_value(address)?)?;
@@ -120,6 +122,18 @@ impl WalletConn {
             .ok_or_else(|| format_err!("get balance failed"))?;
 
         Ok(balance)
+    }
+
+    //returned joint and joint property
+    pub fn get_joint_by_unit_hash(&self, unit: &str) -> Result<(Joint, UnitProps)> {
+        let mut response =
+            self.send_request("get_joint_by_unit_hash", &serde_json::to_value(unit)?)?;
+
+        let joint: Joint = serde_json::from_value(response["joint"].take()).unwrap();
+
+        let property: UnitProps = serde_json::from_value(response["property"].take()).unwrap();
+
+        Ok((joint, property))
     }
 
     pub fn get_latest_history(

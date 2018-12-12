@@ -12,7 +12,7 @@ lazy_static! {
 //---------------------------------------------------------------------------------------
 
 /// special isize with default level set to -1 which is less than any valid usize
-#[derive(Debug, Clone, Copy, Eq, Hash, Serialize)]
+#[derive(Debug, Clone, Copy, Eq, Hash, Serialize, Deserialize)]
 pub struct Level(isize);
 
 const INVALID_LEVEL: isize = -2;
@@ -128,7 +128,7 @@ impl Default for Level {
 //---------------------------------------------------------------------------------------
 // JointSequence
 //---------------------------------------------------------------------------------------
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 // | non-serial | business | state         |
 // |------------|----------|---------------|
 // | good       | good     | Good          |
@@ -148,7 +148,7 @@ pub enum JointSequence {
 //---------------------------------------------------------------------------------------
 // JointProperty
 //---------------------------------------------------------------------------------------
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JointProperty {
     pub level: Level,
     pub best_parent_unit: String,

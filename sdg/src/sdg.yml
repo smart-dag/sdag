@@ -75,21 +75,21 @@ subcommands:
                 required: false
                 default_value: "20"
                 value_name: NUM
+
     - info:
         about: Show the wallet info
+
     - balance:
         about: Show the wallet balance
+
+    - show:
+        about: Show the joint and propeties
         args:
-            - s:
-                help: show stable balance
-                short: s
-                takes_value: false
-                required: false
-            - p:
-                help: show pending balance
-                short: p
-                takes_value: false
-                required: false
+            - UNIT:
+                help: show the joint infos, include joint and properties
+                takes_value: true
+                required: true
+
 
 
 

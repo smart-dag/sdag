@@ -14,7 +14,7 @@ use utils::{AppendList, AppendListExt};
 //---------------------------------------------------------------------------------------
 // UnitProps
 //---------------------------------------------------------------------------------------
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct UnitProps {
     pub key: String,
     props: JointProperty,

@@ -311,7 +311,7 @@ fn main() -> Result<()> {
     let wallet_info = WalletInfo::from_mnemonic(&settings.mnemonic)?;
 
     //info
-    if let Some(_info) = m.subcommand_matches("info") {
+    if m.subcommand_matches("info").is_some() {
         return info(&ws, &wallet_info);
     }
 
@@ -361,16 +361,24 @@ fn main() -> Result<()> {
         return send_payment(&ws, text, address_amount, &wallet_info);
     }
 
-    if let Some(balance) = m.subcommand_matches("balance") {
-        if let Some(_s) = balance.values_of("s") {
-            println!(
-                "{:.6}",
-                ws.get_balance(&wallet_info._00_address)? as f64 / 1000_000.0
-            );
-            return Ok(());
-        }
+    //balance
+    if m.subcommand_matches("balance").is_some() {
+        println!(
+            "{:.6}",
+            ws.get_balance(&wallet_info._00_address)? as f64 / 1000_000.0
+        );
 
         return Ok(());
+    }
+
+    //show joint and properties
+    if let Some(show_args) = m.subcommand_matches("show") {
+        if let Some(unit) = show_args.value_of("UNIT") {
+            let resp = ws.get_joint_by_unit_hash(unit)?;
+
+            println!("joint = {:#?}", resp.0);
+            println!("property = {:#?}", resp.1);
+        }
     }
 
     Ok(())
