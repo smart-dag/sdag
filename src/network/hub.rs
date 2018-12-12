@@ -103,15 +103,15 @@ lazy_static! {
 pub struct NewJointEvent;
 impl_event!(NewJointEvent);
 
-fn init_connection(ws: &Arc<HubConn>) {
+fn init_connection(ws: &Arc<HubConn>) -> Result<()> {
     use rand::{thread_rng, Rng};
 
     // wait for some time for server ready
     coroutine::sleep(Duration::from_millis(1));
 
-    t!(ws.send_version());
-    t!(ws.send_subscribe());
-    t!(ws.send_hub_challenge());
+    ws.send_version()?;
+    ws.send_subscribe()?;
+    ws.send_hub_challenge()?;
 
     let mut rng = thread_rng();
     let n: u64 = rng.gen_range(0, 1000);
@@ -135,12 +135,15 @@ fn init_connection(ws: &Arc<HubConn>) {
             return;
         }
     });
+
+    Ok(())
 }
 
 fn add_peer_host(_bound: Arc<HubConn>) -> Result<()> {
-    // TODO: impl
+    // TODO: impl save peer host to database
     Ok(())
 }
+
 // global request has no specific ws connections, just find a proper one should be fine
 pub struct WsConnections {
     inbound: RwLock<Vec<Arc<HubConn>>>,
@@ -159,17 +162,17 @@ impl WsConnections {
         }
     }
 
-    pub fn add_inbound(&self, inbound: Arc<HubConn>) {
+    pub fn add_inbound(&self, inbound: Arc<HubConn>) -> Result<()> {
         self.inbound.write().unwrap().push(inbound.clone());
         inbound.set_inbound();
-        init_connection(&inbound);
-        t!(add_peer_host(inbound));
+        init_connection(&inbound)?;
+        add_peer_host(inbound)
     }
 
-    pub fn add_outbound(&self, outbound: Arc<HubConn>) {
+    pub fn add_outbound(&self, outbound: Arc<HubConn>) -> Result<()> {
         self.outbound.write().unwrap().push(outbound.clone());
-        init_connection(&outbound);
-        t!(add_peer_host(outbound));
+        init_connection(&outbound)?;
+        add_peer_host(outbound)
     }
 
     pub fn close_all(&self) {
@@ -1297,7 +1300,7 @@ pub fn create_outbound_conn<A: ToSocketAddrs>(address: A) -> Result<Arc<HubConn>
 
     let ws = WsConnection::new(conn, HubData::default(), peer, Role::Client)?;
 
-    WSS.add_outbound(ws.clone());
+    WSS.add_outbound(ws.clone())?;
     Ok(ws)
 }
 

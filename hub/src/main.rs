@@ -46,7 +46,7 @@ fn start_ws_server() -> Result<::may::coroutine::JoinHandle<()>> {
     let port = config::get_hub_server_port();
 
     let server = WsServer::start(("0.0.0.0", port), |c| {
-        WSS.add_inbound(c);
+        t!(WSS.add_inbound(c));
     })?;
     println!("Websocket server running on ws://0.0.0.0:{}", port);
 

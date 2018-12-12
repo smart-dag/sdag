@@ -24,8 +24,11 @@ pub struct WalletData {
 }
 
 impl WalletData {
-    fn wait_init_done(&self) {
-        self.init_done.wait();
+    fn wait_init_done(&self) -> Result<()> {
+        if !self.init_done.wait_timeout(Duration::from_secs(5)) {
+            bail!("wait_init_done timeout")
+        }
+        Ok(())
     }
 
     fn trigger_init_done(&self) {
@@ -207,8 +210,7 @@ fn init_connection(ws: &Arc<WalletConn>) -> Result<()> {
     });
 
     // wait for hub/challenge done for hand shake
-    ws.get_data().wait_init_done();
-    Ok(())
+    ws.get_data().wait_init_done()
 }
 
 pub fn create_outbound_conn<A: ToSocketAddrs>(address: A) -> Result<Arc<WalletConn>> {
