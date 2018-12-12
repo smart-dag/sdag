@@ -33,10 +33,10 @@ subcommands:
                  takes_value: true
                  required: true
     - send:
-        about: Pay TTT to an address
+        about: Pay SDG to an address
         args:
             - pay:
-                help: pay <AMOUNT> TTT to <ADDRESS>
+                help: pay <AMOUNT> SDG to <ADDRESS>
                 short: p
                 long: pay
                 multiple: true

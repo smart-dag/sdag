@@ -271,7 +271,7 @@ fn is_witness(ws: &Arc<WalletConn>, address: &String) -> Result<bool> {
 }
 
 fn main() -> Result<()> {
-    let yml = load_yaml!("ttt.yml");
+    let yml = load_yaml!("sdg.yml");
     let m = App::from_yaml(yml).get_matches();
 
     let verbosity = m.occurrences_of("verbose");
