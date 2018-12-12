@@ -135,6 +135,11 @@ impl WalletConn {
 
         Ok(serde_json::from_value(light_prop).unwrap())
     }
+
+    pub fn get_witnesses(&self) -> Result<Vec<String>> {
+        let witnesses = self.send_request("get_witnesses", &Value::Null)?;
+        Ok(serde_json::from_value(witnesses).unwrap())
+    }
 }
 
 // the server side impl

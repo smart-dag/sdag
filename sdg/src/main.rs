@@ -265,6 +265,11 @@ fn send_payment(
     Ok(())
 }
 
+fn is_witness(ws: &Arc<WalletConn>, address: &String) -> Result<bool> {
+    let witnesses = ws.get_witnesses()?;
+    Ok(witnesses.contains(address))
+}
+
 fn main() -> Result<()> {
     let yml = load_yaml!("ttt.yml");
     let m = App::from_yaml(yml).get_matches();
@@ -348,6 +353,11 @@ fn main() -> Result<()> {
         }
 
         let text = send.value_of("text");
+
+        if is_witness(&ws, &wallet_info._00_address)? {
+            bail!("witness can not send payment by sdg");
+        }
+
         return send_payment(&ws, text, address_amount, &wallet_info);
     }
 
