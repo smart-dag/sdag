@@ -180,7 +180,8 @@ impl WalletConn {
 //--------------------------------------------------------------------------------------
 fn init_connection(ws: &Arc<WalletConn>) -> Result<()> {
     use rand::{thread_rng, Rng};
-
+    // wait for some time for server ready
+    coroutine::sleep(Duration::from_millis(1));
     ws.send_version()?;
 
     let mut rng = thread_rng();
@@ -221,8 +222,6 @@ pub fn create_outbound_conn<A: ToSocketAddrs>(address: A) -> Result<Arc<WalletCo
     let (conn, _) = client(req, stream)?;
 
     let ws = WsConnection::new(conn, WalletData::default(), peer, Role::Client)?;
-    // wait for some time for serer ready
-    coroutine::sleep(Duration::from_millis(1));
 
     init_connection(&ws)?;
     Ok(ws)

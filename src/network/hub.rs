@@ -106,6 +106,9 @@ impl_event!(NewJointEvent);
 fn init_connection(ws: &Arc<HubConn>) {
     use rand::{thread_rng, Rng};
 
+    // wait for some time for server ready
+    coroutine::sleep(Duration::from_millis(1));
+
     t!(ws.send_version());
     t!(ws.send_subscribe());
     t!(ws.send_hub_challenge());
