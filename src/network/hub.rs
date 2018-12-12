@@ -129,6 +129,7 @@ fn init_connection(ws: &Arc<HubConn>) {
         if rsp.is_err() {
             error!("heartbeat err= {}", rsp.unwrap_err());
             ws.close();
+            return;
         }
     });
 }

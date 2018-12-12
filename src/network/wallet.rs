@@ -201,6 +201,7 @@ fn init_connection(ws: &Arc<WalletConn>) -> Result<()> {
         let rsp = ws.send_heartbeat();
         if rsp.is_err() {
             error!("heartbeat err= {}", rsp.unwrap_err());
+            return;
         }
     });
 
@@ -220,6 +221,8 @@ pub fn create_outbound_conn<A: ToSocketAddrs>(address: A) -> Result<Arc<WalletCo
     let (conn, _) = client(req, stream)?;
 
     let ws = WsConnection::new(conn, WalletData::default(), peer, Role::Client)?;
+    // wait for some time for serer ready
+    coroutine::sleep(Duration::from_millis(1));
 
     init_connection(&ws)?;
     Ok(ws)
