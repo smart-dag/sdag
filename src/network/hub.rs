@@ -1079,12 +1079,12 @@ impl HubConn {
             "last_known_mci": last_stable_mci.value()
         });
 
-        let ret = self.send_request("catchup", &param).unwrap();
+        let ret = self.send_request("catchup", &param)?;
         if !ret["error"].is_null() {
             bail!("catchup request got error response: {:?}", ret["error"]);
         }
 
-        let catchup_chain: catchup::CatchupChain = serde_json::from_value(ret).unwrap();
+        let catchup_chain: catchup::CatchupChain = serde_json::from_value(ret)?;
         catchup::process_catchup_chain(catchup_chain)
     }
 
@@ -1326,23 +1326,6 @@ pub fn purge_temp_bad_free_joints(timeout: u64) -> Result<()> {
 pub fn start_catchup(ws: Arc<HubConn>) -> Result<()> {
     error!("catchup started");
 
-    // timely wait the hash tree ball consumed
-    // return false if timeout
-    fn wait_hash_tree_ball_consumed(left_len: usize) -> bool {
-        let mut wait_time = 0;
-        while SDAG_CACHE.get_hash_tree_ball_len() > left_len {
-            // at most we wait for 10 second
-            if wait_time >= 1000 {
-                warn!("wait for catchup data consumed timeout!");
-                return false;
-            }
-            // every one second check again
-            coroutine::sleep(Duration::from_millis(10));
-            wait_time += 1;
-        }
-        true
-    }
-
     // before a catchup the hash_tree_ball should be clear
     assert_eq!(SDAG_CACHE.get_hash_tree_ball_len(), 0);
     let mut catchup_chain_balls = ws.request_catchup()?;
@@ -1351,38 +1334,36 @@ pub fn start_catchup(ws: Arc<HubConn>) -> Result<()> {
     for batch in catchup_chain_balls.windows(2) {
         let start = batch[0].clone();
         let end = batch[1].clone();
-        let ws = ws.clone();
-        // request a new batch
-        try_go!(move || {
-            let batch_balls = ws.request_next_hash_tree(&start, &end)?;
 
-            // check last ball is next item
-            if batch_balls.last().map(|p| &p.ball) != Some(&end) {
-                bail!("batch last ball not match to ball!");
-            }
-            catchup::process_hash_tree(&batch_balls)?;
+        let batch_balls = ws.request_next_hash_tree(&start, &end)?;
 
-            ws.request_new_missing_joints(batch_balls.iter().map(|j| &j.unit))
-        });
+        // check last ball is next item
+        if batch_balls.last().map(|p| &p.ball) != Some(&end) {
+            bail!("batch last ball not match to ball!");
+        }
+        catchup::process_hash_tree(&batch_balls)?;
+
+        ws.request_new_missing_joints(batch_balls.iter().map(|j| &j.unit))?;
 
         // wait the batch number below a value and then start another batch
-        if !wait_hash_tree_ball_consumed(200) {
-            bail!("catchup wait hash tree ball timed out!");
-        }
+        ::utils::wait_cond(Some(Duration::from_secs(8)), || {
+            SDAG_CACHE.get_hash_tree_ball_len() < 300
+        })
+        .context("catchup wait hash tree batch timeout")?;
     }
 
     // wait all the catchup done
-    if !wait_hash_tree_ball_consumed(0) {
-        bail!("catchup wait last hash tree ball timed out!");
-    }
+    ::utils::wait_cond(Some(Duration::from_secs(10)), || {
+        SDAG_CACHE.get_hash_tree_ball_len() == 0
+    })
+    .context("catchup wait last ball timeout")?;
+    error!("catchup done");
 
     // wait until there is no more working
-    while UNIT_IN_WORK.get_waiter_num() != 0 {
-        coroutine::sleep(Duration::from_secs(1));
-    }
+    ::utils::wait_cond(None, || UNIT_IN_WORK.get_waiter_num() == 0).ok();
+
     WSS.request_free_joints_from_all_outbound_peers()?;
 
-    error!("catchup done");
     Ok(())
 }
 

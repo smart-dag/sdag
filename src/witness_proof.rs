@@ -224,8 +224,6 @@ fn process_witness_change_and_definition(
     }
 
     // check signatures of unstable witness joints
-    // they came in reverse chronological order, reverse() reverses in place
-    // witness_joints.reverse();
     for joint in witness_joints {
         validate_witness_unit(&joint.unit, &mut definitions, false)?;
     }
