@@ -8,6 +8,19 @@ use rcu_cell::{RcuCell, RcuReader};
 
 type NodePtr<T> = Option<Box<Node<T>>>;
 
+trait IntoRaw<T> {
+    fn into_raw(self) -> *mut T;
+}
+
+impl<T> IntoRaw<Node<T>> for NodePtr<T> {
+    fn into_raw(self) -> *mut Node<T> {
+        match self {
+            Some(b) => Box::into_raw(b),
+            None => ptr::null_mut(),
+        }
+    }
+}
+
 #[derive(Debug)]
 struct Node<T> {
     value: RcuCell<T>,
@@ -18,22 +31,16 @@ struct Node<T> {
 pub struct AppendListExt<T>(AtomicPtr<Node<T>>);
 
 impl<T> AppendListExt<T> {
-    fn into_raw(ptr: NodePtr<T>) -> *mut Node<T> {
-        match ptr {
-            Some(b) => Box::into_raw(b),
-            None => ptr::null_mut(),
-        }
-    }
     unsafe fn from_raw(ptr: *mut Node<T>) -> NodePtr<T> {
-        if ptr == ptr::null_mut() {
+        if ptr.is_null() {
             None
         } else {
             Some(Box::from_raw(ptr))
         }
     }
 
-    fn new_internal(ptr: NodePtr<T>) -> Self {
-        AppendListExt(AtomicPtr::new(Self::into_raw(ptr)))
+    fn new_internal(node: NodePtr<T>) -> Self {
+        AppendListExt(AtomicPtr::new(node.into_raw()))
     }
 
     pub fn new() -> Self {
@@ -77,10 +84,7 @@ impl<T> AppendListExt<T> {
 
     /// Returns true if the AppendListExt contains no data
     pub fn is_empty(&self) -> bool {
-        for _ in self.iter() {
-            return false;
-        }
-        true
+        self.iter().next().is_none()
     }
 
     /// get the length of the list, this is O(n)

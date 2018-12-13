@@ -247,11 +247,11 @@ fn validate_author_basic(unit: &Unit) -> Result<()> {
             bail!("no authentifiers");
         }
 
-        for (_, value) in &author.authentifiers {
-            if value.is_empty() {
+        for auth in author.authentifiers.values() {
+            if auth.is_empty() {
                 bail!("authentifiers must be nonempty strings");
             }
-            if value.len() > config::MAX_AUTHENTIFIER_LENGTH {
+            if auth.len() > config::MAX_AUTHENTIFIER_LENGTH {
                 bail!("authentifier too long");
             }
         }
@@ -430,7 +430,7 @@ fn validate_parents(joint: &JointData) -> Result<()> {
     }
 
     // check last ball should not retreat
-    let mut max_parent_last_ball_mci = Level::minimum();
+    let mut max_parent_last_ball_mci = Level::MINIMUM;
     for parent in new_parents {
         let parent_joint = parent.read()?;
         let parent_last_ball_mci = parent_joint.get_last_ball_mci()?;
@@ -627,11 +627,11 @@ fn validate_definition(definition: &Value, is_asset: bool) -> Result<()> {
     Ok(())
 }
 
-pub fn validate_authentifiers(
+pub fn validate_authentifiers<S: std::hash::BuildHasher>(
     asset: &Value,
     definition: &Value,
     unit_hash: &[u8],
-    authentifiers: &HashMap<String, String>,
+    authentifiers: &HashMap<String, String, S>,
 ) -> Result<()> {
     let evaluate = |definition: &Value, path: &str, used_path: &mut Vec<String>| -> Result<()> {
         let definition = Definition::from_value(definition)?;

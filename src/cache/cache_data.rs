@@ -65,7 +65,7 @@ impl<K, V> PartialEq for CachedData<K, V> {
 impl<K, V> CachedData<K, V> {
     pub fn empty(key: Arc<K>) -> Self {
         CachedData {
-            key: key,
+            key,
             data: Default::default(),
         }
     }

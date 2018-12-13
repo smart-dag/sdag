@@ -6,6 +6,19 @@ use std::{mem, ptr};
 
 type NodePtr<T> = Option<Box<Node<T>>>;
 
+trait IntoRaw<T> {
+    fn into_raw(self) -> *mut T;
+}
+
+impl<T> IntoRaw<Node<T>> for NodePtr<T> {
+    fn into_raw(self) -> *mut Node<T> {
+        match self {
+            Some(b) => Box::into_raw(b),
+            None => ptr::null_mut(),
+        }
+    }
+}
+
 #[derive(Debug)]
 struct Node<T> {
     value: T,
@@ -16,22 +29,16 @@ struct Node<T> {
 pub struct AppendList<T>(AtomicPtr<Node<T>>);
 
 impl<T> AppendList<T> {
-    fn into_raw(ptr: NodePtr<T>) -> *mut Node<T> {
-        match ptr {
-            Some(b) => Box::into_raw(b),
-            None => ptr::null_mut(),
-        }
-    }
     unsafe fn from_raw(ptr: *mut Node<T>) -> NodePtr<T> {
-        if ptr == ptr::null_mut() {
+        if ptr.is_null() {
             None
         } else {
             Some(Box::from_raw(ptr))
         }
     }
 
-    fn new_internal(ptr: NodePtr<T>) -> Self {
-        AppendList(AtomicPtr::new(Self::into_raw(ptr)))
+    fn new_internal(node: NodePtr<T>) -> Self {
+        AppendList(AtomicPtr::new(node.into_raw()))
     }
 
     pub fn new() -> Self {
@@ -40,7 +47,7 @@ impl<T> AppendList<T> {
 
     pub fn append(&self, value: T) {
         self.append_list(AppendList::new_internal(Some(Box::new(Node {
-            value: value,
+            value,
             next: AppendList::new(),
         }))));
     }
@@ -75,10 +82,7 @@ impl<T> AppendList<T> {
 
     /// Returns true if the AppendList contains no data
     pub fn is_empty(&self) -> bool {
-        for _ in self.iter() {
-            return false;
-        }
-        true
+        self.iter().next().is_none()
     }
 
     /// get the length of the list, this is O(n)

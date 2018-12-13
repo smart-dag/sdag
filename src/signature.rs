@@ -5,7 +5,7 @@ use secp256k1::{key, All, Message, Secp256k1, Signature};
 
 lazy_static! {
     // initialize consume too much memory, init it in thread context
-    static ref SECP256K1: Secp256k1<All> = ::std::thread::spawn(|| Secp256k1::new()).join().unwrap();
+    static ref SECP256K1: Secp256k1<All> = ::std::thread::spawn(Secp256k1::new).join().unwrap();
 }
 
 pub trait Signer {

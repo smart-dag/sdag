@@ -41,7 +41,10 @@ pub fn prepare_catchup_chain(catchup_req: CatchupReq) -> Result<CatchupChain> {
     };
     ensure!(witnesses.len() == 12, "invalid witness list");
 
-    if let None = SDAG_CACHE.get_mc_unit_hash(last_stable_mci.into())? {
+    if SDAG_CACHE
+        .get_mc_unit_hash(last_stable_mci.into())?
+        .is_none()
+    {
         return Ok(CatchupChain {
             // already current
             status: Some("current".to_owned()),

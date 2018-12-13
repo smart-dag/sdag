@@ -124,7 +124,7 @@ impl SDagCacheInner {
     /// move a joint from unhandled to normal
     pub fn transfer_joint_to_normal(&mut self, key: &str) {
         if let Some((k, v)) = self.unhandled_joints.remove_entry(key) {
-            self.normal_joints.entry(k).or_insert(v.clone());
+            self.normal_joints.entry(k).or_insert_with(|| v.clone());
         }
     }
 

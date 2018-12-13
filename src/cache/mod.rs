@@ -227,10 +227,7 @@ impl SDagCache {
     /// a ball either exist in joint.ball or in hash tree ball
     pub fn is_ball_in_hash_tree(&self, ball: &str) -> bool {
         let g = self.hash_tree_balls.read().unwrap();
-        match g.get(ball) {
-            Some(_) => true,
-            None => false,
-        }
+        g.get(ball).is_some()
     }
 
     /// return true if hash tree balls is empty

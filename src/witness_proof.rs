@@ -66,10 +66,8 @@ pub fn prepare_witness_proof(
     last_ball_units.sort_by_key(|u| u.1);
     let (last_ball_unit, last_ball_mci) = last_ball_units.pop().unwrap();
 
-    if last_stable_mci >= last_ball_mci {
-        if last_stable_mci > 0 {
-            return Err(SdagError::CatchupAlreadyCurrent.into());
-        }
+    if last_stable_mci >= last_ball_mci && last_stable_mci > 0 {
+        return Err(SdagError::CatchupAlreadyCurrent.into());
     }
 
     let witness_change_and_definition =

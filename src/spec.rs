@@ -202,7 +202,7 @@ impl Unit {
         is_genesis_unit(&self.unit)
     }
 
-    fn get_naked_unit<'a>(&'a self) -> NakedUnit<'a> {
+    fn get_naked_unit(&self) -> NakedUnit {
         NakedUnit {
             alt: &self.alt,
             version: &self.version,

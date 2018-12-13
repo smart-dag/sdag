@@ -2,7 +2,7 @@ use std::net::ToSocketAddrs;
 use std::sync::Arc;
 use std::time::Duration;
 
-use super::network::{Sender, Server, WsConnection};
+use super::network_base::{Sender, Server, WsConnection};
 use cache::UnitProps;
 use config;
 use error::Result;

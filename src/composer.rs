@@ -127,11 +127,8 @@ pub fn compose_joint<T: Signer>(composer_info: ComposeInfo, signer: &T) -> Resul
     unit.messages.push(payment_message);
     unit.headers_commission = Some(unit.calc_header_size());
 
-    match unit.messages.last_mut().unwrap().payload {
-        Some(Payload::Payment(ref mut x)) => {
-            x.inputs.append(&mut inputs.inputs);
-        }
-        _ => {}
+    if let Some(Payload::Payment(ref mut x)) = unit.messages.last_mut().unwrap().payload {
+        x.inputs.append(&mut inputs.inputs);
     }
 
     unit.payload_commission = Some(unit.calc_payload_size());
@@ -142,8 +139,8 @@ pub fn compose_joint<T: Signer>(composer_info: ComposeInfo, signer: &T) -> Resul
 
     let change = inputs.amount as i64
         - transaction_amount as i64
-        - unit.headers_commission.unwrap() as i64
-        - unit.payload_commission.unwrap() as i64;
+        - i64::from(unit.headers_commission.unwrap())
+        - i64::from(unit.payload_commission.unwrap());
 
     if change < 0 {
         bail!(
@@ -154,25 +151,22 @@ pub fn compose_joint<T: Signer>(composer_info: ComposeInfo, signer: &T) -> Resul
 
     {
         let payment_message = unit.messages.last_mut().unwrap();
-        match payment_message.payload {
-            Some(Payload::Payment(ref mut x)) => {
-                if let Some(change_output) = x.outputs.first_mut() {
-                    change_output.amount = change as u64;
-                } else {
-                    bail!("compose output error")
-                }
-
-                x.outputs.sort_by(|a, b| {
-                    if a.address == b.address {
-                        a.amount.cmp(&b.amount)
-                    } else {
-                        a.address.cmp(&b.address)
-                    }
-                });
-
-                payment_message.payload_hash = object_hash::get_base64_hash(&x)?;
+        if let Some(Payload::Payment(ref mut x)) = payment_message.payload {
+            if let Some(change_output) = x.outputs.first_mut() {
+                change_output.amount = change as u64;
+            } else {
+                bail!("compose output error")
             }
-            _ => {}
+
+            x.outputs.sort_by(|a, b| {
+                if a.address == b.address {
+                    a.amount.cmp(&b.amount)
+                } else {
+                    a.address.cmp(&b.address)
+                }
+            });
+
+            payment_message.payload_hash = object_hash::get_base64_hash(&x)?;
         }
     }
 

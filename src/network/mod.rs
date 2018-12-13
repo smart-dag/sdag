@@ -1,5 +1,5 @@
 pub mod hub;
-mod network;
+mod network_base;
 pub mod wallet;
 
-pub use self::network::{WsConnection, WsServer};
+pub use self::network_base::{WsConnection, WsServer};

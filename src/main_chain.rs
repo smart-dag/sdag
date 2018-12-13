@@ -55,7 +55,7 @@ fn start_main_chain_worker(rx: mpsc::Receiver<CachedJoint>) -> JoinHandle<()> {
             .unwrap()
             .read()
             .map(|j| j.get_level())
-            .unwrap_or(Level::minimum());
+            .unwrap_or(Level::MINIMUM);
 
         info!(
             "main chain worker started, last_stable_level = {:?}",
@@ -81,7 +81,7 @@ fn update_main_chain(joint: CachedJoint) -> Result<Level> {
     let stable_level;
 
     if joint_data.unit.is_genesis_unit() {
-        stable_level = Level::zero();
+        stable_level = Level::ZERO;
         mark_main_chain_joint_stable(joint, stable_level)?;
     } else {
         let (last_stable_mc_joint, unstable_mc) = build_unstable_main_chain_from_joint(joint)?;
@@ -125,7 +125,7 @@ fn calc_max_alt_level(alternative_roots: Vec<CachedJoint>) -> Result<Option<Leve
 
         if joint_data.is_wl_increased() {
             let level = joint_data.get_level();
-            if level > max_alt_level.unwrap_or(Level::zero()) {
+            if level > max_alt_level.unwrap_or(Level::ZERO) {
                 max_alt_level = Some(level);
             }
         }
@@ -168,7 +168,7 @@ fn mark_main_chain_joint_stable(joint: CachedJoint, mci: Level) -> Result<()> {
     }
 
     let mut visited = HashSet::new();
-    let mut sub_mci = Level::zero();
+    let mut sub_mci = Level::ZERO;
 
     while let Some(joint) = sorted.pop() {
         //Ignore the second visit to keep the order right
@@ -184,8 +184,8 @@ fn mark_main_chain_joint_stable(joint: CachedJoint, mci: Level) -> Result<()> {
         sub_mci += 1;
 
         //limci on main chain joint is already set, do not overwrite it
-        if joint_data.get_limci().is_none() {
-            let mut limci = Level::zero();
+        if !joint_data.get_limci().is_valid() {
+            let mut limci = Level::ZERO;
             for parent in joint_data.parents.iter() {
                 let parent_data = parent.read()?;
 
@@ -331,7 +331,7 @@ fn calc_max_alt_level_included_by_later_joints(
 
         if joint_data.is_wl_increased() {
             let level = joint_data.get_level();
-            if level > max_alt_level.unwrap_or(Level::minimum()) {
+            if level > max_alt_level.unwrap_or(Level::MINIMUM) {
                 max_alt_level = Some(level);
             }
         }
@@ -397,7 +397,7 @@ fn calc_min_wl_included_by_later_joints(
         }
     }
 
-    Ok(Level::minimum())
+    Ok(Level::MINIMUM)
 }
 
 //---------------------------------------------------------------------------------------
@@ -463,7 +463,7 @@ pub fn is_stable_in_later_joints(
 
     let min_wl = calc_min_wl_included_by_later_joints(earlier_joint, &later_joints)?;
 
-    let stable = min_wl > max_alt_level.unwrap_or(best_parent.get_level());
+    let stable = min_wl > max_alt_level.unwrap_or_else(|| best_parent.get_level());
 
     Ok(stable)
 }
@@ -484,7 +484,7 @@ pub fn get_last_stable_mci() -> Level {
     get_last_stable_joint()
         .read()
         .map(|j| j.get_mci())
-        .unwrap_or(Level::zero())
+        .unwrap_or(Level::ZERO)
 }
 
 /// get the stable point joint

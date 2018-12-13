@@ -106,17 +106,14 @@ fn start_business_worker(rx: mpsc::Receiver<CachedJoint>) -> JoinHandle<()> {
                 }
                 Err(e) => {
                     error!("validate_joint failed, err = {:?}", e);
-                    match joint_data.get_sequence() {
-                        JointSequence::Good => {
-                            let mut temp_business_state =
-                                BUSINESS_CACHE.temp_business_state.write().unwrap();
-                            for i in 0..joint_data.unit.messages.len() {
-                                if let Err(e) = temp_business_state.revert_message(&joint_data, i) {
-                                    error!("revert temp state failed, err = {:?}", e);
-                                }
+                    if let JointSequence::Good = joint_data.get_sequence() {
+                        let mut temp_business_state =
+                            BUSINESS_CACHE.temp_business_state.write().unwrap();
+                        for i in 0..joint_data.unit.messages.len() {
+                            if let Err(e) = temp_business_state.revert_message(&joint_data, i) {
+                                error!("revert temp state failed, err = {:?}", e);
                             }
                         }
-                        _ => {}
                     }
 
                     joint_data.set_sequence(JointSequence::FinalBad);
@@ -189,7 +186,7 @@ impl GlobalState {
                 .unwrap()
                 .entry(joint.unit.authors[0].address.clone())
                 .and_modify(|v| *v = unit_hash.clone())
-                .or_insert(unit_hash.clone());
+                .or_insert_with(|| unit_hash.clone());
         }
     }
 
@@ -206,7 +203,7 @@ impl GlobalState {
             if let Some(Payload::Payment(ref payment)) = msg.payload {
                 for output in &payment.outputs {
                     // related_joints should not include changes
-                    if &output.address != address {
+                    if output.address != address {
                         self.related_joints
                             .write()
                             .unwrap()
@@ -216,7 +213,7 @@ impl GlobalState {
                                     v.push(unit_hash.clone())
                                 }
                             })
-                            .or_insert(vec![unit_hash.clone()]);
+                            .or_insert_with(|| vec![unit_hash.clone()]);
                     }
                 }
             }
@@ -243,7 +240,7 @@ impl GlobalState {
                 if let Some(Payload::Payment(ref payment)) = msg.payload {
                     // note: no mater what kind we should add output for balance
                     for output in &payment.outputs {
-                        if &output.address == address {
+                        if output.address == address {
                             balance += output.amount;
                         }
                     }
@@ -436,7 +433,8 @@ impl BusinessCache {
             if let Some(ref unit) = last_stable_self_unit {
                 let author_joint = SDAG_CACHE.get_joint(unit)?.read()?;
                 // joint is not include author joint
-                if !(joint > &*author_joint) {
+                let included = joint > &*author_joint;
+                if !included {
                     bail!("joint not include last stable self unit");
                 }
             }
@@ -511,8 +509,8 @@ impl BusinessCache {
                     }
                 }
             }
-            balance -= joint.unit.headers_commission.unwrap_or(0) as u64;
-            balance -= joint.unit.payload_commission.unwrap_or(0) as u64;
+            balance -= u64::from(joint.unit.headers_commission.unwrap_or(0));
+            balance -= u64::from(joint.unit.payload_commission.unwrap_or(0));
         }
 
         if let Some(unit) = last_stable_self_unit {
@@ -630,10 +628,9 @@ fn validate_message_format(msg: &Message) -> Result<()> {
         bail!("wrong payload location: {}", msg.payload_location);
     }
 
-    if msg.payload_location != "uri" {
-        if msg.payload_uri.is_some() && msg.payload_uri_hash.is_some() {
-            bail!("must not contain payload_uri and payload_uri_hash");
-        }
+    if msg.payload_location != "uri" && msg.payload_uri.is_some() && msg.payload_uri_hash.is_some()
+    {
+        bail!("must not contain payload_uri and payload_uri_hash");
     }
 
     Ok(())

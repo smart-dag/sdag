@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-use super::network::{Sender, Server, WsConnection};
+use super::network_base::{Sender, Server, WsConnection};
 use business::BUSINESS_CACHE;
 use cache::{JointData, SDAG_CACHE};
 use catchup;
@@ -355,7 +355,7 @@ impl WsConnections {
         if config::MAX_OUTBOUND_CONNECTIONS > outbound_connecions {
             return config::MAX_OUTBOUND_CONNECTIONS - outbound_connecions;
         }
-        return 0;
+        0
     }
 
     fn contains(&self, addr: &str) -> bool {
@@ -402,7 +402,7 @@ pub fn auto_connection() {
 
     let peers = get_unconnected_peers_in_config();
     for peer in peers {
-        if let Some(_) = BAD_CONNECTION.get(&peer) {
+        if BAD_CONNECTION.get(&peer).is_some() {
             continue;
         }
         if create_outbound_conn(peer).is_ok() {
@@ -415,7 +415,7 @@ pub fn auto_connection() {
 
     let peers = get_unconnected_remote_peers();
     for peer in peers {
-        if let Some(_) = BAD_CONNECTION.get(&peer) {
+        if BAD_CONNECTION.get(&peer).is_some() {
             continue;
         }
         if create_outbound_conn(peer).is_ok() {
@@ -428,7 +428,7 @@ pub fn auto_connection() {
 
     let peers = get_unconnected_peers_in_db();
     for peer in peers {
-        if let Some(_) = BAD_CONNECTION.get(&peer) {
+        if BAD_CONNECTION.get(&peer).is_some() {
             continue;
         }
         if create_outbound_conn(peer).is_ok() {
@@ -1167,7 +1167,7 @@ impl HubConn {
     }
 
     #[allow(dead_code)]
-    fn send_stored_device_messages(&self, _device_address: &String) -> Result<()> {
+    fn send_stored_device_messages(&self, _device_address: &str) -> Result<()> {
         //TODO: save and send device messages
         Ok(())
     }

@@ -106,11 +106,11 @@ fn get_stable_history(history_request: &HistoryRequest) -> Result<Vec<Transactio
 
         fn is_authored_by_address(unit: &Unit, address: &str) -> bool {
             for author in unit.authors.iter() {
-                if &author.address == address {
+                if author.address == address {
                     return true;
                 }
             }
-            return false;
+            false
         }
 
         if !is_authored_by_address(&self_joint_data.unit, address) {
@@ -160,18 +160,18 @@ fn get_stable_history(history_request: &HistoryRequest) -> Result<Vec<Transactio
 /// return true if find all needed tx
 fn get_receive_tx(
     unit: &Unit,
-    address: &String,
+    address: &str,
     need_tx_count: usize,
     txs: &mut Vec<TransactionInfo>,
 ) -> bool {
     for msg in &unit.messages {
         if let Some(Payload::Payment(ref payment)) = msg.payload {
             for output in &payment.outputs {
-                if &output.address == address {
+                if output.address == address {
                     txs.push(TransactionInfo {
                         unit_hash: unit.unit.clone(),
                         from_addr: unit.authors[0].address.clone(), // just support one author currently
-                        to_addr: address.clone(),
+                        to_addr: address.to_owned(),
                         amount: output.amount as i64,
                         time: unit.timestamp,
                     });

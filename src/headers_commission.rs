@@ -115,8 +115,9 @@ fn earner_and_payer_of_hc(
                 let amount = if address.earned_headers_commission_share == 100 {
                     pay_amount
                 } else {
-                    (f64::from(pay_amount) * address.earned_headers_commission_share as f64 / 100.0)
-                        .round() as u32
+                    let pay_amount =
+                        f64::from(pay_amount * address.earned_headers_commission_share) / 100.0;
+                    pay_amount.round() as u32
                 };
                 payers_and_earners
                     .entry((*payer_cache.key).clone())

@@ -122,7 +122,7 @@ impl UtxoCache {
         Ok(())
     }
 
-    fn decrease_output(&mut self, inputs: &Vec<Input>) -> Result<()> {
+    fn decrease_output(&mut self, inputs: &[Input]) -> Result<()> {
         for input in inputs.iter() {
             match input.kind {
                 Some(ref kind) if kind == "issue" => continue,
@@ -151,7 +151,7 @@ impl UtxoCache {
     fn increase_output(
         &mut self,
         unit_hash: &str,
-        outputs: &Vec<Output>,
+        outputs: &[Output],
         message_index: usize,
         utxo_value: UtxoData,
     ) -> Result<()> {
@@ -174,7 +174,7 @@ impl UtxoCache {
             Entry::Occupied(mut utxo) => {
                 let is_empty = {
                     let utxo_set = utxo.get_mut();
-                    if let None = utxo_set.remove(address_key) {
+                    if utxo_set.remove(address_key).is_none() {
                         bail!("no utxo found!");
                     };
                     utxo_set.is_empty()
@@ -244,7 +244,7 @@ impl UtxoCache {
     fn verify_transfer_of_input(
         &self,
         input: &Input,
-        author_addresses: &Vec<&String>,
+        author_addresses: &[&String],
         input_keys: &mut HashSet<String>,
     ) -> Result<u64> {
         if input.address.is_some()
@@ -316,7 +316,7 @@ impl UtxoCache {
         &self,
         input: &Input,
         index: usize,
-        author_addresses: &Vec<&String>,
+        author_addresses: &[&String],
         unit: &Unit,
         input_keys: &mut HashSet<String>,
     ) -> Result<u64> {
@@ -397,7 +397,7 @@ impl UtxoCache {
         amount: usize,
     ) -> Result<()> {
         let key = PayloadCommissionOutputKey { mci, address };
-        if let Some(_) = self.payload_commission_output.get(&key) {
+        if self.payload_commission_output.get(&key).is_some() {
             bail!("already have key={:?} in payload commission output", key);
         }
         self.payload_commission_output.insert(key, amount);
@@ -407,14 +407,14 @@ impl UtxoCache {
     #[allow(dead_code)]
     fn save_header_commission(&mut self, address: String, mci: Level, amount: usize) -> Result<()> {
         let key = HeadersCommissionOutputKey { mci, address };
-        if let Some(_) = self.headers_commission_output.get(&key) {
+        if self.headers_commission_output.get(&key).is_some() {
             bail!("already have key={:?} in headers commission output", key);
         }
         self.headers_commission_output.insert(key, amount);
         Ok(())
     }
 
-    fn verify_output(&self, outputs: &Vec<Output>) -> Result<u64> {
+    fn verify_output(&self, outputs: &[Output]) -> Result<u64> {
         let mut total_output = 0;
         let mut prev_address = String::new();
         let mut prev_amount = 0;
@@ -431,7 +431,7 @@ impl UtxoCache {
                 bail!("output address {} invalid", address)
             }
 
-            if &prev_address > address {
+            if prev_address > *address {
                 bail!("output addresses not sorted");
             } else if &prev_address == address && prev_amount > amount {
                 bail!("output amounts for same address not sorted");
@@ -448,7 +448,7 @@ impl UtxoCache {
     //returned value: (output_address, output_amount, output_mci)
     fn verify_input(
         &self,
-        inputs: &Vec<Input>,
+        inputs: &[Input],
         author_addresses: Vec<&String>,
         unit: &Unit,
     ) -> Result<u64> {
@@ -491,8 +491,8 @@ impl UtxoCache {
 
         if total_input
             != total_output
-                + unit.headers_commission.unwrap_or(0) as u64
-                + unit.payload_commission.unwrap_or(0) as u64
+                + u64::from(unit.headers_commission.unwrap_or(0))
+                + u64::from(unit.payload_commission.unwrap_or(0))
         {
             bail!(
                 "inputs and outputs do not balance: {} != {} + {} + {}",

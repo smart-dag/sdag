@@ -12,11 +12,17 @@ lazy_static! {
 //---------------------------------------------------------------------------------------
 
 /// special isize with default level set to -1 which is less than any valid usize
-#[derive(Debug, Clone, Copy, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Eq, Serialize, Deserialize)]
 pub struct Level(isize);
 
 const INVALID_LEVEL: isize = -2;
 const MINIMUM_LEVEL: isize = -1;
+
+impl std::hash::Hash for Level {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        state.write_isize(self.0);
+    }
+}
 
 impl PartialOrd for Level {
     #[inline]
@@ -78,37 +84,23 @@ impl ::std::ops::SubAssign<usize> for Level {
 }
 
 impl Level {
-    pub fn none() -> Self {
-        Self::default()
-    }
-
-    pub fn zero() -> Self {
-        Level(0)
-    }
-
+    pub const ZERO: Level = Level(0);
+    pub const INVALID: Level = Level(INVALID_LEVEL);
     // minimum + 1 = 0
-    pub fn minimum() -> Self {
-        Level(MINIMUM_LEVEL)
-    }
+    pub const MINIMUM: Level = Level(MINIMUM_LEVEL);
 
     pub fn new(l: usize) -> Self {
         Level(l as isize)
     }
 
-    pub fn value(&self) -> usize {
+    pub fn value(self) -> usize {
         assert!(self.0 >= 0);
         self.0 as usize
     }
 
-    /// is not set a valid value
-    #[inline]
-    pub fn is_none(&self) -> bool {
-        self.0 < 0
-    }
-
     /// contains a valid value
     #[inline]
-    pub fn is_valid(&self) -> bool {
+    pub fn is_valid(self) -> bool {
         self.0 >= 0
     }
 }
@@ -235,7 +227,7 @@ fn test_write() {
     let joint = Joint {
         ball: None,
         skiplist_units: Vec::new(),
-        unit: unit,
+        unit,
         unsigned: None,
     };
     let parents_set = joint

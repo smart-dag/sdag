@@ -8,7 +8,7 @@ impl<T, F> FnOps<T> for F
 where
     F: Fn(&T) -> () + Send + Sync,
 {
-    fn call_box(self: &Self, data: &T) -> () {
+    fn call_box(self: &Self, data: &T) {
         (*self)(data)
     }
 }

@@ -250,10 +250,10 @@ impl JointData {
                 // need to use it's own property, not the shared one
                 joint_data.props = Default::default();
 
-                joint_data.set_level(Level::zero());
-                joint_data.set_wl(Level::zero());
+                joint_data.set_level(Level::ZERO);
+                joint_data.set_wl(Level::ZERO);
                 // trigger genesis increase min_wl_increased
-                joint_data.set_min_wl(Level::minimum());
+                joint_data.set_min_wl(Level::MINIMUM);
                 // clear all it's children to break visit loop
                 joint_data.children = Default::default();
 
@@ -322,16 +322,16 @@ impl JointData {
     }
 
     pub fn get_balance(&self) -> u64 {
-        self.props.read().unwrap().balance.clone()
+        self.props.read().unwrap().balance
     }
 }
 
 impl JointData {
     fn calc_level(&self) -> Result<()> {
-        let mut max_parent_level = Level::minimum();
+        let mut max_parent_level = Level::MINIMUM;
         for parent in self.parents.iter() {
             let level = parent.read().context("calc_level")?.get_level();
-            assert_eq!(level.is_none(), false);
+            assert_eq!(level.is_valid(), true);
             if max_parent_level < level {
                 max_parent_level = level;
             }
@@ -411,7 +411,7 @@ impl JointData {
         // only genesis has no last ball unit
         let last_ball_unit = match self.unit.last_ball_unit.as_ref() {
             Some(unit) => unit,
-            None => return Ok(Level::zero()),
+            None => return Ok(Level::ZERO),
         };
 
         let last_ball_joint = SDAG_CACHE.get_joint(last_ball_unit)?.read()?;
