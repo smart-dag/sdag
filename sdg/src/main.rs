@@ -387,14 +387,17 @@ fn main() -> Result<()> {
             use std::fs::File;
             let mut joints = Vec::new();
             for i in 0.. {
-                let mut new_joints = ws.get_joints_by_mci(i)?;
-                if new_joints.is_empty() {
+                let mut stable_joints = ws.get_joints_by_mci(i)?;
+                if stable_joints.is_empty() {
                     println!("last mci = {}", i);
                     break;
                 }
-                joints.append(&mut new_joints);
+                joints.append(&mut stable_joints);
             }
+            let mut unstable_joints = ws.get_joints_by_mci(-1)?;
+            joints.append(&mut unstable_joints);
             println!("total unit num = {}", joints.len());
+
             let file = File::create(file)?;
             serde_json::to_writer_pretty(&file, &joints)?;
         }

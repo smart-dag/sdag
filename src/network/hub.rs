@@ -951,17 +951,28 @@ impl HubConn {
 
     fn on_get_joints_by_mci(&self, param: Value) -> Result<Value> {
         let mci = param
-            .as_u64()
-            .ok_or_else(|| format_err!("not a valid mci"))? as usize;
+            .as_i64()
+            .ok_or_else(|| format_err!("not a valid mci"))?;
 
-        let joints: Vec<Joint> = SDAG_CACHE
-            .get_joints_by_mci(Level::from(mci))?
-            .into_iter()
-            .map(|j| j.read())
-            // Skip those failed to read
-            .filter(|j| j.is_ok())
-            .map(|j| (**j.unwrap()).clone())
-            .collect();
+        let joints: Vec<Joint> = if mci < 0 {
+            SDAG_CACHE
+                .get_unstable_joints()?
+                .into_iter()
+                .map(|j| j.read())
+                // Skip those failed to read
+                .filter(|j| j.is_ok())
+                .map(|j| (**j.unwrap()).clone())
+                .collect()
+        } else {
+            SDAG_CACHE
+                .get_joints_by_mci(Level::from(mci as usize))?
+                .into_iter()
+                .map(|j| j.read())
+                // Skip those failed to read
+                .filter(|j| j.is_ok())
+                .map(|j| (**j.unwrap()).clone())
+                .collect()
+        };
 
         Ok(json!({ "joints": joints }))
     }

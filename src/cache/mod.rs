@@ -134,6 +134,39 @@ impl SDagCache {
         self.joints.read().unwrap().get_free_joints()
     }
 
+    /// get all unstable joints
+    pub fn get_unstable_joints(&self) -> Result<Vec<CachedJoint>> {
+        let mut queue = VecDeque::new();
+        let mut visited = HashSet::new();
+        let mut joints = Vec::new();
+
+        for joint in self.get_free_joints()? {
+            queue.push_back(joint);
+        }
+
+        while let Some(joint) = queue.pop_front() {
+            let joint_data = joint.read()?;
+            let key = joint.key.clone();
+            if !joint_data.is_stable() {
+                joints.push(joint);
+            } else {
+                continue;
+            }
+
+            if !visited.contains(&key) {
+                visited.insert(key);
+                for parent in joint_data.parents.iter() {
+                    queue.push_back(parent.clone());
+                }
+            }
+        }
+
+        // reverse
+        joints.reverse();
+
+        Ok(joints)
+    }
+
     /// check if the joint is new, only new joint will be handled
     pub fn check_new_joint(&self, joint: &str) -> Result<()> {
         let cache = self.joints.read().unwrap();

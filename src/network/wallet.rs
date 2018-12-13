@@ -136,8 +136,8 @@ impl WalletConn {
         Ok((joint, property))
     }
 
-    //returned joint and joint property
-    pub fn get_joints_by_mci(&self, mci: usize) -> Result<Vec<Joint>> {
+    //returned joints by mci, -1 would return all free joints
+    pub fn get_joints_by_mci(&self, mci: isize) -> Result<Vec<Joint>> {
         let mut response = self.send_request("get_joints_by_mci", &serde_json::to_value(mci)?)?;
 
         let joints: Vec<Joint> = serde_json::from_value(response["joints"].take())?;
