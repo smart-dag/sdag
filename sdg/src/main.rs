@@ -381,5 +381,23 @@ fn main() -> Result<()> {
         }
     }
 
+    //show joint and properties
+    if let Some(dump_args) = m.subcommand_matches("dump") {
+        if let Some(file) = dump_args.value_of("FILE") {
+            use std::fs::File;
+            let mut joints = Vec::new();
+            for i in 0.. {
+                let mut new_joints = ws.get_joints_by_mci(i)?;
+                if new_joints.is_empty() {
+                    println!("last mci = {}", i);
+                    break;
+                }
+                joints.append(&mut new_joints);
+            }
+            println!("total unit num = {}", joints.len());
+            let file = File::create(file)?;
+            serde_json::to_writer_pretty(&file, &joints)?;
+        }
+    }
     Ok(())
 }

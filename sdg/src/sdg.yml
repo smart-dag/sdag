@@ -82,6 +82,14 @@ subcommands:
     - balance:
         about: Show the wallet balance
 
+    - dump:
+        about: dmup all data to a file
+        args:
+            - FILE:
+                help: dump the joints with file name
+                takes_value: true
+                required: true
+
     - show:
         about: Show the joint and propeties
         args:

@@ -111,7 +111,7 @@ impl WalletConn {
             })?,
         )?;
 
-        Ok(serde_json::from_value(inputs_response).unwrap())
+        Ok(serde_json::from_value(inputs_response)?)
     }
 
     //returned spendable the number of coins
@@ -129,11 +129,20 @@ impl WalletConn {
         let mut response =
             self.send_request("get_joint_by_unit_hash", &serde_json::to_value(unit)?)?;
 
-        let joint: Joint = serde_json::from_value(response["joint"].take()).unwrap();
+        let joint: Joint = serde_json::from_value(response["joint"].take())?;
 
-        let property: UnitProps = serde_json::from_value(response["property"].take()).unwrap();
+        let property: UnitProps = serde_json::from_value(response["property"].take())?;
 
         Ok((joint, property))
+    }
+
+    //returned joint and joint property
+    pub fn get_joints_by_mci(&self, mci: usize) -> Result<Vec<Joint>> {
+        let mut response = self.send_request("get_joints_by_mci", &serde_json::to_value(mci)?)?;
+
+        let joints: Vec<Joint> = serde_json::from_value(response["joints"].take())?;
+
+        Ok(joints)
     }
 
     pub fn get_latest_history(
@@ -146,18 +155,18 @@ impl WalletConn {
             &serde_json::to_value(light::HistoryRequest { address, num })?,
         )?;
 
-        Ok(serde_json::from_value(response).unwrap())
+        Ok(serde_json::from_value(response)?)
     }
 
     pub fn get_light_props(&self, address: &str) -> Result<light::LightProps> {
         let light_prop = self.send_request("light/light_props", &serde_json::to_value(address)?)?;
 
-        Ok(serde_json::from_value(light_prop).unwrap())
+        Ok(serde_json::from_value(light_prop)?)
     }
 
     pub fn get_witnesses(&self) -> Result<Vec<String>> {
         let witnesses = self.send_request("get_witnesses", &Value::Null)?;
-        Ok(serde_json::from_value(witnesses).unwrap())
+        Ok(serde_json::from_value(witnesses)?)
     }
 }
 
