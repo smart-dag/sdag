@@ -44,4 +44,5 @@ members = [
     "wallet_base",
     "sdg",
     "witness",
+    "test_case"
 ]

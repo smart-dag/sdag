@@ -1,0 +1,24 @@
+[package]
+name = "test_case"
+version = "0.1.0"
+authors = ["_jiang <jiang762507357@163.com>"]
+edition = "2018"
+
+
+
+[dependencies]
+sdag = { path = ".."}
+sdag_wallet_base = { path = "../wallet_base" }
+clap = {version = "2", features = ["yaml"]}
+
+may = "0.3"
+log = "0.4"
+fern = "0.5"
+chrono = "0.4"
+failure = "0.1"
+rand = "0.6"
+
+serde = "1"
+serde_json = "1"
+serde_derive = "1"
+
