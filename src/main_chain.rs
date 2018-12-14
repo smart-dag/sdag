@@ -211,7 +211,9 @@ fn mark_main_chain_joint_stable(joint: CachedJoint, mci: Level) -> Result<()> {
         "main chain update: last_stable_joint = {:?}",
         main_chain_joint_data.get_props()
     );
+
     *LAST_STABLE_JOINT.write().unwrap() = joint;
+    ::utils::event::emit_event(MciStableEvent { mci });
 
     Ok(())
 }

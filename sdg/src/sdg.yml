@@ -86,7 +86,7 @@ subcommands:
         about: dmup all data to a file
         args:
             - FILE:
-                help: dump the joints with file name
+                help: dump the joints to file and verify data
                 takes_value: true
                 required: true
 

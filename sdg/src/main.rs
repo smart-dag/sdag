@@ -1,6 +1,8 @@
 #[macro_use]
 extern crate log;
 #[macro_use]
+extern crate may;
+#[macro_use]
 extern crate clap;
 #[macro_use]
 extern crate failure;
@@ -9,7 +11,6 @@ extern crate serde_derive;
 
 extern crate chrono;
 extern crate fern;
-extern crate may;
 extern crate sdag;
 extern crate sdag_wallet_base;
 extern crate serde;
@@ -18,12 +19,18 @@ extern crate serde_json;
 mod config;
 
 use std::sync::Arc;
+use std::time::Instant;
 
 use chrono::{Local, TimeZone};
 use clap::App;
 use failure::ResultExt;
+use may::sync::Semphore;
+use sdag::cache::SDAG_CACHE;
 use sdag::error::Result;
+use sdag::joint::{Joint, JointSequence};
 use sdag::network::wallet::WalletConn;
+use sdag::validation;
+use sdag::{t, try_go};
 use sdag_wallet_base::{Base64KeyExt, ExtendedPrivKey, ExtendedPubKey, Mnemonic};
 
 struct WalletInfo {
@@ -127,7 +134,7 @@ fn connect_to_remote(peers: &[String]) -> Result<Arc<WalletConn>> {
 fn info(ws: &Arc<WalletConn>, wallet_info: &WalletInfo) -> Result<()> {
     let address_pubk = wallet_info._00_address_pubk.to_base64_key();
 
-    let stable = ws.get_balance(&wallet_info._00_address)? as f64 / 1000_000.0;
+    let stable = ws.get_balance(&wallet_info._00_address)? as f64 / 1_000_000.0;
 
     println!("\ncurrent wallet info:\n");
     println!("device_address: {}", wallet_info.device_address);
@@ -143,11 +150,11 @@ fn info(ws: &Arc<WalletConn>, wallet_info: &WalletInfo) -> Result<()> {
 
 fn show_history(
     ws: &Arc<WalletConn>,
-    address: &String,
+    address: &str,
     index: Option<usize>,
     num: usize,
 ) -> Result<()> {
-    let history = ws.get_latest_history(address.clone(), num)?;
+    let history = ws.get_latest_history(address.to_owned(), num)?;
 
     if let Some(index) = index {
         // show special unit's detail information
@@ -156,14 +163,13 @@ fn show_history(
         }
 
         let history = &history.transactions[index - 1];
-        let mut amount;
-        if &history.to_addr == address {
+        let amount = if history.to_addr == address {
             println!("FROM     : {}", history.from_addr);
-            amount = history.amount;
+            history.amount
         } else {
             println!("TO       : {}", history.to_addr);
-            amount = 0 - history.amount;
-        }
+            0 - history.amount
+        };
         println!("UNIT     : {}", history.unit_hash);
         println!("AMOUNT   : {:.6} MN", amount as f64 / 1_000_000.0);
         println!(
@@ -177,7 +183,7 @@ fn show_history(
             if id > num - 1 {
                 break;
             }
-            let amount = if &transaction.to_addr == address {
+            let amount = if transaction.to_addr == address {
                 transaction.amount
             } else {
                 0 - transaction.amount
@@ -265,12 +271,66 @@ fn send_payment(
     Ok(())
 }
 
-fn is_witness(ws: &Arc<WalletConn>, address: &String) -> Result<bool> {
-    let witnesses = ws.get_witnesses()?;
-    Ok(witnesses.contains(address))
+fn verify_joints(joints: Vec<Joint>, last_mci: usize) -> Result<()> {
+    let now = Instant::now();
+    let sem = Arc::new(Semphore::new(0));
+    let total_joints = joints.len();
+    register_event_handlers(last_mci, sem.clone());
+    for joint in joints {
+        try_go!(move || {
+            // check content_hash or unit_hash first!
+            validation::validate_unit_hash(&joint.unit)?;
+            let cached_joint = match SDAG_CACHE.add_new_joint(joint) {
+                Ok(j) => j,
+                Err(e) => {
+                    bail!("add_new_joint: err = {}", e);
+                }
+            };
+            let joint_data = cached_joint.read().unwrap();
+            if joint_data.unit.content_hash.is_some() {
+                joint_data.set_sequence(JointSequence::FinalBad);
+            }
+
+            if !joint_data.is_missing_parent() {
+                validation::validate_ready_joint(cached_joint)?;
+            }
+
+            Ok(())
+        });
+    }
+
+    sem.wait();
+    let dur = now.elapsed();
+    println!("time_used={:?}", dur);
+    let sec = dur.as_secs() as f64 + f64::from(dur.subsec_nanos()) / 1_000_000_000.0;
+    let tps = total_joints as f64 / sec;
+    println!("TPS = {}", tps);
+    Ok(())
+}
+
+// register global event handlers
+fn register_event_handlers(last_mci: usize, sem: Arc<Semphore>) {
+    use sdag::cache::ReadyJointEvent;
+    use sdag::main_chain::MciStableEvent;
+    use sdag::utils::event::Event;
+
+    MciStableEvent::add_handler(move |v| {
+        if v.mci.value() == last_mci {
+            sem.post();
+        }
+    });
+    ReadyJointEvent::add_handler(|j| t!(validation::validate_ready_joint(j.joint.clone())));
 }
 
 fn main() -> Result<()> {
+    // init default coroutine settings
+    let stack_size = if cfg!(debug_assertions) {
+        0x4000
+    } else {
+        0x2000
+    };
+    may::config().set_stack_size(stack_size).set_workers(2);
+
     let yml = load_yaml!("sdg.yml");
     let m = App::from_yaml(yml).get_matches();
 
@@ -335,6 +395,11 @@ fn main() -> Result<()> {
 
     //Send
     if let Some(send) = m.subcommand_matches("send") {
+        let witnesses = ws.get_witnesses()?;
+        if witnesses.contains(&wallet_info._00_address) {
+            bail!("witness can not send payment by sdg");
+        }
+
         let mut address_amount = Vec::new();
         if let Some(pay) = send.values_of("pay") {
             let v = pay.collect::<Vec<_>>();
@@ -344,7 +409,7 @@ fn main() -> Result<()> {
                     return Ok(());
                 }
                 let amount = arg[1].parse::<f64>().context("invalid amount arg")?;
-                if amount > std::u64::MAX as f64 || amount < 0.000001 {
+                if amount > std::u64::MAX as f64 || amount < 0.000_001 {
                     eprintln!("invalid amount, please check");
                     return Ok(());
                 }
@@ -354,10 +419,6 @@ fn main() -> Result<()> {
 
         let text = send.value_of("text");
 
-        if is_witness(&ws, &wallet_info._00_address)? {
-            bail!("witness can not send payment by sdg");
-        }
-
         return send_payment(&ws, text, address_amount, &wallet_info);
     }
 
@@ -365,7 +426,7 @@ fn main() -> Result<()> {
     if m.subcommand_matches("balance").is_some() {
         println!(
             "{:.6}",
-            ws.get_balance(&wallet_info._00_address)? as f64 / 1000_000.0
+            ws.get_balance(&wallet_info._00_address)? as f64 / 1_000_000.0
         );
 
         return Ok(());
@@ -386,10 +447,12 @@ fn main() -> Result<()> {
         if let Some(file) = dump_args.value_of("FILE") {
             use std::fs::File;
             let mut joints = Vec::new();
+            let mut last_mci = 0;
             for i in 0.. {
                 let mut stable_joints = ws.get_joints_by_mci(i)?;
                 if stable_joints.is_empty() {
-                    println!("last mci = {}", i);
+                    last_mci = i as usize - 1;
+                    println!("last mci = {}", last_mci);
                     break;
                 }
                 joints.append(&mut stable_joints);
@@ -398,8 +461,11 @@ fn main() -> Result<()> {
             joints.append(&mut unstable_joints);
             println!("total unit num = {}", joints.len());
 
+            // save all the joints
             let file = File::create(file)?;
             serde_json::to_writer_pretty(&file, &joints)?;
+            // verify the jonits
+            verify_joints(joints, last_mci)?;
         }
     }
     Ok(())

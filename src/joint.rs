@@ -94,7 +94,7 @@ impl Level {
     }
 
     pub fn value(self) -> usize {
-        assert!(self.0 >= 0);
+        // assert!(self.0 >= 0);
         self.0 as usize
     }
 

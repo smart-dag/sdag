@@ -13,6 +13,20 @@ use serde_json::Value;
 use signature;
 use spec::{Definition, Unit};
 
+/// validate unit
+pub fn validate_unit_hash(unit: &Unit) -> Result<()> {
+    // check content_hash or unit_hash first!
+    let unit_hash = match unit.content_hash {
+        Some(ref hash) => hash,
+        None => &unit.unit,
+    };
+
+    if unit_hash != &unit.calc_unit_hash() {
+        bail!("wrong unit hash calculated");
+    }
+    Ok(())
+}
+
 /// validate joint when it get ready
 pub fn validate_ready_joint(joint: CachedJoint) -> Result<()> {
     // TODO: if validation failed we should sent error message to the corresponding connection
@@ -30,6 +44,7 @@ pub fn validate_ready_joint(joint: CachedJoint) -> Result<()> {
         }
         Err(e) => {
             // validation failed, purge the bad joint
+            error!("normal_validate, err={}", e.to_string());
             SDAG_CACHE.purge_bad_joint(&joint.key, e.to_string());
             return Err(e);
         }
@@ -54,7 +69,7 @@ fn normal_validate(joint: &JointData) -> Result<()> {
 
     if !unit.parent_units.is_empty() {
         validate_parents(joint)?;
-        validate_ball(joint)?;
+        // validate_ball(joint)?;
     }
 
     validate_witnesses(joint).context("validate witnesses failed")?;
@@ -114,6 +129,7 @@ pub fn basic_validate(joint: &Joint) -> Result<()> {
 }
 
 // check if joint.ball correct
+#[allow(dead_code)]
 fn validate_ball(joint: &JointData) -> Result<()> {
     if joint.ball.is_none() {
         return Ok(());
@@ -405,7 +421,7 @@ fn validate_parents(joint: &JointData) -> Result<()> {
 
     // Last ball may not stable in our view, need to wait until it got stable
     while !last_ball_joint.read()?.is_stable() {
-        may::coroutine::sleep(::std::time::Duration::from_millis(1));
+        may::coroutine::yield_now();
     }
 
     let last_ball_joint_data = last_ball_joint.read()?;

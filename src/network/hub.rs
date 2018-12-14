@@ -685,7 +685,7 @@ impl HubConn {
         let joint: Joint = serde_json::from_value(param)?;
         info!("receive a joint: {:?}", joint);
         ensure!(!joint.unit.unit.is_empty(), "no unit");
-        self.handle_online_joint(&joint)
+        self.handle_online_joint(joint)
     }
 
     fn on_catchup(&self, param: Value) -> Result<Value> {
@@ -788,9 +788,11 @@ impl HubConn {
         let joint: Joint = serde_json::from_value(param)?;
         info!("receive a posted joint: {:?}", joint);
 
-        self.handle_online_joint(&joint)?;
+        self.handle_online_joint(joint)?;
 
-        WSS.broadcast_joint(&joint)?;
+        // TODO: we should only broadcast the joint after normalize
+        // and wati until it comes?
+        // WSS.broadcast_joint(&joint)?;
         Ok(Value::from("accepted"))
     }
 
@@ -988,28 +990,23 @@ impl HubConn {
 }
 
 impl HubConn {
-    fn handle_online_joint(&self, joint: &Joint) -> Result<()> {
+    fn handle_online_joint(&self, joint: Joint) -> Result<()> {
         // clear the main chain index, main chain index is used by light only
         // joint.unit.main_chain_index = None;
 
         // check content_hash or unit_hash first!
-        let unit = match joint.unit.content_hash {
-            Some(ref hash) => hash,
-            None => &joint.unit.unit,
-        };
-        if unit != &joint.unit.calc_unit_hash() {
-            // TODO: the peer is doing something evil, we should record that
-            bail!("wrong unit hash calculated");
-        }
+        validation::validate_unit_hash(&joint.unit)?;
+
+        let ball = joint.ball.clone();
 
         // check if unit is in work, when g is dropped unlock the unit
-        let g = UNIT_IN_WORK.try_lock(vec![unit.to_owned()]);
+        let g = UNIT_IN_WORK.try_lock(vec![joint.unit.unit.to_owned()]);
         if g.is_none() {
             // the unit is in work, do nothing
             return Ok(());
         }
 
-        let cached_joint = match SDAG_CACHE.add_new_joint(joint.clone()) {
+        let cached_joint = match SDAG_CACHE.add_new_joint(joint) {
             Ok(j) => j,
             Err(e) => {
                 warn!("add_new_joint: {}", e);
@@ -1026,8 +1023,8 @@ impl HubConn {
         }
 
         // trigger catchup
-        if let Some(ref ball) = joint.ball {
-            if !SDAG_CACHE.is_ball_in_hash_tree(ball) {
+        if let Some(ball) = ball {
+            if !SDAG_CACHE.is_ball_in_hash_tree(&ball) {
                 // need to catchup and keep the joint in unhandled till timeout
                 let ws = WSS.get_ws(self);
                 try_go!(move || {
@@ -1264,14 +1261,13 @@ impl HubConn {
 
             let joint: Joint = serde_json::from_value(v["joint"].take())?;
             info!("receive a requested joint: {:?}", joint);
-            if joint.unit.unit.is_empty() {
-                bail!("no unit");
-            } else if joint.unit.unit != unit {
+
+            if joint.unit.unit != unit {
                 let err = format!("I didn't request this unit from you: {}", joint.unit.unit);
                 return ws.send_error(Value::from(err));
             }
 
-            ws.handle_online_joint(&joint)
+            ws.handle_online_joint(joint)
         }
 
         for unit in units {

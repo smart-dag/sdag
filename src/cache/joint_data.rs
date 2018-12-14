@@ -250,7 +250,9 @@ impl JointData {
                 // need to use it's own property, not the shared one
                 joint_data.props = Default::default();
 
-                joint_data.set_level(Level::ZERO);
+                joint_data.set_mci(Level::MINIMUM);
+                joint_data.set_limci(Level::MINIMUM);
+                joint_data.set_level(Level::MINIMUM);
                 joint_data.set_wl(Level::ZERO);
                 // trigger genesis increase min_wl_increased
                 joint_data.set_min_wl(Level::MINIMUM);

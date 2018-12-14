@@ -14,15 +14,8 @@ pub struct Settings {
 
 impl Default for Settings {
     fn default() -> Self {
-        let hub_url;
-        if cfg!(debug_assertions) {
-            hub_url = vec![String::from("119.28.86.54:6616")];
-        } else {
-            hub_url = vec![String::from("raytest.sdag.org:80")];
-        }
-
         Settings {
-            hub_url,
+            hub_url: vec![String::from("127.0.0.1:6615")],
             mnemonic: mnemonic("")
                 .expect("failed to generate mnemonic")
                 .to_string(),

@@ -3,7 +3,6 @@ mod cache_impl;
 mod joint_data;
 
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::time::Duration;
 
 use config;
 use error::Result;
@@ -37,7 +36,7 @@ impl CachedJoint {
 
         loop {
             match self.data.try_lock() {
-                None => coroutine::sleep(Duration::from_millis(1)),
+                None => coroutine::yield_now(), //coroutine::sleep(Duration::from_millis(1)),
                 Some(mut g) => break g.update(Some(joint_data)),
             }
         }
@@ -147,14 +146,12 @@ impl SDagCache {
         while let Some(joint) = queue.pop_front() {
             let joint_data = joint.read()?;
             let key = joint.key.clone();
-            if !joint_data.is_stable() {
-                joints.push(joint);
-            } else {
+            if joint_data.is_stable() {
                 continue;
             }
 
-            if !visited.contains(&key) {
-                visited.insert(key);
+            if visited.insert(key) {
+                joints.push(joint);
                 for parent in joint_data.parents.iter() {
                     queue.push_back(parent.clone());
                 }
@@ -332,15 +329,13 @@ impl SDagCache {
         while let Some(joint) = queue.pop_front() {
             let joint_data = joint.read()?;
             let key = joint.key.clone();
-            if joint_data.get_mci() == mci {
-                let sub_mci = joint_data.get_sub_mci();
-                joints.push((sub_mci, joint));
-            } else {
+            if joint_data.get_mci() != mci {
                 continue;
             }
 
-            if !visited.contains(&key) {
-                visited.insert(key);
+            if visited.insert(key) {
+                let sub_mci = joint_data.get_sub_mci();
+                joints.push((sub_mci, joint));
                 for parent in joint_data.parents.iter() {
                     queue.push_back(parent.clone());
                 }
