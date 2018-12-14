@@ -96,7 +96,7 @@ fn if_my_witnessing_is_unstable(my_address: &str) -> Result<bool> {
     while let Some(joint) = queue.pop_front() {
         let joint_data = joint.read()?;
 
-        if visited.contains(&joint_data.unit.unit) || joint_data.is_stable() {
+        if !visited.insert(joint.key.clone()) || joint_data.is_stable() {
             continue;
         }
 
@@ -106,12 +106,8 @@ fn if_my_witnessing_is_unstable(my_address: &str) -> Result<bool> {
             }
         }
 
-        visited.insert(joint.key.clone());
-
         for p in joint_data.parents.iter() {
-            if !visited.contains(&p.key) {
-                queue.push_back(p.clone());
-            }
+            queue.push_back(p.clone());
         }
     }
 
@@ -191,7 +187,7 @@ fn if_unstable_joints_have_non_witness() -> Result<bool> {
     while let Some(joint) = queue.pop_front() {
         let joint_data = joint.read()?;
 
-        if visited.contains(&joint_data.unit.unit) || joint_data.is_stable() {
+        if !visited.insert(joint.key.clone()) || joint_data.is_stable() {
             continue;
         }
 
@@ -203,12 +199,8 @@ fn if_unstable_joints_have_non_witness() -> Result<bool> {
             }
         }
 
-        visited.insert(joint.key.clone());
-
         for p in joint_data.parents.iter() {
-            if !visited.contains(&p.key) {
-                queue.push_back(p.clone());
-            }
+            queue.push_back(p.clone());
         }
     }
 

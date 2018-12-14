@@ -78,8 +78,7 @@ impl UnitProps {
 
             // still need to compare parents
             for parent in joint.parents.iter() {
-                if !visited.contains(&parent.key) {
-                    visited.insert(parent.key.clone());
+                if visited.insert(parent.key.clone()) {
                     joints.push_back(parent.read()?);
                 }
             }

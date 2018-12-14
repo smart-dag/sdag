@@ -108,7 +108,7 @@ fn read_descendant_units_by_authors_before_mc_index(
             let child_data = child.read()?;
             let child_mci = child_data.get_mci();
 
-            if child_mci > to_mci {
+            if !visited.insert(child.key.clone()) || child_mci > to_mci {
                 continue;
             }
 
@@ -118,10 +118,7 @@ fn read_descendant_units_by_authors_before_mc_index(
                 }
             }
 
-            if !visited.contains(&child.key) {
-                visited.insert(child.key.clone());
-                joints.push_back(child_data);
-            }
+            joints.push_back(child_data);
         }
     }
 

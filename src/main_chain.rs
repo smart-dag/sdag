@@ -172,9 +172,7 @@ fn mark_main_chain_joint_stable(joint: CachedJoint, mci: Level) -> Result<()> {
 
     while let Some(joint) = sorted.pop() {
         //Ignore the second visit to keep the order right
-        if !visited.contains(&joint.key) {
-            visited.insert(joint.key.clone());
-        } else {
+        if !visited.insert(joint.key.clone()) {
             continue;
         }
 

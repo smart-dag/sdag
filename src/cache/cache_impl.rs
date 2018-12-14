@@ -95,6 +95,11 @@ impl SDagCacheInner {
         while let Some(joint) = joints.pop_front() {
             let joint_data = joint.read()?;
             let key = joint.key.clone();
+
+            if !visited.insert(key) {
+                continue;
+            }
+
             if joint_data.get_sequence() == JointSequence::Good
                 || joint_data.unit.is_authored_by_witness()
             {
@@ -105,11 +110,8 @@ impl SDagCacheInner {
             }
 
             // the joint is now temp-bad
-            if !visited.contains(&key) {
-                visited.insert(key);
-                for parent in joint_data.parents.iter() {
-                    joints.push_back(parent.clone());
-                }
+            for parent in joint_data.parents.iter() {
+                joints.push_back(parent.clone());
             }
         }
 

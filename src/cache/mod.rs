@@ -146,15 +146,15 @@ impl SDagCache {
         while let Some(joint) = queue.pop_front() {
             let joint_data = joint.read()?;
             let key = joint.key.clone();
-            if joint_data.is_stable() {
+
+            if !visited.insert(key) || joint_data.is_stable() {
                 continue;
             }
 
-            if visited.insert(key) {
-                joints.push(joint);
-                for parent in joint_data.parents.iter() {
-                    queue.push_back(parent.clone());
-                }
+            joints.push(joint);
+
+            for parent in joint_data.parents.iter() {
+                queue.push_back(parent.clone());
             }
         }
 
@@ -329,16 +329,15 @@ impl SDagCache {
         while let Some(joint) = queue.pop_front() {
             let joint_data = joint.read()?;
             let key = joint.key.clone();
-            if joint_data.get_mci() != mci {
+
+            if !visited.insert(key) || joint_data.get_mci() != mci {
                 continue;
             }
 
-            if visited.insert(key) {
-                let sub_mci = joint_data.get_sub_mci();
-                joints.push((sub_mci, joint));
-                for parent in joint_data.parents.iter() {
-                    queue.push_back(parent.clone());
-                }
+            let sub_mci = joint_data.get_sub_mci();
+            joints.push((sub_mci, joint));
+            for parent in joint_data.parents.iter() {
+                queue.push_back(parent.clone());
             }
         }
 

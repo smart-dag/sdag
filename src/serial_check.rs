@@ -74,17 +74,14 @@ fn get_unstable_ancestor_units(
     while let Some(joint) = queue.pop_front() {
         let joint_data = joint.read()?;
 
-        if joint_data.is_stable() || visited.contains(&joint_data.unit.unit) {
+        if !visited.insert(joint.key.clone()) || joint_data.is_stable() {
             continue;
         }
 
         result.insert(joint.key.clone());
-        visited.insert(joint.key.clone());
 
         for p in joint_data.parents.iter() {
-            if !visited.contains(&p.key) {
-                queue.push_back(p.clone());
-            }
+            queue.push_back(p.clone());
         }
     }
 
@@ -102,8 +99,7 @@ fn get_descendant_units(joint: CachedJoint) -> Result<HashSet<Arc<String>>> {
     while let Some(joint) = queue.pop_front() {
         for child in joint.read()?.children.iter() {
             let child = &*child;
-            if !visited.contains(&child.key) {
-                visited.insert(child.key.clone());
+            if visited.insert(child.key.clone()) {
                 queue.push_back(child.clone());
             }
         }
