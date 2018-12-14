@@ -420,9 +420,8 @@ fn validate_parents(joint: &JointData) -> Result<()> {
     }
 
     // Last ball may not stable in our view, need to wait until it got stable
-    while !last_ball_joint.read()?.is_stable() {
-        may::coroutine::yield_now();
-    }
+
+    last_ball_joint.read()?.wait_stable()?;
 
     let last_ball_joint_data = last_ball_joint.read()?;
     // last_ball_unit is on main chain

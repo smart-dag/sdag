@@ -8,7 +8,7 @@ use error::Result;
 use failure::ResultExt;
 use joint::{Joint, JointProperty, JointSequence, Level};
 use kv_store::{LoadFromKv, KV_STORE};
-use may::sync::RwLock;
+use may::sync::{RwLock, Semphore};
 use utils::{AppendList, AppendListExt};
 
 //---------------------------------------------------------------------------------------
@@ -132,6 +132,7 @@ pub struct JointData {
     best_parent: Arc<AppendList<CachedJoint>>,
     valid_parent_num: Arc<AtomicUsize>,
     joint: Joint,
+    stable_sem: Arc<Semphore>,
     props: Arc<RwLock<JointProperty>>,
 }
 
@@ -219,8 +220,19 @@ impl JointData {
         self.props.read().unwrap().is_stable
     }
 
+    pub fn wait_stable(&self) -> Result<()> {
+        use std::time::Duration;
+        let timeout = !self.stable_sem.wait_timeout(Duration::from_secs(1));
+        self.stable_sem.post();
+        if timeout {
+            bail!("wait stable timeout! unit={}", self.unit.unit);
+        }
+        Ok(())
+    }
+
     pub fn set_stable(&self) {
         self.props.write().unwrap().is_stable = true;
+        self.stable_sem.post();
         debug!("Joint {} is stable {:?}", self.unit.unit, self.props);
     }
 
@@ -432,6 +444,7 @@ impl JointData {
             children: self.children.clone(),
             best_parent: self.best_parent.clone(),
             valid_parent_num: self.valid_parent_num.clone(),
+            stable_sem: self.stable_sem.clone(),
             joint: self.joint.clone(),
             props: self.props.clone(),
         }
@@ -487,6 +500,7 @@ impl From<Joint> for JointData {
             children: Default::default(),
             props: Default::default(),
             valid_parent_num: Default::default(),
+            stable_sem: Arc::new(Semphore::new(0)),
         }
     }
 }
@@ -530,6 +544,7 @@ impl LoadFromKv<String> for JointData {
             parents: Arc::new(parents),
             children: Arc::new(children),
             best_parent: Arc::new(best_parent),
+            stable_sem: Arc::new(Semphore::new(props.is_stable as usize)),
             props: Arc::new(RwLock::new(props)),
             valid_parent_num: Arc::new(AtomicUsize::new(valid_parent_num)),
         })
