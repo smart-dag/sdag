@@ -103,6 +103,10 @@ fn start_business_worker(rx: mpsc::Receiver<CachedJoint>) -> JoinHandle<()> {
 
                         joint_data.set_sequence(JointSequence::FinalBad);
                     }
+
+                    if joint_data.get_sequence() != JointSequence::Good {
+                        joint_data.set_sequence(JointSequence::Good);
+                    }
                 }
                 Err(e) => {
                     error!("validate_joint failed, err = {:?}", e);
