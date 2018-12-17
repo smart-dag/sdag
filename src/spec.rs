@@ -199,7 +199,8 @@ pub fn is_genesis_ball(ball: &str) -> bool {
 
 impl Unit {
     pub fn is_genesis_unit(&self) -> bool {
-        is_genesis_unit(&self.unit)
+        // is_genesis_unit(&self.unit)
+        self.parent_units.is_empty()
     }
 
     fn get_naked_unit(&self) -> NakedUnit {
