@@ -272,6 +272,10 @@ fn send_payment(
 }
 
 fn verify_joints(joints: Vec<Joint>, last_mci: usize) -> Result<()> {
+    if joints.is_empty() {
+        return Ok(());
+    }
+
     let now = Instant::now();
     let sem = Arc::new(Semphore::new(0));
     let total_joints = joints.len();
