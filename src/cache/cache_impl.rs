@@ -160,7 +160,7 @@ impl SDagCacheInner {
             // remove parent from free joints
             self.free_joints.remove(&*parent.key);
             // add child for parents
-            parent_data.children.append(joint.clone());
+            parent_data.add_child(joint.clone());
         }
 
         // add the new free joints

@@ -45,7 +45,7 @@ impl UnitProps {
             || self.is_stable && !other.is_stable
     }
 
-    /// return true if any given joint include or equal the current one
+    /// return true if any given joint include or equal to the current one
     pub fn is_ancestor<'a, I: IntoIterator<Item = &'a CachedJoint>>(
         &self,
         later_joints: I,

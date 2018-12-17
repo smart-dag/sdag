@@ -420,7 +420,6 @@ fn validate_parents(joint: &JointData) -> Result<()> {
     }
 
     // Last ball may not stable in our view, need to wait until it got stable
-
     last_ball_joint.read()?.wait_stable()?;
 
     let last_ball_joint_data = last_ball_joint.read()?;

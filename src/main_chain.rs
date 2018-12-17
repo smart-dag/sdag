@@ -365,12 +365,14 @@ fn calc_min_wl_included_by_later_joints(
             continue;
         }
 
-        for child in joint_data.children.iter() {
-            let child = &*child;
-            let child_data = child.read()?;
+        if !later_joints.contains(&joint) {
+            for child in joint_data.children.iter() {
+                let child = &*child;
+                let child_data = child.read()?;
 
-            if child_data.get_best_parent() == joint {
-                joints.push(child.clone());
+                if child_data.get_best_parent() == joint {
+                    joints.push(child.clone());
+                }
             }
         }
 
@@ -385,11 +387,9 @@ fn calc_min_wl_included_by_later_joints(
     let mut collected_witnesses = HashSet::new();
     while let Some(joint_data) = witness_joints.pop() {
         for author in &joint_data.unit.authors {
-            if collected_witnesses.contains(&author.address) {
+            if !collected_witnesses.insert(author.address.clone()) {
                 continue;
             }
-
-            collected_witnesses.insert(author.address.clone());
 
             if collected_witnesses.len() >= ::config::MAJORITY_OF_WITNESSES {
                 return Ok(joint_data.get_wl());
@@ -459,13 +459,21 @@ pub fn is_stable_in_later_joints(
         }
     }
     let max_alt_level =
-        calc_max_alt_level_included_by_later_joints(alt_branches_roots, &later_joints)?;
+        calc_max_alt_level_included_by_later_joints(alt_branches_roots, &later_joints)?
+            .unwrap_or(best_parent.get_level());
 
     let min_wl = calc_min_wl_included_by_later_joints(earlier_joint, &later_joints)?;
 
-    let stable = min_wl > max_alt_level.unwrap_or_else(|| best_parent.get_level());
+    let is_stable = min_wl > max_alt_level;
 
-    Ok(stable)
+    if !is_stable {
+        error!(
+            "Checking is_stable_in_later_joints(): min_wl: {:?}, max_alt_level: {:?}, earlier_joint: {}, later_joints={:?}",
+            min_wl, max_alt_level, earlier_joint.key, later_joints
+        );
+    }
+
+    Ok(is_stable)
 }
 
 /// Returns current unstable main chain from the best free joint
