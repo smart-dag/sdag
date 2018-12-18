@@ -37,12 +37,16 @@ impl UnitProps {
         // 2) self.wl < earlier_unit.wl;
         // 3) self.mci < earlier_unit.mci;
         // 4) self.limci < earlier_unit.limci
-        // 5) self.is_stable && !earlier_unit.is_stable;
+
+        // 5) self.is_stable && !earlier_unit.is_stable; NOT TRUE for dynamic situation! (#208)
+        /* self is one of the later units, other is ancestor unit.
+         * but other's prop is ready earlier than self's prop, earlier may got unstable,
+         * and later may got stable! thus cause the branch returns wrong value! */
+
         self.level <= other.level
             || self.wl < other.wl
             || self.mci < other.mci
             || self.limci < other.limci
-            || self.is_stable && !other.is_stable
     }
 
     /// return true if any given joint include or equal to the current one
@@ -257,7 +261,6 @@ impl JointData {
             None => {
                 use rcu_cell::RcuCell;
                 let mut joint_data = self.make_copy();
-
                 // need to use it's own property, not the shared one
                 joint_data.props = Default::default();
 
@@ -447,30 +450,6 @@ impl JointData {
             joint: self.joint.clone(),
             props: self.props.clone(),
         }
-    }
-
-    /// return true if self is earlier than other
-    /// this is not used right now
-    pub fn is_earlier_than(&self, other: &Self) -> bool {
-        let self_prop = self.props.read().unwrap();
-        let other_prop = other.props.read().unwrap();
-
-        // self is not stable, we don't know if self is earlier than other
-        if !self_prop.is_stable {
-            return false;
-        }
-
-        // self is stable and other is not, so must earlier
-        if !other_prop.is_stable {
-            return true;
-        }
-
-        // self and other must be both stable till here
-        if self_prop.mci != other_prop.mci {
-            return self_prop.mci < other_prop.mci;
-        }
-
-        self_prop.sub_mci < other_prop.sub_mci
     }
 
     /// return true if self is more precedence than other
