@@ -79,14 +79,17 @@ subcommands:
     - info:
         about: Show the wallet info
 
+    - net:
+        about: Show the hub net connections
+
     - balance:
         about: Show the wallet balance
 
     - dump:
-        about: dmup all data to a file
+        about: dmup all units to a file and verify data
         args:
             - FILE:
-                help: dump the joints to file and verify data
+                help: file to save the joints
                 takes_value: true
                 required: true
 
@@ -94,7 +97,7 @@ subcommands:
         about: Show the joint and propeties
         args:
             - UNIT:
-                help: show the joint infos, include joint and properties
+                help: unit hash
                 takes_value: true
                 required: true
 

@@ -148,6 +148,12 @@ fn info(ws: &Arc<WalletConn>, wallet_info: &WalletInfo) -> Result<()> {
     Ok(())
 }
 
+fn net_state(ws: &Arc<WalletConn>) -> Result<()> {
+    let net_state = ws.get_net_state()?;
+    println!("{}", serde_json::to_string_pretty(&net_state)?);
+    Ok(())
+}
+
 fn show_history(
     ws: &Arc<WalletConn>,
     address: &str,
@@ -377,6 +383,11 @@ fn main() -> Result<()> {
     //info
     if m.subcommand_matches("info").is_some() {
         return info(&ws, &wallet_info);
+    }
+
+    //net
+    if m.subcommand_matches("net").is_some() {
+        return net_state(&ws);
     }
 
     //Log

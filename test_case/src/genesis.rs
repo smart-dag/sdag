@@ -275,11 +275,11 @@ pub fn gen_first_payment(
             sign
         },
         definition: json!([
-                "sig",
-                {
-                    "pubkey": paying_wallet._00_address_pubk.to_base64_key()
-                }
-            ]),
+            "sig",
+            {
+                "pubkey": paying_wallet._00_address_pubk.to_base64_key()
+            }
+        ]),
     });
     unit.authors.sort_by(|a, b| a.address.cmp(&b.address));
 

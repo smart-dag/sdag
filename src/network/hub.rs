@@ -29,6 +29,12 @@ use utils::{AtomicLock, FifoCache, MapLock};
 use validation;
 
 #[derive(Serialize, Deserialize)]
+pub struct HubNetState {
+    in_bounds: Vec<String>,
+    out_bounds: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize)]
 pub struct Login {
     pub challenge: String,
     pub pubkey: String,
@@ -350,6 +356,13 @@ impl WsConnections {
             .collect()
     }
 
+    fn get_net_state(&self) -> HubNetState {
+        HubNetState {
+            in_bounds: self.get_inbound_peers(),
+            out_bounds: self.get_outbound_peers(""),
+        }
+    }
+
     fn get_needed_outbound_peers(&self) -> usize {
         let outbound_connecions = self.outbound.read().unwrap().len();
         if config::MAX_OUTBOUND_CONNECTIONS > outbound_connecions {
@@ -490,6 +503,7 @@ impl Server<HubData> for HubData {
             "light/get_link_proofs" => ws.on_get_link_proofs(params)?,
             "light/inputs" => ws.on_get_inputs(params)?,
             "get_balance" => ws.on_get_balance(params)?,
+            "net_state" => ws.on_get_net_state(params)?,
             "light/light_props" => ws.on_get_light_props(params)?,
             // apis for explorer
             "get_network_info" => ws.on_get_network_info(params)?,
@@ -587,7 +601,6 @@ impl HubConn {
         Ok(())
     }
 
-    //TODO:
     fn on_get_balance(&self, param: Value) -> Result<Value> {
         let addr = param
             .as_str()
@@ -777,6 +790,11 @@ impl HubConn {
         let challenge = param.as_str();
         let peers = WSS.get_outbound_peers(challenge.unwrap_or("unknown"));
         Ok(serde_json::to_value(peers)?)
+    }
+
+    fn on_get_net_state(&self, _param: Value) -> Result<Value> {
+        let net_state = WSS.get_net_state();
+        Ok(serde_json::to_value(net_state)?)
     }
 
     fn on_get_witnesses(&self, _: Value) -> Result<Value> {

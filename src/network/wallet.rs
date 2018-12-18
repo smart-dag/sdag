@@ -124,6 +124,12 @@ impl WalletConn {
         Ok(balance)
     }
 
+    // get the network status
+    pub fn get_net_state(&self) -> Result<super::hub::HubNetState> {
+        let response = self.send_request("net_state", &Value::Null)?;
+        Ok(serde_json::from_value(response)?)
+    }
+
     //returned joint and joint property
     pub fn get_joint_by_unit_hash(&self, unit: &str) -> Result<(Joint, UnitProps)> {
         let mut response =
