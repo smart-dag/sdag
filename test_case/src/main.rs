@@ -13,68 +13,27 @@ extern crate may;
 extern crate sdag;
 extern crate sdag_wallet_base;
 extern crate serde;
+#[macro_use]
 extern crate serde_json;
 
 use chrono::{Local, TimeZone};
 use clap::App;
 use failure::ResultExt;
 use may::*;
+use sdag_wallet_base::Base64KeyExt;
 
 use rand::{thread_rng, Rng};
 use std::sync::Arc;
 use std::{thread, time::Duration};
 
 mod config;
+mod genesis;
 mod wallet;
 
 use sdag::error::Result;
 use sdag::network::wallet::WalletConn;
-use sdag_wallet_base::{Base64KeyExt, ExtendedPrivKey, ExtendedPubKey, Mnemonic};
 
-#[derive(Debug, Clone)]
-struct WalletInfo {
-    master_prvk: ExtendedPrivKey,
-    wallet_pubk: ExtendedPubKey,
-    device_address: String,
-    wallet_0_id: String,
-    _00_address: String,
-    _00_address_pubk: ExtendedPubKey,
-    _00_address_prvk: ExtendedPrivKey,
-}
-
-impl WalletInfo {
-    fn from_mnemonic(mnemonic: &str) -> Result<WalletInfo> {
-        let wallet = 0;
-        let mnemonic = Mnemonic::from(&mnemonic)?;
-        let master_prvk = sdag_wallet_base::master_private_key(&mnemonic, "")?;
-        let device_address = sdag_wallet_base::device_address(&master_prvk)?;
-        let wallet_pubk = sdag_wallet_base::wallet_pubkey(&master_prvk, wallet)?;
-        let wallet_0_id = sdag_wallet_base::wallet_id(&wallet_pubk);
-        let _00_address = sdag_wallet_base::wallet_address(&wallet_pubk, false, 0)?;
-        let _00_address_prvk = sdag_wallet_base::wallet_address_prvkey(&master_prvk, 0, false, 0)?;
-        let _00_address_pubk = sdag_wallet_base::wallet_address_pubkey(&wallet_pubk, false, 0)?;
-
-        Ok(WalletInfo {
-            master_prvk,
-            wallet_pubk,
-            device_address,
-            wallet_0_id,
-            _00_address,
-            _00_address_pubk,
-            _00_address_prvk,
-        })
-    }
-}
-
-impl sdag::signature::Signer for WalletInfo {
-    fn sign(&self, hash: &[u8], address: &str) -> Result<String> {
-        if address != self._00_address {
-            bail!("invalid address for wallet to sign");
-        }
-
-        sdag_wallet_base::sign(hash, &self._00_address_prvk)
-    }
-}
+use self::wallet::WalletInfo;
 
 fn init_log(verbosity: u64) {
     let log_lvl = match verbosity {
@@ -129,17 +88,13 @@ fn connect_to_remote(peers: &[String]) -> Result<Arc<WalletConn>> {
     bail!("failed to connect remote hub");
 }
 
-#[allow(dead_code)]
 fn info(ws: &Arc<WalletConn>, wallet_info: &WalletInfo) -> Result<()> {
     let address_pubk = wallet_info._00_address_pubk.to_base64_key();
 
     let stable = ws.get_balance(&wallet_info._00_address)? as f64 / 1000_000.0;
 
     println!("\ncurrent wallet info:\n");
-    println!("device_address: {}", wallet_info.device_address);
     println!("wallet_public_key: {}", wallet_info.wallet_pubk.to_string());
-    println!("└──wallet_id(0): {}", wallet_info.wallet_0_id);
-
     println!("   └──address(0/0): {}", wallet_info._00_address);
     println!("      ├── path: /m/44'/0'/0'/0/0");
     println!("      ├── pubkey: {}", address_pubk);
@@ -148,7 +103,6 @@ fn info(ws: &Arc<WalletConn>, wallet_info: &WalletInfo) -> Result<()> {
     Ok(())
 }
 
-#[allow(dead_code)]
 fn show_history(
     ws: &Arc<WalletConn>,
     address: &String,
@@ -267,22 +221,52 @@ fn is_witness(ws: &Arc<WalletConn>, address: &String) -> Result<bool> {
     Ok(witnesses.contains(address))
 }
 
-fn continue_sending(ws: &Arc<WalletConn>, wallets: &Vec<wallet::Wallets>) -> Result<()> {
-    let mut wallets_info: Vec<WalletInfo> = vec![];
-    for w in wallets.iter() {
-        wallets_info.push(WalletInfo::from_mnemonic(&w.mnemonic)?);
-    }
-
-    thread::sleep(Duration::from_secs(2));
+fn continue_sending(
+    ws: Arc<WalletConn>,
+    wallets_info: &Vec<wallet::WalletInfo>,
+    index: usize,
+) -> Result<()> {
     let mut rng = thread_rng();
 
     let n1: usize = rng.gen_range(0, 100);
-    let n2: usize = rng.gen_range(0, 100);
 
     let address = wallets_info[n1]._00_address.clone();
-    send_payment(&ws, vec![(address, 0.001)], &wallets_info[n2])?;
 
+    send_payment(&ws, vec![(address, 0.001)], &wallets_info[index])?;
     Ok(())
+}
+
+fn genesis_init() -> Result<()> {
+    // TODO: get total amount and msg from args
+    let total = 500_000_000_000_000;
+    let msg = "hello sdag";
+    let wallets = genesis::gen_all_wallets()?;
+
+    let genesis_joint = genesis::gen_genesis_joint(&wallets, total, msg)?;
+
+    config::save_results(&genesis_joint, genesis::GENESIS_FILE)?;
+    config::save_results(
+        &genesis::gen_first_payment(&wallets.sdag_org, 20, &genesis_joint)?,
+        genesis::FIRST_PAYMENT,
+    )?;
+
+    #[derive(Serialize)]
+    struct Tmp<'a> {
+        wallets: Vec<&'a String>,
+        sdag_org: String,
+    };
+
+    let result = Tmp {
+        wallets: wallets
+            .witnesses
+            .iter()
+            .map(|v| &v.mnemonic)
+            .collect::<Vec<_>>(),
+
+        sdag_org: wallets.sdag_org.mnemonic,
+    };
+
+    config::save_results(&result, genesis::INIT_MNEMONIC)
 }
 
 fn main() -> Result<()> {
@@ -294,14 +278,6 @@ fn main() -> Result<()> {
     let settings = config::get_settings();
     println!("{:?}", settings);
     let ws = connect_to_remote(&settings.hub_url).context("sdfsd")?;
-
-    let wallet_info = WalletInfo::from_mnemonic(&settings.mnemonic)?;
-    let test_wallets = Arc::new(wallet::get_wallets()?);
-    let test_address = wallet::get_wallets_address(&test_wallets)?;
-
-    if is_witness(&ws, &wallet_info._00_address)? {
-        bail!("witness can not send payment by test");
-    }
 
     // init command
     if let Some(init_arg) = m.subcommand_matches("init") {
@@ -316,10 +292,34 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
+    if m.subcommand_matches("genesis").is_some() {
+        genesis_init()?;
+        return Ok(());
+    }
+
+    //raw_post
+    if let Some(raw_post) = m.subcommand_matches("raw_post") {
+        if raw_post.values_of("genesis").is_some() {
+            let genesis_file = config::open_file(genesis::GENESIS_FILE)?;
+            ws.post_joint(&serde_json::from_reader(genesis_file)?)?;
+            return Ok(());
+        }
+
+        if raw_post.values_of("first_pay").is_some() {
+            let first_paid_file = config::open_file(genesis::FIRST_PAYMENT)?;
+            ws.post_joint(&serde_json::from_reader(first_paid_file)?)?;
+            return Ok(());
+        }
+    }
+
     if let Some(n) = m.subcommand_matches("wallets") {
         match value_t!(n.value_of("n"), u64) {
             Ok(num) => {
-                let wallets = wallet::gen_wallets(num)?;
+                let wallets_info = wallet::gen_wallets(num)?;
+                let wallets = wallets_info
+                    .iter()
+                    .map(|v| (v.mnemonic.clone(), v._00_address.clone()))
+                    .collect::<Vec<_>>();
                 config::save_results(&wallets, config::WALLET_ADDRESSES)?;
             }
 
@@ -328,38 +328,121 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
+    //transfer
     if let Some(send) = m.subcommand_matches("send") {
-        if let Some(_c) = send.values_of("continue") {
+        let test_wallets = match wallet::get_wallets() {
+            Ok(wallets) => Arc::new(wallets),
+            Err(_) => {
+                let wallets_info = wallet::gen_wallets(100)?;
+                let wallets = wallets_info
+                    .iter()
+                    .map(|v| (v.mnemonic.clone(), v._00_address.clone()))
+                    .collect::<Vec<_>>();
+                config::save_results(&wallets, config::WALLET_ADDRESSES)?;
+                Arc::new(wallets_info)
+            }
+        };
+
+        if let Ok(num) = value_t!(send.value_of("continue"), usize) {
             info!("continuously");
 
-            for _ in 0..20 {
+            for i in 0..num {
                 let tmp_ws = Arc::clone(&ws);
                 let tmp_test_wallets = Arc::clone(&test_wallets);
 
                 thread::spawn(move || loop {
-                    match continue_sending(&tmp_ws, &tmp_test_wallets) {
+                    let tmp_ws = Arc::clone(&tmp_ws);
+                    match continue_sending(tmp_ws, &tmp_test_wallets, i) {
                         Err(e) => error!("{}", e),
                         _ => {}
                     };
+                    thread::yield_now();
+                    thread::sleep(Duration::from_millis(10));
                 });
             }
 
             loop {
-                thread::sleep(Duration::from_secs(10));
+                thread::sleep(Duration::from_secs(1));
             }
-        } else {
-            match value_t!(send.value_of("pay"), u64) {
-                Ok(num) => {
-                    let address_amount = test_address
-                        .iter()
-                        .map(|w| (w.clone(), num as f64))
-                        .collect::<Vec<(String, f64)>>();
+        }
 
-                    return send_payment(&ws, address_amount, &wallet_info);;
+        if let Ok(num) = value_t!(send.value_of("pay"), u64) {
+            let wallet_info = WalletInfo::from_mnemonic(&settings.mnemonic)?;
+
+            if is_witness(&ws, &wallet_info._00_address)? {
+                bail!("witness can not send payment by test");
+            }
+
+            let address_amount = test_wallets
+                .iter()
+                .map(|w| (w._00_address.clone(), num as f64))
+                .collect::<Vec<(String, f64)>>();
+
+            return send_payment(&ws, address_amount, &wallet_info);
+        }
+    }
+
+    //balance
+    if let Some(arg) = m.subcommand_matches("balance") {
+        if let Some(address) = arg.value_of("ADDRESS") {
+            println!("{:.6}", ws.get_balance(&address)? as f64 / 1_000_000.0);
+        }
+
+        return Ok(());
+    }
+
+    let mut wallets_info = wallet::get_wallets()?;
+    wallets_info.push(WalletInfo::from_mnemonic(&settings.mnemonic)?);
+
+    //info
+    if let Some(arg) = m.subcommand_matches("info") {
+        if let Some(address) = arg.value_of("ADDRESS") {
+            for wallet in wallets_info {
+                if wallet._00_address == address {
+                    return info(&ws, &wallet);
                 }
-
-                Err(e) => e.exit(),
             }
+        }
+        return Ok(());
+    }
+
+    //log
+    if let Some(log) = m.subcommand_matches("log") {
+        let wallet = || -> Result<WalletInfo> {
+            if let Some(address) = log.value_of("ADDRESS") {
+                for wallet in wallets_info {
+                    if wallet._00_address == address {
+                        return Ok(wallet);
+                    }
+                }
+            }
+            bail!("not found wallet")
+        }()?;
+
+        let index = value_t!(log.value_of("v"), usize).ok();
+        match value_t!(log.value_of("n"), usize) {
+            Ok(num) => {
+                println!("num = {}, index = {:?}", num, index);
+                return show_history(&ws, &wallet._00_address, index, num);
+            }
+            Err(clap::Error {
+                kind: clap::ErrorKind::ArgumentNotFound,
+                ..
+            }) => {
+                println!("3");
+                return show_history(&ws, &wallet._00_address, index, 5);
+            }
+            Err(e) => e.exit(),
+        }
+    }
+
+    //show joint and properties
+    if let Some(show_args) = m.subcommand_matches("show") {
+        if let Some(unit) = show_args.value_of("UNIT") {
+            let resp = ws.get_joint_by_unit_hash(unit)?;
+
+            println!("joint = {:#?}", resp.0);
+            println!("property = {:#?}", resp.1);
         }
     }
 

@@ -29,10 +29,16 @@ subcommands:
     - raw_post:
         about: post a raw joint from specified json file
         args:
-            - JOINT_FILE:
-                 help: the json file must contains a valid joint
-                 takes_value: true
-                 required: true
+            - genesis:
+                help: send genesis unit
+                short: g
+                long: genesis
+                required: false
+            - first_pay:
+                help: send first payment 
+                short: f
+                long: first_pay
+                required: false
     - send:
         about: Pay SDG to an address
         args:
@@ -41,6 +47,9 @@ subcommands:
                 short: c
                 long: continue
                 required: false
+                value_names:
+                    - NUM
+                takes_value: true
             - pay:
                 help: pay <AMOUNT> SDG to wallets
                 short: p
@@ -57,44 +66,63 @@ subcommands:
                 takes_value: true
                 required: false
                 
-    - log:
-        about: Show the history of this wallet account
-        args:
-            - v:
-                help: show details of specified history transaction
-                short: v
-                takes_value: true
-                required: false
-                value_name: INDEX
-            - u:
-                help: information behind of the unit to be shown
-                short: u
-                takes_value: true
-                required: false
-                default_value: "20"
-                value_name: UNIT
-            - n:
-                help: the maximum of transactions to be shown
-                short: n
-                takes_value: true
-                required: false
-                default_value: "20"
-                value_name: NUM
-    - info:
-        about: Show the wallet info
+    - genesis:
+        about: create genesis
     - balance:
         about: Show the wallet balance
         args:
-            - s:
-                help: show stable balance
-                short: s
-                takes_value: false
+            - ADDRESS:
+                help: get balance with the ADDRESS
+                takes_value: true
                 required: false
-            - p:
-                help: show pending balance
-                short: p
-                takes_value: false
-                required: false
-
+    - info:
+        about: Show the wallet info
+        args:
+            # wallet address
+            - ADDRESS:
+                help: get wallet info
+                takes_value: true
+                required: true
+    - init:
+            about: set a wallet that transfer to other wallets
+            args:
+                - MNEMONIC:
+                    help: set the wallet with the mnemonic
+                    takes_value: true
+                    required: false
+    - log:
+            about: Show the history of this wallet account
+            args:
+                - ADDRESS:
+                    help: must need wallet address
+                    takes_value: true
+                    required: true
+                - v:
+                    help: show details of specified history transaction
+                    short: v
+                    takes_value: true
+                    required: false
+                    value_name: INDEX
+                - u:
+                    help: information behind of the unit to be shown
+                    short: u
+                    takes_value: true
+                    required: false
+                    default_value: "20"
+                    value_name: UNIT
+                - n:
+                    help: the maximum of transactions to be shown
+                    short: n
+                    takes_value: true
+                    required: false
+                    default_value: "20"
+                    value_name: NUM
+    - show:
+        about: Show the joint and propeties
+        args:
+            - UNIT:
+                help: show the joint infos, include joint and properties
+                takes_value: true
+                required: true
 
 

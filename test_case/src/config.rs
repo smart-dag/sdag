@@ -43,6 +43,13 @@ impl Settings {
     }
 }
 
+pub fn open_file(path: &str) -> Result<File> {
+    let mut settings_path = ::std::env::current_dir()?;
+    settings_path.push(SETTINGS_FILE);
+    println!("{:?}", settings_path);
+    Ok(File::open(path)?)
+}
+
 fn open_settings() -> Result<Settings> {
     let mut settings_path = ::std::env::current_dir()?;
     settings_path.push(SETTINGS_FILE);
