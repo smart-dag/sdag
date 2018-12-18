@@ -806,11 +806,12 @@ impl HubConn {
         let joint: Joint = serde_json::from_value(param)?;
         info!("receive a posted joint: {:?}", joint);
 
+        let unit = joint.clone();
         self.handle_online_joint(joint)?;
 
         // TODO: we should only broadcast the joint after normalize
         // and wati until it comes?
-        // WSS.broadcast_joint(&joint)?;
+        WSS.broadcast_joint(&unit)?;
         Ok(Value::from("accepted"))
     }
 
@@ -1124,6 +1125,7 @@ impl HubConn {
             let g = UNIT_IN_WORK.try_lock(vec![unit.clone()]);
             if g.is_none() {
                 // other thread is working on the unit, skip it
+                debug!("request unit in working. unit={}", unit);
                 continue;
             }
 
@@ -1284,6 +1286,7 @@ impl HubConn {
                 let err = format!("I didn't request this unit from you: {}", joint.unit.unit);
                 return ws.send_error(Value::from(err));
             }
+            drop(g);
 
             ws.handle_online_joint(joint)
         }
@@ -1371,7 +1374,7 @@ pub fn start_catchup(ws: Arc<HubConn>) -> Result<()> {
         ws.request_new_missing_joints(batch_balls.iter().map(|j| &j.unit))?;
 
         // wait the batch number below a value and then start another batch
-        ::utils::wait_cond(Some(Duration::from_secs(8)), || {
+        ::utils::wait_cond(Some(Duration::from_secs(10)), || {
             SDAG_CACHE.get_hash_tree_ball_len() < 300
         })
         .context("catchup wait hash tree batch timeout")?;
