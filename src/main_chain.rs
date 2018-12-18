@@ -465,14 +465,6 @@ pub fn is_stable_in_later_joints(
     let min_wl = calc_min_wl_included_by_later_joints(earlier_joint, &later_joints)?;
 
     let is_stable = min_wl > max_alt_level;
-
-    if !is_stable {
-        error!(
-            "Checking is_stable_in_later_joints(): min_wl: {:?}, max_alt_level: {:?}, earlier_joint: {}, later_joints={:?}",
-            min_wl, max_alt_level, earlier_joint.key, later_joints
-        );
-    }
-
     Ok(is_stable)
 }
 
