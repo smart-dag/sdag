@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 
 use may::sync::RwLock;
 use sdag::business::BUSINESS_CACHE;
-use sdag::cache::SDAG_CACHE;
+use sdag::cache::{CachedJoint, SDAG_CACHE};
 use sdag::error::Result;
 use sdag::joint::JointSequence;
 use sdag::main_chain;
@@ -27,7 +27,7 @@ const THRESHOLD_DISTANCE: i32 = 8;
 pub fn witness_timer_check() -> Result<Duration> {
     match check_timeout() {
         None => {
-            if if_need_witnessing(&WALLET_INFO._00_address)? {
+            if is_need_witnessing()? {
                 witness()?;
             }
             *EVENT_TIMER.write().unwrap() = None;
@@ -73,7 +73,7 @@ pub fn check_and_witness() -> Result<()> {
         }
     };
 
-    if if_my_witnessing_is_unstable(&WALLET_INFO._00_address)? {
+    if is_my_witnessing_unstable(&WALLET_INFO._00_address)? {
         info!("my units is not stable");
         return Ok(());
     }
@@ -84,7 +84,7 @@ pub fn check_and_witness() -> Result<()> {
 }
 
 /// check if unstable joints have my witnessing
-fn if_my_witnessing_is_unstable(my_address: &str) -> Result<bool> {
+fn is_my_witnessing_unstable(my_address: &str) -> Result<bool> {
     let free_joints = SDAG_CACHE.get_free_joints()?;
     let mut queue = VecDeque::new();
     let mut visited = HashSet::new();
@@ -158,7 +158,11 @@ fn adjust_witnessing_speed(my_address: &str) -> Result<()> {
     Ok(())
 }
 
-fn if_need_witnessing(my_address: &str) -> Result<(bool)> {
+/// witnessing condition:
+/// 1) last self unstable joint is relative stable to free joint, that means the path from free joint to my last unstable joint have more than 6 diff witnesses
+/// 2) non witness joint mci > min retrievable mci, min retrievable is last_stable_joint's last_stable_unit mci
+/// 3) last self unstable joint support current main chain, that means current main chain include my last unstable joint (cancel)
+fn is_need_witnessing() -> Result<(bool)> {
     let _g = match IS_WITNESSING.try_lock() {
         Some(g) => g,
         None => {
@@ -167,27 +171,75 @@ fn if_need_witnessing(my_address: &str) -> Result<(bool)> {
         }
     };
 
-    if if_my_witnessing_is_unstable(my_address)? {
+    let free_joints = SDAG_CACHE.get_free_joints()?;
+
+    if free_joints.is_empty() {
         return Ok(false);
     }
 
-    if_unstable_joints_have_non_witness()
+    let (need_witness, has_normal_joint) = is_relative_stable(&free_joints)?;
+
+    if !need_witness {
+        return Ok(false);
+    }
+
+    if has_normal_joint {
+        return Ok(true);
+    }
+
+    is_normal_joint_behind_min_retrievable(&free_joints)
 }
 
-/// return true if authors of unstable joints have non witness address
-fn if_unstable_joints_have_non_witness() -> Result<bool> {
-    let free_joints = SDAG_CACHE.get_free_joints()?;
+/// return true if more than 6 different other witnesses from best free joints until stable
+/// return true if has unstable normal joints
+fn is_relative_stable(free_joints: &[CachedJoint]) -> Result<(bool, bool)> {
+    let mut best_free_parent = sdag::main_chain::find_best_joint(free_joints.iter())?
+        .ok_or_else(|| format_err!("empty best joint amoun free joints"))?
+        .read()?;
+
+    let mut has_normal_joints = false;
+
+    let mut diff_witnesses = HashSet::new();
+    while !best_free_parent.is_stable() {
+        for author in &best_free_parent.unit.authors {
+            if WALLET_INFO._00_address == author.address {
+                return Ok((false, has_normal_joints));
+            }
+
+            if MY_WITNESSES.contains(&author.address) {
+                diff_witnesses.insert(author.address.clone());
+            } else {
+                has_normal_joints = true;
+            }
+        }
+
+        // need at least half other witnesses
+        if diff_witnesses.len() >= sdag::config::MAJORITY_OF_WITNESSES - 1 {
+            break;
+        }
+
+        best_free_parent = best_free_parent.get_best_parent().read()?;
+    }
+
+    Ok((true, has_normal_joints))
+}
+
+/// return true if non witness joint behind min retrievable mci, it is very heavy!!!
+fn is_normal_joint_behind_min_retrievable(free_joints: &[CachedJoint]) -> Result<bool> {
+    let min_retrievable_mci = get_min_retrievable_unit(free_joints)?.read()?.get_mci();
+
     let mut queue = VecDeque::new();
     let mut visited = HashSet::new();
 
     for joint in free_joints {
-        queue.push_back(joint);
+        queue.push_back(joint.clone());
     }
 
     while let Some(joint) = queue.pop_front() {
         let joint_data = joint.read()?;
+        let mci = joint_data.get_mci();
 
-        if !visited.insert(joint.key.clone()) || joint_data.is_stable() {
+        if !visited.insert(joint.key.clone()) || mci <= min_retrievable_mci {
             continue;
         }
 
@@ -205,6 +257,17 @@ fn if_unstable_joints_have_non_witness() -> Result<bool> {
     }
 
     Ok(false)
+}
+
+/// get min retrievable unit: last stable unit's last stable unit
+fn get_min_retrievable_unit(free_joints: &[CachedJoint]) -> Result<CachedJoint> {
+    // we can unwrap here because free joints is not empty
+    let best_joint = sdag::main_chain::find_best_joint(free_joints.iter())?.unwrap();
+
+    match best_joint.read()?.unit.last_ball_unit {
+        Some(ref unit) => SDAG_CACHE.get_joint(unit),
+        None => Ok(best_joint), // only genesis has no last ball unit
+    }
 }
 
 #[derive(Serialize)]

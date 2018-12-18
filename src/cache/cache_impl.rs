@@ -75,7 +75,7 @@ impl SDagCacheInner {
 
     /// get all the good free joints
     pub fn get_free_joints(&self) -> Result<Vec<CachedJoint>> {
-        // judage if the joint has all bad children
+        // judge if the joint has all bad children
         fn is_all_children_bad(joint: &JointData) -> Result<bool> {
             for child in joint.children.iter() {
                 let child_data = child.read()?;
@@ -141,7 +141,7 @@ impl SDagCacheInner {
     pub fn update_parent_and_child(&mut self, key: &str) {
         let joint = self.get_joint(key).expect("not found ready joint");
 
-        // add parents for my childern
+        // add parents for my children
         if let Some((_k, v)) = self.missing_parents.remove_entry(key) {
             for child in v {
                 let child_data = child.raw_read();

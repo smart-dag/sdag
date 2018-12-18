@@ -44,7 +44,11 @@ pub fn validate_ready_joint(joint: CachedJoint) -> Result<()> {
         }
         Err(e) => {
             // validation failed, purge the bad joint
-            error!("normal_validate, err={}", e.to_string());
+            error!(
+                "normal_validate, unit={}, err={}",
+                &joint.key,
+                e.to_string()
+            );
             SDAG_CACHE.purge_bad_joint(&joint.key, e.to_string());
             return Err(e);
         }
