@@ -20,22 +20,28 @@ test_case raw_post --first_pay
 test_case send --pay [coins]
 ```
 
+
 5. transfer to eacher other among generated [num] wallets, and [num] should be less than the number of the wallets.
 ```
 test_case send --continue
 ```
 
-6. find some wallet transaction history
+6. transfer coins to  generated wallets [n] times
+```
+test_case send --pay [coins] --continue [n]
+```
+
+7. find some wallet transaction history
 ```
 test_case log  [ADDRESS] -[n] -[v]
 ```
 
-7. find some wallet information
+8. find some wallet information
 ```
 test_case info  [ADDRESS] 
 ```
 
-8. get some wallet balance
+9. get some wallet balance
 ```
 test_case balance  [ADDRESS] 
 ```
