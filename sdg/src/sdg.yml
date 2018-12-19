@@ -78,6 +78,12 @@ subcommands:
 
     - info:
         about: Show the wallet info
+        args:
+            - j:
+                help: wallet info format to JSON
+                short: j
+                long: json
+
 
     - net:
         about: Show the hub net connections

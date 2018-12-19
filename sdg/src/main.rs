@@ -131,19 +131,44 @@ fn connect_to_remote(peers: &[String]) -> Result<Arc<WalletConn>> {
     bail!("failed to connect remote hub");
 }
 
-fn info(ws: &Arc<WalletConn>, wallet_info: &WalletInfo) -> Result<()> {
+fn info(ws: &Arc<WalletConn>, wallet_info: &WalletInfo, is_json: bool) -> Result<()> {
     let address_pubk = wallet_info._00_address_pubk.to_base64_key();
 
     let stable = ws.get_balance(&wallet_info._00_address)? as f64 / 1_000_000.0;
 
-    println!("\ncurrent wallet info:\n");
-    println!("device_address: {}", wallet_info.device_address);
-    println!("wallet_public_key: {}", wallet_info.wallet_pubk.to_string());
-    println!("└──wallet_id(0): {}", wallet_info.wallet_0_id);
-    println!("   └──address(0/0): {}", wallet_info._00_address);
-    println!("      ├── path: /m/44'/0'/0'/0/0");
-    println!("      ├── pubkey: {}", address_pubk);
-    println!("      └── balance: {:.6}", stable);
+    if is_json {
+        #[derive(Serialize, Debug)]
+        struct Info {
+            device_address: String,
+            wallet_public_key: String,
+            wallet_id: String,
+            address: String,
+            path: String,
+            pubkey: String,
+            balance: String,
+        }
+
+        let info = Info {
+            device_address: wallet_info.device_address.clone(),
+            wallet_public_key: wallet_info.wallet_pubk.to_string(),
+            wallet_id: wallet_info.wallet_0_id.clone(),
+            address: wallet_info._00_address.clone(),
+            path: "/m/44'/0'/0'/0/0".to_string(),
+            pubkey: address_pubk.clone(),
+            balance: stable.to_string(),
+        };
+        serde_json::to_writer_pretty(std::io::stdout(), &info)?;
+        println!("");
+    } else {
+        println!("\ncurrent wallet info:\n");
+        println!("device_address: {}", wallet_info.device_address);
+        println!("wallet_public_key: {}", wallet_info.wallet_pubk.to_string());
+        println!("└──wallet_id(0): {}", wallet_info.wallet_0_id);
+        println!("   └──address(0/0): {}", wallet_info._00_address);
+        println!("      ├── path: /m/44'/0'/0'/0/0");
+        println!("      ├── pubkey: {}", address_pubk);
+        println!("      └── balance: {:.6}", stable);
+    }
 
     Ok(())
 }
@@ -381,8 +406,9 @@ fn main() -> Result<()> {
     let wallet_info = WalletInfo::from_mnemonic(&settings.mnemonic)?;
 
     //info
-    if m.subcommand_matches("info").is_some() {
-        return info(&ws, &wallet_info);
+    if let Some(info_args) = m.subcommand_matches("info") {
+        let is_json = info_args.values_of("j").is_some();
+        return info(&ws, &wallet_info, is_json);
     }
 
     //net
@@ -479,7 +505,7 @@ fn main() -> Result<()> {
             // save all the joints
             let file = File::create(file)?;
             serde_json::to_writer_pretty(&file, &joints)?;
-            // verify the jonits
+            // verify the joints
             verify_joints(joints, last_mci)?;
         }
     }

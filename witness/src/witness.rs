@@ -226,7 +226,7 @@ fn is_relative_stable(free_joints: &[CachedJoint]) -> Result<(bool, bool)> {
 
 /// return true if non witness joint behind min retrievable mci, it is very heavy!!!
 fn is_normal_joint_behind_min_retrievable(free_joints: &[CachedJoint]) -> Result<bool> {
-    let min_retrievable_mci = get_min_retrievable_unit(free_joints)?.read()?.get_mci();
+    let min_retrievable_mci = get_min_retrievable_unit()?.read()?.get_mci();
 
     let mut queue = VecDeque::new();
     let mut visited = HashSet::new();
@@ -260,13 +260,13 @@ fn is_normal_joint_behind_min_retrievable(free_joints: &[CachedJoint]) -> Result
 }
 
 /// get min retrievable unit: last stable unit's last stable unit
-fn get_min_retrievable_unit(free_joints: &[CachedJoint]) -> Result<CachedJoint> {
+fn get_min_retrievable_unit() -> Result<CachedJoint> {
     // we can unwrap here because free joints is not empty
-    let best_joint = sdag::main_chain::find_best_joint(free_joints.iter())?.unwrap();
+    let last_stable_joint = sdag::main_chain::get_last_stable_joint();
 
-    match best_joint.read()?.unit.last_ball_unit {
+    match last_stable_joint.read()?.unit.last_ball_unit {
         Some(ref unit) => SDAG_CACHE.get_joint(unit),
-        None => Ok(best_joint), // only genesis has no last ball unit
+        None => Ok(last_stable_joint), // only genesis has no last ball unit
     }
 }
 
