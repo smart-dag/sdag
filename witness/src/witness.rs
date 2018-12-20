@@ -194,7 +194,7 @@ fn is_need_witnessing() -> Result<(bool)> {
 /// return true if has unstable normal joints
 fn is_relative_stable(free_joints: &[CachedJoint]) -> Result<(bool, bool)> {
     let mut best_free_parent = sdag::main_chain::find_best_joint(free_joints.iter())?
-        .ok_or_else(|| format_err!("empty best joint amoun free joints"))?
+        .ok_or_else(|| format_err!("empty best joint among free joints"))?
         .read()?;
 
     let mut has_normal_joints = false;
@@ -206,16 +206,15 @@ fn is_relative_stable(free_joints: &[CachedJoint]) -> Result<(bool, bool)> {
                 return Ok((false, has_normal_joints));
             }
 
-            if MY_WITNESSES.contains(&author.address) {
-                diff_witnesses.insert(author.address.clone());
+            // need at least half other witnesses
+            if MY_WITNESSES.contains(&author.address)
+                && diff_witnesses.insert(author.address.clone())
+                && diff_witnesses.len() >= sdag::config::MAJORITY_OF_WITNESSES - 1
+            {
+                return Ok((true, has_normal_joints));
             } else {
                 has_normal_joints = true;
             }
-        }
-
-        // need at least half other witnesses
-        if diff_witnesses.len() >= sdag::config::MAJORITY_OF_WITNESSES - 1 {
-            break;
         }
 
         best_free_parent = best_free_parent.get_best_parent().read()?;
