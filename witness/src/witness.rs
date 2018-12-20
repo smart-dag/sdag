@@ -345,12 +345,12 @@ fn witness() -> Result<()> {
     }
 
     if joint_data.is_missing_parent()
-        || sdag::validation::validate_ready_joint(cached_joint).is_err()
+        || sdag::validation::validate_ready_joint(cached_joint.clone()).is_err()
     {
         bail!("compose new joint is invalid, joint is [{:?}]", &joint);
     }
 
-    sdag::network::hub::WSS.broadcast_joint(&joint)?;
+    sdag::network::hub::WSS.broadcast_joint(cached_joint)?;
 
     Ok(())
 }

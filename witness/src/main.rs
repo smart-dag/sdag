@@ -81,7 +81,7 @@ impl sdag::signature::Signer for WalletInfo {
 // register global event handlers
 fn register_event_handlers() {
     use sdag::cache::ReadyJointEvent;
-    use sdag::network::hub::NormalizeEvent;
+    use sdag::cache::NormalizeEvent;
     use sdag::utils::event::Event;
 
     ReadyJointEvent::add_handler(|j| t!(sdag::validation::validate_ready_joint(j.joint.clone())));

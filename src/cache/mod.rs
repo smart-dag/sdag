@@ -46,13 +46,19 @@ impl CachedJoint {
 }
 
 //---------------------------------------------------------------------------------------
-// ReadyJointEvent
+// JointEvents
 //---------------------------------------------------------------------------------------
 pub struct ReadyJointEvent {
     pub joint: CachedJoint,
 }
 
 impl_event!(ReadyJointEvent);
+
+pub struct NormalizeEvent {
+    pub joint: CachedJoint,
+}
+
+impl_event!(NormalizeEvent);
 
 //---------------------------------------------------------------------------------------
 // SDagCache

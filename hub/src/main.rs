@@ -71,12 +71,14 @@ fn network_cleanup() {
 
 // register global event handlers
 fn register_event_handlers() {
+    use cache::NormalizeEvent;
     use cache::ReadyJointEvent;
     // use main_chain::MciStableEvent;
     use utils::event::Event;
 
     // MciStableEvent::add_handler(|v| t!(network::hub::notify_watchers_about_stable_joints(v.mci)));
     ReadyJointEvent::add_handler(|j| t!(validation::validate_ready_joint(j.joint.clone())));
+    NormalizeEvent::add_handler(|v| t!(network::hub::WSS.broadcast_joint(v.joint.clone())));
 }
 
 // the hub server logic that run in coroutine context

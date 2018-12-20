@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use super::network_base::{Sender, Server, WsConnection};
 use business::BUSINESS_CACHE;
-use cache::{JointData, SDAG_CACHE};
+use cache::{CachedJoint, JointData, SDAG_CACHE};
 use catchup;
 use composer::*;
 use config;
@@ -105,9 +105,6 @@ lazy_static! {
     static ref CHALLENGE_ID: String = object_hash::gen_random_string(30);
     static ref BAD_CONNECTION: FifoCache<String, ()> = FifoCache::with_capacity(10);
 }
-
-pub struct NormalizeEvent;
-impl_event!(NormalizeEvent);
 
 fn init_connection(ws: &Arc<HubConn>) -> Result<()> {
     use rand::{thread_rng, Rng};
@@ -313,7 +310,8 @@ impl WsConnections {
         Ok(())
     }
 
-    pub fn broadcast_joint(&self, joint: &Joint) -> Result<()> {
+    pub fn broadcast_joint(&self, joint: CachedJoint) -> Result<()> {
+        let joint = &*joint.read()?;
         for c in &*self.outbound.read().unwrap() {
             // we should check if the outbound is subscribed
             // ref issue #28
@@ -806,12 +804,8 @@ impl HubConn {
         let joint: Joint = serde_json::from_value(param)?;
         info!("receive a posted joint: {:?}", joint);
 
-        let unit = joint.clone();
         self.handle_online_joint(joint)?;
 
-        // TODO: we should only broadcast the joint after normalize
-        // and wati until it comes?
-        WSS.broadcast_joint(&unit)?;
         Ok(Value::from("accepted"))
     }
 
@@ -1551,7 +1545,9 @@ fn clear_ball_after_min_retrievable_mci(joint_data: &JointData) -> Result<Joint>
 
     // min_retrievable mci is the mci of the last ball of the last stable joint
     if joint_data.get_mci()
-        >= SDAG_CACHE.get_last_ball_mci_of_mci(::main_chain::get_last_stable_mci()).unwrap_or(Level::default())
+        >= SDAG_CACHE
+            .get_last_ball_mci_of_mci(::main_chain::get_last_stable_mci())
+            .unwrap_or(Level::default())
     {
         joint.ball = None;
         joint.skiplist_units = Vec::new();
