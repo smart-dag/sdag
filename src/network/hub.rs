@@ -1551,9 +1551,7 @@ fn clear_ball_after_min_retrievable_mci(joint_data: &JointData) -> Result<Joint>
 
     // min_retrievable mci is the mci of the last ball of the last stable joint
     if joint_data.get_mci()
-        >= SDAG_CACHE
-            .get_last_ball_mci_of_mci(::main_chain::get_last_stable_mci())
-            .unwrap_or(Level::default())
+        >= SDAG_CACHE.get_last_ball_mci_of_mci(::main_chain::get_last_stable_mci()).unwrap_or(Level::default())
     {
         joint.ball = None;
         joint.skiplist_units = Vec::new();
