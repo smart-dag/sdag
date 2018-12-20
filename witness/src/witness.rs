@@ -305,7 +305,7 @@ fn witness() -> Result<()> {
         change_address: WALLET_INFO._00_address.clone(),
         outputs: Vec::new(),
         inputs: sdag::light::InputsResponse { inputs, amount },
-        transaction_amount: amount,
+        transaction_amount: 0,
         text_message: None,
         light_props: light_props,
         pubk: WALLET_PUBK.clone(),
