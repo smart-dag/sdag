@@ -106,8 +106,8 @@ lazy_static! {
     static ref BAD_CONNECTION: FifoCache<String, ()> = FifoCache::with_capacity(10);
 }
 
-pub struct NewJointEvent;
-impl_event!(NewJointEvent);
+pub struct NormalizeEvent;
+impl_event!(NormalizeEvent);
 
 fn init_connection(ws: &Arc<HubConn>) -> Result<()> {
     use rand::{thread_rng, Rng};
@@ -1551,7 +1551,9 @@ fn clear_ball_after_min_retrievable_mci(joint_data: &JointData) -> Result<Joint>
 
     // min_retrievable mci is the mci of the last ball of the last stable joint
     if joint_data.get_mci()
-        >= SDAG_CACHE.get_last_ball_mci_of_mci(::main_chain::get_last_stable_mci()).unwrap_or(Level::default())
+        >= SDAG_CACHE
+            .get_last_ball_mci_of_mci(::main_chain::get_last_stable_mci())
+            .unwrap_or(Level::default())
     {
         joint.ball = None;
         joint.skiplist_units = Vec::new();

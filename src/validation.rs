@@ -60,6 +60,8 @@ pub fn validate_ready_joint(joint: CachedJoint) -> Result<()> {
         validate_messages(&joint_data);
     }
 
+    ::utils::event::emit_event(::network::hub::NormalizeEvent);
+
     if joint_data.is_min_wl_increased() {
         main_chain::MAIN_CHAIN_WORKER.push_ready_joint(joint)?;
     }

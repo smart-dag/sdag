@@ -200,21 +200,22 @@ fn is_relative_stable(free_joints: &[CachedJoint]) -> Result<(bool, bool)> {
     let mut has_normal_joints = false;
 
     let mut diff_witnesses = HashSet::new();
-    while !best_free_parent.is_stable() {
+    while !(best_free_parent.is_stable() || best_free_parent.unit.is_genesis_unit()) {
         for author in &best_free_parent.unit.authors {
             if WALLET_INFO._00_address == author.address {
                 return Ok((false, has_normal_joints));
             }
 
-            // need at least half other witnesses
-            if MY_WITNESSES.contains(&author.address)
-                && diff_witnesses.insert(author.address.clone())
-                && diff_witnesses.len() >= sdag::config::MAJORITY_OF_WITNESSES - 1
-            {
-                return Ok((true, has_normal_joints));
+            if MY_WITNESSES.contains(&author.address) {
+                diff_witnesses.insert(author.address.clone());
             } else {
                 has_normal_joints = true;
             }
+        }
+
+        // need at least half other witnesses
+        if diff_witnesses.len() >= sdag::config::MAJORITY_OF_WITNESSES - 1 {
+            break;
         }
 
         best_free_parent = best_free_parent.get_best_parent().read()?;
