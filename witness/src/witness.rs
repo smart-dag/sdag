@@ -9,6 +9,7 @@ use sdag::business::BUSINESS_CACHE;
 use sdag::cache::{CachedJoint, SDAG_CACHE};
 use sdag::error::Result;
 use sdag::joint::JointSequence;
+use sdag::joint::Level;
 use sdag::my_witness::MY_WITNESSES;
 use sdag::utils::AtomicLock;
 use sdag_wallet_base::Base64KeyExt;
@@ -18,8 +19,11 @@ use WALLET_INFO;
 lazy_static! {
     static ref IS_WITNESSING: AtomicLock = AtomicLock::new();
     static ref EVENT_TIMER: Arc<RwLock<Option<Instant>>> = Arc::new(RwLock::new(None));
-    pub static ref WALLET_PUBK: String = WALLET_INFO._00_address_pubk.to_base64_key();
+    static ref WALLET_PUBK: String = WALLET_INFO._00_address_pubk.to_base64_key();
+    static ref SELF_LEVEL: Arc<RwLock<Level>> = Arc::new(RwLock::new(Level::MINIMUM));
 }
+
+const THRESHOLD_DISTANCE: usize = sdag::config::COUNT_WITNESSES * 2 / 3;
 
 pub fn witness_timer_check() -> Result<Duration> {
     match check_timeout() {
@@ -42,15 +46,25 @@ fn set_timeout(sleep_time_ms: u64) {
     }
 }
 
+fn set_self_level(level: Level) {
+    let mut g = SELF_LEVEL.write().unwrap();
+    if level > *g {
+        *g = level;
+    }
+}
+
 // when check_timeout return None means we need to take action
 // when return Some(duration) means we need to sleep duration for next check
 #[inline]
 fn check_timeout() -> Option<Duration> {
     let g = EVENT_TIMER.read().unwrap();
+
     match *g {
         None => Some(Duration::from_secs(1)),
+
         Some(time) => {
             let now = Instant::now();
+
             if now >= time {
                 None
             } else {
@@ -61,8 +75,6 @@ fn check_timeout() -> Option<Duration> {
 }
 
 pub fn check_and_witness() {
-    use rand::{thread_rng, Rng};
-
     info!("check and witness");
     let _g = match IS_WITNESSING.try_lock() {
         Some(g) => g,
@@ -72,13 +84,39 @@ pub fn check_and_witness() {
         }
     };
 
+    if adjust_witnessing_speed().is_err() {
+        error!("adjust_witnessing_speed failed");
+    };
+}
+
+/// adjust witnessing speed
+fn adjust_witnessing_speed() -> Result<()> {
+    use rand::{thread_rng, Rng};
     let mut rng = thread_rng();
-    let timeout = ((1.0 + rng.gen_range(0.0, 1.0)) * 500 as f32).round() as u64;
+    let time;
+    let self_level = *SELF_LEVEL.read()?;
+    if self_level == Level::MINIMUM {
+        time = (rng.gen_range(0.0, 1.0) * 3_000.0) as u64;
+    } else {
+        let free_joints = SDAG_CACHE.get_free_joints()?;
+        let free_joint_level = sdag::main_chain::find_best_joint(free_joints.iter())?
+            .ok_or_else(|| format_err!("empty best joint among free joints"))?
+            .read()?
+            .get_level();
+        let distance = free_joint_level - self_level;
+        if distance < THRESHOLD_DISTANCE {
+            time = ((THRESHOLD_DISTANCE - distance) * 300) as u64;
+        } else {
+            time = ((THRESHOLD_DISTANCE / distance) * 300) as u64;
+        }
+    }
     info!(
         "scheduling unconditional witnessing in {} ms unless a new unit arrives.",
-        timeout
+        time
     );
-    set_timeout(timeout);
+    set_timeout(time);
+
+    Ok(())
 }
 
 /// witnessing condition:
@@ -140,22 +178,19 @@ fn is_relative_stable(best_joint: &CachedJoint) -> Result<(bool, bool)> {
                 has_normal_joints = true;
             }
         }
-
         // need at least half other witnesses
         if diff_witnesses.len() >= sdag::config::MAJORITY_OF_WITNESSES - 1 {
             break;
         }
-
         best_free_parent = best_free_parent.get_best_parent().read()?;
     }
 
     Ok((true, has_normal_joints))
 }
 
-/// return true if successie witnessing (contains no normal joint)
+/// return true if successive witnessing (contains no normal joint)
 fn is_successive_witnesses(best_joint: &CachedJoint) -> Result<bool> {
     let mut best_free_parent = best_joint.read()?;
-
     let mut diff_witnesses = HashSet::new();
     while !(best_free_parent.is_stable() || best_free_parent.unit.is_genesis_unit()) {
         for author in &best_free_parent.unit.authors {
@@ -169,12 +204,10 @@ fn is_successive_witnesses(best_joint: &CachedJoint) -> Result<bool> {
                 return Ok(false);
             }
         }
-
         // need at least half other witnesses
         if diff_witnesses.len() >= sdag::config::COUNT_WITNESSES - 3 {
             break;
         }
-
         best_free_parent = best_free_parent.get_best_parent().read()?;
     }
     Ok(false)
@@ -183,10 +216,8 @@ fn is_successive_witnesses(best_joint: &CachedJoint) -> Result<bool> {
 /// return true if non witness joint behind min retrievable mci, it is very heavy!!!
 fn is_normal_joint_behind_min_retrievable(free_joints: &[CachedJoint]) -> Result<bool> {
     let min_retrievable_mci = get_min_retrievable_unit()?.read()?.get_mci();
-
     let mut queue = VecDeque::new();
     let mut visited = HashSet::new();
-
     for joint in free_joints {
         queue.push_back(joint.clone());
     }
@@ -194,11 +225,9 @@ fn is_normal_joint_behind_min_retrievable(free_joints: &[CachedJoint]) -> Result
     while let Some(joint) = queue.pop_front() {
         let joint_data = joint.read()?;
         let mci = joint_data.get_mci();
-
         if !visited.insert(joint.key.clone()) || mci <= min_retrievable_mci {
             continue;
         }
-
         for author in &joint_data.unit.authors {
             if !MY_WITNESSES.contains(&author.address)
                 && joint_data.get_sequence() == JointSequence::Good
@@ -206,7 +235,6 @@ fn is_normal_joint_behind_min_retrievable(free_joints: &[CachedJoint]) -> Result
                 return Ok(true);
             }
         }
-
         for p in joint_data.parents.iter() {
             queue.push_back(p.clone());
         }
@@ -219,7 +247,6 @@ fn is_normal_joint_behind_min_retrievable(free_joints: &[CachedJoint]) -> Result
 fn get_min_retrievable_unit() -> Result<CachedJoint> {
     // we can unwrap here because free joints is not empty
     let last_stable_joint = sdag::main_chain::get_last_stable_joint();
-
     match last_stable_joint.read()?.unit.last_ball_unit {
         Some(ref unit) => SDAG_CACHE.get_joint(unit),
         None => Ok(last_stable_joint), // only genesis has no last ball unit
@@ -235,7 +262,6 @@ struct TimeStamp {
 fn witness() -> Result<()> {
     // divide one output into two outputs, to increase witnessing concurrent performance
     // let amount = divide_money(&WALLET_INFO._00_address)?;
-
     let sdag::composer::ParentsAndLastBall {
         parents,
         last_ball,
@@ -288,10 +314,17 @@ fn witness() -> Result<()> {
 
     let joint = sdag::composer::compose_joint(compose_info, &*WALLET_INFO)?;
     let cached_joint = SDAG_CACHE.add_new_joint(joint)?;
+    sdag::validation::validate_ready_joint(cached_joint.clone())?;
     let joint_data = cached_joint.read()?;
-    sdag::validation::validate_ready_joint(cached_joint)?;
-
-    sdag::network::hub::WSS.broadcast_joint(&joint_data)?;
+    let mut max_parent_level = Level::MINIMUM;
+    for parent in joint_data.parents.iter() {
+        let level = parent.read()?.get_level();
+        assert_eq!(level.is_valid(), true);
+        if max_parent_level < level {
+            max_parent_level = level;
+        }
+    }
+    set_self_level(max_parent_level + 1);
 
     Ok(())
 }
