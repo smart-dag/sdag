@@ -100,7 +100,10 @@ fn is_need_witnessing() -> Result<(bool)> {
         return Ok(false);
     }
 
-    let (need_witness, has_normal_joint) = is_relative_stable(&free_joints)?;
+    let best_joint = sdag::main_chain::find_best_joint(free_joints.iter())?
+        .ok_or_else(|| format_err!("empty best joint among free joints"))?;
+
+    let (need_witness, has_normal_joint) = is_relative_stable(&best_joint)?;
 
     if !need_witness {
         return Ok(false);
@@ -110,15 +113,17 @@ fn is_need_witnessing() -> Result<(bool)> {
         return Ok(true);
     }
 
+    if is_successive_witnesses(&best_joint)? {
+        return Ok(false);
+    }
+
     is_normal_joint_behind_min_retrievable(&free_joints)
 }
 
 /// return true if more than 6 different other witnesses from best free joints until stable
 /// return true if has unstable normal joints
-fn is_relative_stable(free_joints: &[CachedJoint]) -> Result<(bool, bool)> {
-    let mut best_free_parent = sdag::main_chain::find_best_joint(free_joints.iter())?
-        .ok_or_else(|| format_err!("empty best joint among free joints"))?
-        .read()?;
+fn is_relative_stable(best_joint: &CachedJoint) -> Result<(bool, bool)> {
+    let mut best_free_parent = best_joint.read()?;
 
     let mut has_normal_joints = false;
 
@@ -145,6 +150,34 @@ fn is_relative_stable(free_joints: &[CachedJoint]) -> Result<(bool, bool)> {
     }
 
     Ok((true, has_normal_joints))
+}
+
+/// return true if successie witnessing (contains no normal joint)
+fn is_successive_witnesses(best_joint: &CachedJoint) -> Result<bool> {
+    let mut best_free_parent = best_joint.read()?;
+
+    let mut diff_witnesses = HashSet::new();
+    while !(best_free_parent.is_stable() || best_free_parent.unit.is_genesis_unit()) {
+        for author in &best_free_parent.unit.authors {
+            if WALLET_INFO._00_address == author.address {
+                return Ok(true);
+            }
+
+            if MY_WITNESSES.contains(&author.address) {
+                diff_witnesses.insert(author.address.clone());
+            } else {
+                return Ok(false);
+            }
+        }
+
+        // need at least half other witnesses
+        if diff_witnesses.len() >= sdag::config::COUNT_WITNESSES - 3 {
+            break;
+        }
+
+        best_free_parent = best_free_parent.get_best_parent().read()?;
+    }
+    Ok(false)
 }
 
 /// return true if non witness joint behind min retrievable mci, it is very heavy!!!
