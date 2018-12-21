@@ -123,6 +123,9 @@ impl SDagCacheInner {
         self.unhandled_joints.contains_key(key)
     }
 
+    pub fn get_known_unhandled_joints(&self) -> usize {
+        self.unhandled_joints.keys().len()
+    }
     /// move a joint from unhandled to normal
     pub fn transfer_joint_to_normal(&mut self, key: &str) {
         if let Some((k, v)) = self.unhandled_joints.remove_entry(key) {
@@ -133,6 +136,10 @@ impl SDagCacheInner {
     /// query if joint is known bad
     pub fn is_known_bad_joint(&self, key: &str) -> bool {
         self.known_bad_joints.contains_key(key)
+    }
+
+    pub fn get_known_bad_joints(&self) -> usize {
+        self.known_bad_joints.keys().len()
     }
 
     /// remove the missing parent entry if the parent is validate good

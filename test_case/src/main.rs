@@ -15,12 +15,15 @@ extern crate sdag_wallet_base;
 extern crate serde;
 #[macro_use]
 extern crate serde_json;
+#[macro_use]
+extern crate lazy_static;
 
 use chrono::{Local, TimeZone};
 use clap::App;
 use failure::ResultExt;
 use may::*;
 use sdag_wallet_base::Base64KeyExt;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use rand::{thread_rng, Rng};
 use std::sync::Arc;
@@ -34,6 +37,10 @@ use sdag::error::Result;
 use sdag::network::wallet::WalletConn;
 
 use self::wallet::WalletInfo;
+
+lazy_static! {
+    pub static ref TRANSANTION_NUM: AtomicUsize = AtomicUsize::new(0);
+}
 
 fn init_log(verbosity: u64) {
     let log_lvl = match verbosity {
@@ -199,6 +206,7 @@ fn send_payment(
         eprintln!("post_joint err={}", e);
         return Err(e);
     }
+
     println!("FROM  : {}", wallet_info._00_address);
     println!("TO    : ");
     for (address, amount) in address_amount {
@@ -212,6 +220,7 @@ fn send_payment(
             .timestamp_millis(sdag::time::now() as i64)
             .naive_local()
     );
+    println!("Total :{}", TRANSANTION_NUM.fetch_add(1, Ordering::SeqCst));
 
     Ok(())
 }
@@ -233,6 +242,7 @@ fn continue_sending(ws: Arc<WalletConn>, wallets_info: &Vec<wallet::WalletInfo>)
         thread::sleep(Duration::from_secs(10));
         eprintln!("{}", e);
     }
+
     Ok(())
 }
 

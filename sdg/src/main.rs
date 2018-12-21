@@ -472,16 +472,55 @@ fn main() -> Result<()> {
     }
 
     //show joint and properties
-    if let Some(show_args) = m.subcommand_matches("show") {
-        if let Some(unit) = show_args.value_of("UNIT") {
-            let resp = ws.get_joint_by_unit_hash(unit)?;
+    if let Some(unit_args) = m.subcommand_matches("unit") {
+        //show the list of free joint
+        if unit_args.values_of("free").is_some() {
+            let units_hash = ws.get_free_joints_list()?;
+
+            for (index, hash) in units_hash.iter().enumerate() {
+                println!("{}. unit -> {}", index + 1, hash);
+            }
+
+            if units_hash.is_empty() {
+                println!("\nthere is no free joints\n");
+            }
+        }
+
+        if unit_args.values_of("bad").is_some() {
+            println!(
+                "\nthe number of bad joints = {}\n",
+                ws.get_bad_joints_list()?
+            );
+        }
+
+        if unit_args.values_of("unhandled").is_some() {
+            println!(
+                "\nthe number of bad joints = {}\n",
+                ws.get_unhandled_joints_list()?
+            );
+        }
+
+        //show joint and properties
+        if let Some(hash) = unit_args.value_of("show") {
+            let resp = ws.get_joint_by_unit_hash(hash)?;
 
             println!("joint = {:#?}", resp.0);
             println!("property = {:#?}", resp.1);
         }
+
+        if let Ok(num) = value_t!(unit_args.value_of("mci"), isize) {
+            let joints = ws.get_joints_by_mci(num)?;
+
+            for (index, joint) in joints.iter().enumerate() {
+                println!("{}. unit -> {}", index + 1, joint.unit.unit);
+            }
+
+            if joints.is_empty() {
+                println!("\nthere is no joints with same mci\n");
+            }
+        }
     }
 
-    //show joint and properties
     if let Some(dump_args) = m.subcommand_matches("dump") {
         if let Some(file) = dump_args.value_of("FILE") {
             use std::fs::File;
@@ -506,6 +545,8 @@ fn main() -> Result<()> {
             // verify the joints
             verify_joints(joints, last_mci)?;
         }
+        return Ok(());
     }
+
     Ok(())
 }

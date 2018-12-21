@@ -84,7 +84,6 @@ subcommands:
                 short: j
                 long: json
 
-
     - net:
         about: Show the hub net connections
 
@@ -98,15 +97,38 @@ subcommands:
                 help: file to save the joints
                 takes_value: true
                 required: true
-
-    - show:
-        about: Show the joint and propeties
+           
+    - unit:
+        about: Show information about unit
         args:
-            - UNIT:
-                help: unit hash
+            - show:
+                help: show some unit information
+                short: s
+                long: show
+                required: false
+                value_names:
+                    - UNIT
                 takes_value: true
-                required: true
-
+            - free:
+                help: show all free jonit unit hash
+                short: f
+                long: free
+            - bad:
+                help: show the number of bad jonits
+                short: b
+                long: bad
+            - unhandled:
+                help: show the number of unhandled jonits
+                short: h 
+                long: unhandled
+            - mci:
+                help: show same mci units 
+                short: m
+                long: mci
+                required: false
+                value_names:
+                    - NUM
+                takes_value: true
 
 
 

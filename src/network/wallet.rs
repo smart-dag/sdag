@@ -142,6 +142,25 @@ impl WalletConn {
         Ok((joint, property))
     }
 
+    //returned free joint list
+    pub fn get_free_joints_list(&self) -> Result<Vec<String>> {
+        let response = self.send_request("get_free_joints_list", &Value::Null)?;
+
+        Ok(serde_json::from_value(response)?)
+    }
+
+    pub fn get_bad_joints_list(&self) -> Result<usize> {
+        let response = self.send_request("get_bad_joints_list", &Value::Null)?;
+
+        Ok(serde_json::from_value(response)?)
+    }
+
+    pub fn get_unhandled_joints_list(&self) -> Result<usize> {
+        let response = self.send_request("get_unhandled_joints_list", &Value::Null)?;
+
+        Ok(serde_json::from_value(response)?)
+    }
+
     //returned joints by mci, -1 would return all free joints
     pub fn get_joints_by_mci(&self, mci: isize) -> Result<Vec<Joint>> {
         let mut response = self.send_request("get_joints_by_mci", &serde_json::to_value(mci)?)?;

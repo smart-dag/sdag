@@ -351,6 +351,9 @@ impl Server<HubData> for HubData {
             "get_network_info" => ws.on_get_network_info(params)?,
             "get_joints_by_mci" => ws.on_get_joints_by_mci(params)?,
             "get_joint_by_unit_hash" => ws.on_get_joint_by_unit_hash(params)?,
+            "get_free_joints_list" => ws.get_free_joints_list(params)?,
+            "get_bad_joints_list" => ws.get_bad_joints_list(params)?,
+            "get_unhandled_joints_list" => ws.get_unhandled_joints_list(params)?,
             command => bail!("on_request unknown command: {}", command),
         };
         Ok(response)
@@ -519,6 +522,28 @@ impl HubConn {
                 Ok(json!({ "joint_not_found": unit }))
             }
         }
+    }
+
+    fn get_free_joints_list(&self, _param: Value) -> Result<Value> {
+        match SDAG_CACHE.get_free_joints() {
+            Ok(joints) => Ok(json!(joints
+                .iter()
+                .map(|v| v.key.to_string())
+                .collect::<Vec<String>>())),
+
+            Err(e) => {
+                error!(" err={}", e);
+                bail!("{}", e);
+            }
+        }
+    }
+
+    fn get_bad_joints_list(&self, _param: Value) -> Result<Value> {
+        Ok(json!(SDAG_CACHE.get_bad_joints()))
+    }
+
+    fn get_unhandled_joints_list(&self, _param: Value) -> Result<Value> {
+        Ok(json!(SDAG_CACHE.get_unhandled_joints()))
     }
 
     fn on_joint(&self, param: Value) -> Result<()> {

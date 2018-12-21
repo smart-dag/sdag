@@ -124,6 +124,14 @@ impl SDagCache {
         self.joints.read().unwrap().get_free_joints()
     }
 
+    pub fn get_bad_joints(&self) -> usize {
+        self.joints.read().unwrap().get_known_bad_joints()
+    }
+
+    pub fn get_unhandled_joints(&self) -> usize {
+        self.joints.read().unwrap().get_known_unhandled_joints()
+    }
+
     /// get all unstable joints
     pub fn get_unstable_joints(&self) -> Result<Vec<CachedJoint>> {
         let mut queue = VecDeque::new();
