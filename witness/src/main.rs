@@ -84,7 +84,7 @@ fn register_event_handlers() {
     use sdag::validation::NewJointEvent;
 
     // hook the actual handler here
-    NewJointEvent::add_handler(move |_v| t!(witness::check_and_witness()));
+    NewJointEvent::add_handler(move |_v| witness::check_and_witness());
 }
 
 fn init_log() {
@@ -136,8 +136,7 @@ fn connect_to_remote() -> Result<()> {
         }
     }
 
-    witness::check_and_witness()?;
-
+    witness::check_and_witness();
     Ok(())
 }
 

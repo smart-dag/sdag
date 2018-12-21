@@ -60,7 +60,7 @@ fn check_timeout() -> Option<Duration> {
     }
 }
 
-pub fn check_and_witness() -> Result<()> {
+pub fn check_and_witness() {
     use rand::{thread_rng, Rng};
 
     info!("check and witness");
@@ -68,7 +68,7 @@ pub fn check_and_witness() -> Result<()> {
         Some(g) => g,
         None => {
             info!("witnessing under way");
-            return Ok(());
+            return;
         }
     };
 
@@ -79,8 +79,6 @@ pub fn check_and_witness() -> Result<()> {
         timeout
     );
     set_timeout(timeout);
-
-    Ok(())
 }
 
 /// witnessing condition:
