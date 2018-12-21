@@ -79,7 +79,13 @@ impl sdag::signature::Signer for WalletInfo {
 }
 
 // register global event handlers
-fn register_event_handlers() {}
+fn register_event_handlers() {
+    use sdag::utils::event::Event;
+    use sdag::validation::NewJointEvent;
+
+    // hook the actual handler here
+    NewJointEvent::add_handler(move |_v| t!(witness::check_and_witness()));
+}
 
 fn init_log() {
     // TODO: need to implement async logs

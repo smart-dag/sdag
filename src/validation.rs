@@ -13,6 +13,16 @@ use serde_json::Value;
 use signature;
 use spec::{Definition, Unit};
 
+//---------------------------------------------------------------------------------------
+// MciStableEvent
+//---------------------------------------------------------------------------------------
+pub struct NewJointEvent;
+impl_event!(NewJointEvent);
+
+//---------------------------------------------------------------------------------------
+// Global functions
+//---------------------------------------------------------------------------------------
+
 /// validate unit
 pub fn validate_unit_hash(unit: &Unit) -> Result<()> {
     // check content_hash or unit_hash first!
@@ -68,6 +78,8 @@ pub fn validate_ready_joint(joint: CachedJoint) -> Result<()> {
     if joint_data.get_sequence() == JointSequence::Good {
         try_go!(|| ::network::hub::WSS.broadcast_joint(joint_data));
     }
+
+    ::utils::event::emit_event(NewJointEvent);
 
     Ok(())
 }
