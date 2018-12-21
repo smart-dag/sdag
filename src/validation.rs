@@ -8,6 +8,7 @@ use failure::ResultExt;
 use joint::{Joint, JointSequence, Level};
 use main_chain;
 use object_hash;
+use rcu_cell::RcuReader;
 use serde::Deserialize;
 use serde_json::Value;
 use signature;
@@ -16,7 +17,10 @@ use spec::{Definition, Unit};
 //---------------------------------------------------------------------------------------
 // MciStableEvent
 //---------------------------------------------------------------------------------------
-pub struct NewJointEvent;
+pub struct NewJointEvent {
+    pub joint: RcuReader<JointData>,
+}
+
 impl_event!(NewJointEvent);
 
 //---------------------------------------------------------------------------------------
@@ -74,12 +78,7 @@ pub fn validate_ready_joint(joint: CachedJoint) -> Result<()> {
         main_chain::MAIN_CHAIN_WORKER.push_ready_joint(joint)?;
     }
 
-    // broadcast the good joint
-    if joint_data.get_sequence() == JointSequence::Good {
-        try_go!(|| ::network::hub::WSS.broadcast_joint(joint_data));
-    }
-
-    ::utils::event::emit_event(NewJointEvent);
+    ::utils::event::emit_event(NewJointEvent { joint: joint_data });
 
     Ok(())
 }

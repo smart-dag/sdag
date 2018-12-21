@@ -28,10 +28,10 @@ pub type Result<T> = ::std::result::Result<T, failure::Error>;
 lazy_static! {
     // initialize consume too much memory, init it in thread context
     static ref KEY_FACTORY: KeyFactory =
-        ::std::thread::spawn(|| KeyFactory::new()).join().unwrap();
+        ::std::thread::spawn(KeyFactory::new).join().unwrap();
 
     static ref SECP256K1: secp256k1::Secp256k1<secp256k1::All> =
-        ::std::thread::spawn(|| secp256k1::Secp256k1::new()).join().unwrap();
+        ::std::thread::spawn(secp256k1::Secp256k1::new).join().unwrap();
 }
 
 pub trait Base64KeyExt: Sized {
@@ -90,7 +90,7 @@ pub fn wallet_address_prvkey(
             index: is_change as u32,
         },
     )?;
-    Ok(KEY_FACTORY.private_child(&prvk, ChildNumber::Normal { index: index })?)
+    Ok(KEY_FACTORY.private_child(&prvk, ChildNumber::Normal { index })?)
 }
 
 /// get wallet pubkey for an address
@@ -106,7 +106,7 @@ pub fn wallet_address_pubkey(
             index: is_change as u32,
         },
     )?;
-    Ok(KEY_FACTORY.public_child(&pubk, ChildNumber::Normal { index: index })?)
+    Ok(KEY_FACTORY.public_child(&pubk, ChildNumber::Normal { index })?)
 }
 
 /// get device address

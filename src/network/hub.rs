@@ -19,7 +19,6 @@ use may::coroutine;
 use may::net::TcpStream;
 use may::sync::RwLock;
 use object_hash;
-use rcu_cell::RcuReader;
 use serde_json::{self, Value};
 use signature;
 use tungstenite::client::client;
@@ -295,7 +294,13 @@ impl WsConnections {
         None
     }
 
-    pub fn broadcast_joint(&self, joint: RcuReader<JointData>) -> Result<()> {
+    pub fn broadcast_joint(&self, joint: &Joint) -> Result<()> {
+        // disable broadcast during catchup
+        let _g = match IS_CATCHING_UP.try_lock() {
+            Some(g) => g,
+            None => return Ok(()),
+        };
+
         for c in &*self.outbound.read().unwrap() {
             // we should check if the outbound is subscribed
             // ref issue #28
