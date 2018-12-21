@@ -73,45 +73,9 @@ pub fn check_and_witness() -> Result<()> {
         }
     };
 
-    if is_my_witnessing_unstable(&WALLET_INFO._00_address)? {
-        info!("my units is not stable");
-        return Ok(());
-    }
-
     adjust_witnessing_speed(&WALLET_INFO._00_address)?;
 
     Ok(())
-}
-
-/// check if unstable joints have my witnessing
-fn is_my_witnessing_unstable(my_address: &str) -> Result<bool> {
-    let free_joints = SDAG_CACHE.get_free_joints()?;
-    let mut queue = VecDeque::new();
-    let mut visited = HashSet::new();
-
-    for joint in free_joints {
-        queue.push_back(joint);
-    }
-
-    while let Some(joint) = queue.pop_front() {
-        let joint_data = joint.read()?;
-
-        if !visited.insert(joint.key.clone()) || joint_data.is_stable() {
-            continue;
-        }
-
-        for author in &joint_data.unit.authors {
-            if &author.address == my_address {
-                return Ok(true);
-            }
-        }
-
-        for p in joint_data.parents.iter() {
-            queue.push_back(p.clone());
-        }
-    }
-
-    Ok(false)
 }
 
 /// adjust witnessing speed: increase speed if (last_mci - my_last_mci) > 8

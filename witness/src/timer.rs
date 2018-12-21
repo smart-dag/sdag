@@ -38,7 +38,7 @@ pub fn start_global_timers() {
 
     // witness compose and send joint
     go!(move || loop {
-        info!("witness_broadcast_joint");
+        info!("witness_timer_check");
         let dur = witness::witness_timer_check().unwrap_or_else(|e| {
             error!("witness timer err={}", e);
             Duration::from_secs(1)
