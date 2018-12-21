@@ -46,21 +46,6 @@ impl CachedJoint {
 }
 
 //---------------------------------------------------------------------------------------
-// JointEvents
-//---------------------------------------------------------------------------------------
-pub struct ReadyJointEvent {
-    pub joint: CachedJoint,
-}
-
-impl_event!(ReadyJointEvent);
-
-pub struct NormalizeEvent {
-    pub joint: CachedJoint,
-}
-
-impl_event!(NormalizeEvent);
-
-//---------------------------------------------------------------------------------------
 // SDagCache
 //---------------------------------------------------------------------------------------
 // this is the unit mem cache

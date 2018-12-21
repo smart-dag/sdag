@@ -29,8 +29,8 @@ use sdag::cache::SDAG_CACHE;
 use sdag::error::Result;
 use sdag::joint::{Joint, JointSequence};
 use sdag::network::wallet::WalletConn;
+use sdag::try_go;
 use sdag::validation;
-use sdag::{t, try_go};
 use sdag_wallet_base::{Base64KeyExt, ExtendedPrivKey, ExtendedPubKey, Mnemonic};
 
 struct WalletInfo {
@@ -345,7 +345,6 @@ fn verify_joints(joints: Vec<Joint>, last_mci: usize) -> Result<()> {
 
 // register global event handlers
 fn register_event_handlers(last_mci: usize, sem: Arc<Semphore>) {
-    use sdag::cache::ReadyJointEvent;
     use sdag::main_chain::MciStableEvent;
     use sdag::utils::event::Event;
 
@@ -354,7 +353,6 @@ fn register_event_handlers(last_mci: usize, sem: Arc<Semphore>) {
             sem.post();
         }
     });
-    ReadyJointEvent::add_handler(|j| t!(validation::validate_ready_joint(j.joint.clone())));
 }
 
 fn main() -> Result<()> {

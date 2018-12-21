@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 
-use cache::{CachedData, CachedJoint, HashKey, JointData, ReadyJointEvent};
+use cache::{CachedData, CachedJoint, HashKey, JointData};
 use error::Result;
 use joint::JointSequence;
 use rcu_cell::RcuCell;
@@ -148,7 +148,7 @@ impl SDagCacheInner {
                 child_data.add_parent(joint.clone());
                 if !child_data.is_missing_parent() {
                     // trigger the child ready here, start validate, save and so on
-                    ::utils::event::emit_event(ReadyJointEvent { joint: child });
+                    try_go!(|| ::validation::validate_ready_joint(child));
                 }
             }
         }

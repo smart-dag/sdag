@@ -79,15 +79,7 @@ impl sdag::signature::Signer for WalletInfo {
 }
 
 // register global event handlers
-fn register_event_handlers() {
-    use sdag::cache::ReadyJointEvent;
-    use sdag::cache::NormalizeEvent;
-    use sdag::utils::event::Event;
-
-    ReadyJointEvent::add_handler(|j| t!(sdag::validation::validate_ready_joint(j.joint.clone())));
-    // hook the actual handler here
-    NormalizeEvent::add_handler(move |_v| t!(witness::check_and_witness()));
-}
+fn register_event_handlers() {}
 
 fn init_log() {
     // TODO: need to implement async logs
@@ -147,15 +139,10 @@ fn network_cleanup() {
     network::hub::WSS.close_all();
 }
 
-fn check_witness(address: &String) -> Result<()> {
-    if sdag::my_witness::MY_WITNESSES.contains(address) {
-        return Ok(());
-    }
-    bail!("address {} is not witness");
-}
-
 fn main() -> Result<()> {
-    check_witness(&WALLET_INFO._00_address)?;
+    if !sdag::my_witness::MY_WITNESSES.contains(&WALLET_INFO._00_address) {
+        bail!("address {} is not witness");
+    }
 
     init()?;
 

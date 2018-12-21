@@ -1,5 +1,6 @@
 extern crate sdag_wallet_base;
 
+use std::collections::{HashSet, VecDeque};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -13,7 +14,6 @@ use sdag::my_witness::MY_WITNESSES;
 use sdag::utils::AtomicLock;
 use sdag_wallet_base::Base64KeyExt;
 use serde_json;
-use std::collections::{HashSet, VecDeque};
 use WALLET_INFO;
 
 lazy_static! {
@@ -255,8 +255,8 @@ fn witness() -> Result<()> {
         BUSINESS_CACHE.get_inputs_for_amount(&WALLET_INFO._00_address, 1_000 as u64, false)?;
 
     let light_props = sdag::light::LightProps {
-        last_ball: last_ball,
-        last_ball_unit: last_ball_unit,
+        last_ball,
+        last_ball_unit,
         parent_units: parents,
         witness_list_unit: sdag::config::get_genesis_unit(),
         has_definition: SDAG_CACHE
@@ -271,7 +271,7 @@ fn witness() -> Result<()> {
         inputs: sdag::light::InputsResponse { inputs, amount },
         transaction_amount: 0,
         text_message: None,
-        light_props: light_props,
+        light_props,
         pubk: WALLET_PUBK.clone(),
     };
 
@@ -295,26 +295,8 @@ fn witness() -> Result<()> {
     }
 
     let joint = sdag::composer::compose_joint(compose_info, &*WALLET_INFO)?;
-
-    let cached_joint = match SDAG_CACHE.add_new_joint(joint.clone()) {
-        Ok(j) => j,
-        Err(e) => {
-            warn!("add_new_joint: {}", e);
-            return Ok(());
-        }
-    };
-    let joint_data = cached_joint.read().unwrap();
-    if joint_data.unit.content_hash.is_some() {
-        joint_data.set_sequence(JointSequence::FinalBad);
-    }
-
-    if joint_data.is_missing_parent()
-        || sdag::validation::validate_ready_joint(cached_joint.clone()).is_err()
-    {
-        bail!("compose new joint is invalid, joint is [{:?}]", &joint);
-    }
-
-    sdag::network::hub::WSS.broadcast_joint(cached_joint)?;
+    let cached_joint = SDAG_CACHE.add_new_joint(joint)?;
+    sdag::validation::validate_ready_joint(cached_joint)?;
 
     Ok(())
 }

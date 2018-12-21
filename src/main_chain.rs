@@ -460,7 +460,7 @@ pub fn is_stable_in_later_joints(
     }
     let max_alt_level =
         calc_max_alt_level_included_by_later_joints(alt_branches_roots, &later_joints)?
-            .unwrap_or(best_parent.get_level());
+            .unwrap_or_else(|| best_parent.get_level());
 
     let min_wl = calc_min_wl_included_by_later_joints(earlier_joint, &later_joints)?;
 

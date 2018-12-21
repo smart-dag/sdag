@@ -223,14 +223,17 @@ impl JointData {
         self.props.read().unwrap().is_stable
     }
 
-    pub fn wait_stable(&self) -> Result<()> {
+    pub fn wait_stable(&self) {
         use std::time::Duration;
-        let timeout = !self.stable_sem.wait_timeout(Duration::from_secs(1));
-        self.stable_sem.post();
-        if timeout {
-            bail!("wait stable timeout! unit={}", self.unit.unit);
+        loop {
+            let timeout = !self.stable_sem.wait_timeout(Duration::from_secs(1));
+            self.stable_sem.post();
+            if timeout {
+                error!("wait stable timeout! unit={}", self.unit.unit);
+            } else {
+                return;
+            }
         }
-        Ok(())
     }
 
     pub fn set_stable(&self) {

@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use super::network_base::{Sender, Server, WsConnection};
 use business::BUSINESS_CACHE;
-use cache::{CachedJoint, JointData, SDAG_CACHE};
+use cache::{JointData, SDAG_CACHE};
 use catchup;
 use composer::*;
 use config;
@@ -19,6 +19,7 @@ use may::coroutine;
 use may::net::TcpStream;
 use may::sync::RwLock;
 use object_hash;
+use rcu_cell::RcuReader;
 use serde_json::{self, Value};
 use signature;
 use tungstenite::client::client;
@@ -294,33 +295,16 @@ impl WsConnections {
         None
     }
 
-    #[allow(dead_code)]
-    fn forward_joint(&self, cur_ws: &HubConn, joint: &Joint) -> Result<()> {
-        for c in &*self.outbound.read().unwrap() {
-            if c.is_subscribed() && !c.conn_eq(cur_ws) {
-                c.send_joint(joint)?;
-            }
-        }
-
-        for c in &*self.inbound.read().unwrap() {
-            if c.is_subscribed() && !c.conn_eq(cur_ws) {
-                c.send_joint(joint)?;
-            }
-        }
-        Ok(())
-    }
-
-    pub fn broadcast_joint(&self, joint: CachedJoint) -> Result<()> {
-        let joint = &*joint.read()?;
+    pub fn broadcast_joint(&self, joint: RcuReader<JointData>) -> Result<()> {
         for c in &*self.outbound.read().unwrap() {
             // we should check if the outbound is subscribed
             // ref issue #28
-            c.send_joint(joint)?;
+            c.send_joint(&joint)?;
         }
 
         for c in &*self.inbound.read().unwrap() {
             if c.is_subscribed() {
-                c.send_joint(joint)?;
+                c.send_joint(&joint)?;
             }
         }
         Ok(())
@@ -1010,8 +994,6 @@ impl HubConn {
         // check content_hash or unit_hash first!
         validation::validate_unit_hash(&joint.unit)?;
 
-        let ball = joint.ball.clone();
-
         // check if unit is in work, when g is dropped unlock the unit
         let g = UNIT_IN_WORK.try_lock(vec![joint.unit.unit.to_owned()]);
         if g.is_none() {
@@ -1036,8 +1018,8 @@ impl HubConn {
         }
 
         // trigger catchup
-        if let Some(ball) = ball {
-            if !SDAG_CACHE.is_ball_in_hash_tree(&ball) {
+        if let Some(ball) = &joint_data.ball {
+            if !SDAG_CACHE.is_ball_in_hash_tree(ball) {
                 // need to catchup and keep the joint in unhandled till timeout
                 let ws = WSS.get_ws(self);
                 try_go!(move || {
@@ -1547,7 +1529,7 @@ fn clear_ball_after_min_retrievable_mci(joint_data: &JointData) -> Result<Joint>
     if joint_data.get_mci()
         >= SDAG_CACHE
             .get_last_ball_mci_of_mci(::main_chain::get_last_stable_mci())
-            .unwrap_or(Level::default())
+            .unwrap_or(Level::INVALID)
     {
         joint.ball = None;
         joint.skiplist_units = Vec::new();

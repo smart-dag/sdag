@@ -60,12 +60,13 @@ pub fn validate_ready_joint(joint: CachedJoint) -> Result<()> {
         validate_messages(&joint_data);
     }
 
-    ::utils::event::emit_event(::cache::NormalizeEvent {
-        joint: joint.clone(),
-    });
-
     if joint_data.is_min_wl_increased() {
         main_chain::MAIN_CHAIN_WORKER.push_ready_joint(joint)?;
+    }
+
+    // broadcast the good joint
+    if joint_data.get_sequence() == JointSequence::Good {
+        try_go!(|| ::network::hub::WSS.broadcast_joint(joint_data));
     }
 
     Ok(())
@@ -428,7 +429,7 @@ fn validate_parents(joint: &JointData) -> Result<()> {
     }
 
     // Last ball may not stable in our view, need to wait until it got stable
-    last_ball_joint.read()?.wait_stable()?;
+    last_ball_joint.read()?.wait_stable();
 
     let last_ball_joint_data = last_ball_joint.read()?;
     // last_ball_unit is on main chain
