@@ -20,7 +20,6 @@ use may::net::TcpStream;
 use may::sync::RwLock;
 use object_hash;
 use serde_json::{self, Value};
-use signature;
 use tungstenite::client::client;
 use tungstenite::handshake::client::Request;
 use tungstenite::protocol::Role;
@@ -28,71 +27,9 @@ use url::Url;
 use utils::{AtomicLock, FifoCache, MapLock};
 use validation;
 
-#[derive(Serialize, Deserialize)]
-pub struct HubNetState {
-    in_bounds: Vec<String>,
-    out_bounds: Vec<String>,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct Login {
-    pub challenge: String,
-    pub pubkey: String,
-    #[serde(skip_serializing)]
-    pub signature: String,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct TempPubkey {
-    pub pubkey: String,
-    pub temp_pubkey: String,
-    #[serde(skip_serializing)]
-    pub signature: String,
-}
-
-#[derive(Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum DeviceMessage {
-    Login(Login),
-    TempPubkey(TempPubkey),
-}
-
-impl DeviceMessage {
-    // prefix device addresses with 0 to avoid confusion with payment addresses
-    // Note that 0 is not a member of base32 alphabet, which makes device addresses easily distinguishable from payment addresses
-    // but still selectable by double-click.  Stripping the leading 0 will not produce a payment address that the device owner knows a private key for,
-    // because payment address is derived by c-hashing the definition object, while device address is produced from raw public key.
-    fn get_device_address(&self) -> Result<String> {
-        let mut address = match *self {
-            DeviceMessage::Login(ref login) => object_hash::get_chash(&login.pubkey)?,
-            DeviceMessage::TempPubkey(ref temp_pubkey) => {
-                object_hash::get_chash(&temp_pubkey.pubkey)?
-            }
-        };
-
-        address.insert(0, '0');
-        Ok(address)
-    }
-
-    fn get_device_message_hash_to_sign(&self) -> Vec<u8> {
-        use sha2::{Digest, Sha256};
-
-        let source_string = ::obj_ser::to_string(self).expect("DeviceMessage to string failed");
-        Sha256::digest(source_string.as_bytes()).to_vec()
-    }
-}
-
-pub struct HubData {
-    // indicate if this connection is a subscribed peer
-    is_subscribed: AtomicBool,
-    is_source: AtomicBool,
-    is_inbound: AtomicBool,
-    is_login_completed: AtomicBool,
-    challenge: ArcCell<String>,
-    device_address: ArcCell<Option<String>>,
-}
-
-pub type HubConn = WsConnection<HubData>;
+//---------------------------------------------------------------------------------------
+// Global Data
+//---------------------------------------------------------------------------------------
 
 // global data that record the internal state
 lazy_static! {
@@ -102,51 +39,22 @@ lazy_static! {
     static ref UNIT_IN_WORK: MapLock<String> = MapLock::new();
     static ref JOINT_IN_REQ: MapLock<String> = MapLock::new();
     static ref IS_CATCHING_UP: AtomicLock = AtomicLock::new();
-    static ref CHALLENGE_ID: String = object_hash::gen_random_string(30);
+    static ref HUB_ID: String = object_hash::gen_random_string(30);
     static ref BAD_CONNECTION: FifoCache<String, ()> = FifoCache::with_capacity(10);
 }
 
-fn init_connection(ws: &Arc<HubConn>) -> Result<()> {
-    use rand::{thread_rng, Rng};
-
-    // wait for some time for server ready
-    coroutine::sleep(Duration::from_millis(1));
-
-    ws.send_version()?;
-    ws.send_subscribe()?;
-    ws.send_hub_challenge()?;
-
-    let mut rng = thread_rng();
-    let n: u64 = rng.gen_range(0, 1000);
-    let ws_c = Arc::downgrade(ws);
-
-    // start the heartbeat timer for each connection
-    go!(move || loop {
-        coroutine::sleep(Duration::from_millis(3000 + n));
-        let ws = match ws_c.upgrade() {
-            Some(ws) => ws,
-            None => return,
-        };
-        if ws.get_last_recv_tm().elapsed() < Duration::from_secs(5) {
-            continue;
-        }
-        // heartbeat failed so just close the connection
-        let rsp = ws.send_heartbeat();
-        if rsp.is_err() {
-            error!("heartbeat err= {}", rsp.unwrap_err());
-            ws.close();
-            return;
-        }
-    });
-
-    Ok(())
+//---------------------------------------------------------------------------------------
+// HubNetState
+//---------------------------------------------------------------------------------------
+#[derive(Serialize, Deserialize)]
+pub struct HubNetState {
+    in_bounds: Vec<String>,
+    out_bounds: Vec<String>,
 }
 
-fn add_peer_host(_bound: Arc<HubConn>) -> Result<()> {
-    // TODO: impl save peer host to database
-    Ok(())
-}
-
+//---------------------------------------------------------------------------------------
+// WsConnections
+//---------------------------------------------------------------------------------------
 // global request has no specific ws connections, just find a proper one should be fine
 pub struct WsConnections {
     inbound: RwLock<Vec<Arc<HubConn>>>,
@@ -250,10 +158,10 @@ impl WsConnections {
 
     fn get_peers_from_remote(&self) -> Vec<String> {
         let mut peers: Vec<String> = Vec::new();
-        let challenge = Value::from(CHALLENGE_ID.as_str());
+        let hub_id = Value::from(HUB_ID.as_str());
         let out_bound_peers = self.outbound.read().unwrap().to_vec();
         for out_bound_peer in out_bound_peers {
-            if let Ok(value) = out_bound_peer.send_request("get_peers", &challenge) {
+            if let Ok(value) = out_bound_peer.send_request("get_peers", &hub_id) {
                 if let Ok(mut tmp) = serde_json::from_value(value) {
                     peers.append(&mut tmp);
                 }
@@ -262,7 +170,7 @@ impl WsConnections {
 
         let in_bound_peers = self.inbound.read().unwrap().to_vec();
         for in_bound_peer in in_bound_peers {
-            if let Ok(value) = in_bound_peer.send_request("get_peers", &challenge) {
+            if let Ok(value) = in_bound_peer.send_request("get_peers", &hub_id) {
                 if let Ok(mut tmp) = serde_json::from_value(value) {
                     peers.append(&mut tmp);
                 }
@@ -323,13 +231,13 @@ impl WsConnections {
         Ok(())
     }
 
-    pub fn get_outbound_peers(&self, challenge: &str) -> Vec<String> {
-        // filter out the connection with the same challenge
+    pub fn get_outbound_peers(&self, hub_id: &str) -> Vec<String> {
+        // filter out the connection with the same hub_id
         self.outbound
             .read()
             .unwrap()
             .iter()
-            .filter(|c| c.get_challenge() != challenge)
+            .filter(|c| c.get_peer_id() != hub_id)
             .map(|c| c.get_peer().to_owned())
             .collect()
     }
@@ -375,70 +283,20 @@ impl WsConnections {
     }
 }
 
-fn get_unconnected_peers_in_config() -> Vec<String> {
-    config::get_remote_hub_url()
-        .into_iter()
-        .filter(|peer| !WSS.contains(peer))
-        .collect::<Vec<_>>()
+//---------------------------------------------------------------------------------------
+// HubConn
+//---------------------------------------------------------------------------------------
+
+pub struct HubData {
+    // indicate if this connection is a subscribed peer
+    is_subscribed: AtomicBool,
+    is_source: AtomicBool,
+    is_inbound: AtomicBool,
+    peer_id: ArcCell<String>,
+    device_address: ArcCell<Option<String>>,
 }
 
-fn get_unconnected_peers_in_db() -> Vec<String> {
-    // TODO: impl
-    Vec::new()
-}
-
-pub fn get_unconnected_remote_peers() -> Vec<String> {
-    WSS.get_peers_from_remote()
-        .into_iter()
-        .filter(|peer| !WSS.contains(peer))
-        .collect::<Vec<_>>()
-}
-
-pub fn auto_connection() {
-    let mut counts = WSS.get_needed_outbound_peers();
-    if counts == 0 {
-        return;
-    }
-
-    let peers = get_unconnected_peers_in_config();
-    for peer in peers {
-        if BAD_CONNECTION.get(&peer).is_some() {
-            continue;
-        }
-        if create_outbound_conn(peer).is_ok() {
-            counts -= 1;
-            if counts == 0 {
-                return;
-            }
-        }
-    }
-
-    let peers = get_unconnected_remote_peers();
-    for peer in peers {
-        if BAD_CONNECTION.get(&peer).is_some() {
-            continue;
-        }
-        if create_outbound_conn(peer).is_ok() {
-            counts -= 1;
-            if counts == 0 {
-                return;
-            }
-        }
-    }
-
-    let peers = get_unconnected_peers_in_db();
-    for peer in peers {
-        if BAD_CONNECTION.get(&peer).is_some() {
-            continue;
-        }
-        if create_outbound_conn(peer).is_ok() {
-            counts -= 1;
-            if counts == 0 {
-                return;
-            }
-        }
-    }
-}
+pub type HubConn = WsConnection<HubData>;
 
 impl Default for HubData {
     fn default() -> Self {
@@ -446,8 +304,7 @@ impl Default for HubData {
             is_subscribed: AtomicBool::new(false),
             is_source: AtomicBool::new(false),
             is_inbound: AtomicBool::new(false),
-            is_login_completed: AtomicBool::new(false),
-            challenge: ArcCell::new(Arc::new("unknown".to_owned())),
+            peer_id: ArcCell::new(Arc::new("unknown".to_owned())),
             device_address: ArcCell::new(Arc::new(None)),
         }
     }
@@ -457,7 +314,7 @@ impl Server<HubData> for HubData {
     fn on_message(ws: Arc<HubConn>, subject: String, body: Value) -> Result<()> {
         match subject.as_str() {
             "version" => ws.on_version(body)?,
-            "hub/challenge" => ws.on_hub_challenge(body)?,
+            "hub/challenge" => ws.on_peer_hub_id(body)?,
             "free_joints_end" => {} // not handled
             "error" => error!("receive error: {}", body),
             "info" => info!("receive info: {}", body),
@@ -465,7 +322,6 @@ impl Server<HubData> for HubData {
             "joint" => ws.on_joint(body)?,
             "refresh" => ws.on_refresh(body)?,
             "light/new_address_to_watch" => ws.on_new_address_to_watch(body)?,
-            "hub/login" => ws.on_hub_login(body)?,
             subject => bail!(
                 "on_message unknown subject: {} body {}",
                 subject,
@@ -482,7 +338,6 @@ impl Server<HubData> for HubData {
             "get_joint" => ws.on_get_joint(params)?,
             "catchup" => ws.on_catchup(params)?,
             "get_hash_tree" => ws.on_get_hash_tree(params)?,
-            "hub/temp_pubkey" => ws.on_hub_temp_pubkey(params)?,
             "get_peers" => ws.on_get_peers(params)?,
             "get_witnesses" => ws.on_get_witnesses(params)?,
             "post_joint" => ws.on_post_joint(params)?,
@@ -538,24 +393,14 @@ impl HubConn {
         data.is_inbound.store(true, Ordering::Relaxed);
     }
 
-    pub fn is_login_completed(&self) -> bool {
+    pub fn get_peer_id(&self) -> String {
         let data = self.get_data();
-        data.is_login_completed.load(Ordering::Relaxed)
+        data.peer_id.get().to_string()
     }
 
-    pub fn set_login_completed(&self) {
+    pub fn set_peer_id(&self, peer_id: &str) {
         let data = self.get_data();
-        data.is_login_completed.store(true, Ordering::Relaxed);
-    }
-
-    pub fn get_challenge(&self) -> String {
-        let data = self.get_data();
-        data.challenge.get().to_string()
-    }
-
-    pub fn set_challenge(&self, challenge: &str) {
-        let data = self.get_data();
-        data.challenge.set(Arc::new(challenge.to_owned()));
+        data.peer_id.set(Arc::new(peer_id.to_owned()));
     }
 
     pub fn get_device_address(&self) -> Arc<Option<String>> {
@@ -635,7 +480,7 @@ impl HubConn {
         let subscription_id = param["subscription_id"]
             .as_str()
             .ok_or_else(|| format_err!("no subscription_id"))?;
-        if subscription_id == *CHALLENGE_ID {
+        if subscription_id == *HUB_ID {
             self.close();
             return Err(format_err!("self-connect"));
         }
@@ -655,16 +500,11 @@ impl HubConn {
         Ok(Value::from("subscribed"))
     }
 
-    fn on_hub_challenge(&self, param: Value) -> Result<()> {
-        // this is hub, we do nothing here
-        // only wallet would save the challenge
-        // for next login and match
-        info!("peer is a hub, challenge = {}", param);
-        let challenge = param
-            .as_str()
-            .ok_or_else(|| format_err!("no challenge id"))?;
-        // we save the peer's challenge to distingue who it is
-        self.set_challenge(challenge);
+    fn on_peer_hub_id(&self, param: Value) -> Result<()> {
+        info!("peer is a hub, peer_id = {}", param);
+        let peer_id = param.as_str().ok_or_else(|| format_err!("no peer id"))?;
+        // we save the peer's hub id to distingue who it is
+        self.set_peer_id(peer_id);
         Ok(())
     }
 
@@ -774,8 +614,8 @@ impl HubConn {
     }
 
     fn on_get_peers(&self, param: Value) -> Result<Value> {
-        let challenge = param.as_str();
-        let peers = WSS.get_outbound_peers(challenge.unwrap_or("unknown"));
+        let peer_id = param.as_str();
+        let peers = WSS.get_outbound_peers(peer_id.unwrap_or("unknown"));
         Ok(serde_json::to_value(peers)?)
     }
 
@@ -820,121 +660,6 @@ impl HubConn {
         //     &units,
         // )?)?)
         Ok(json![null])
-    }
-
-    fn on_hub_login(&self, body: Value) -> Result<()> {
-        match serde_json::from_value::<DeviceMessage>(body) {
-            Err(e) => {
-                error!("hub_login: serde err= {}", e);
-                return self.send_error(Value::from("no login params"));
-            }
-            Ok(device_message) => {
-                if let DeviceMessage::Login(ref login) = &device_message {
-                    if login.challenge != *CHALLENGE_ID {
-                        return self.send_error(Value::from("wrong challenge"));
-                    }
-
-                    if login.pubkey.len() != ::config::PUBKEY_LENGTH {
-                        return self.send_error(Value::from("wrong pubkey length"));
-                    }
-
-                    if login.signature.len() != ::config::SIG_LENGTH {
-                        return self.send_error(Value::from("wrong signature length"));
-                    };
-
-                    if signature::verify(
-                        &device_message.get_device_message_hash_to_sign(),
-                        &login.signature,
-                        &login.pubkey,
-                    )
-                    .is_err()
-                    {
-                        return self.send_error(Value::from("wrong signature"));
-                    }
-
-                    let device_address = device_message.get_device_address()?;
-                    self.set_device_address(&device_address);
-
-                    self.send_just_saying("hub/push_project_number", json!({"projectNumber": 0}))?;
-
-                    // TODO: send out saved messages to device
-                    // after this point the device is authenticated and can send further commands
-                    // let db = db::DB_POOL.get_connection();
-                    // let mut stmt =
-                    //     db.prepare_cached("SELECT 1 FROM devices WHERE device_address=?")?;
-                    // if !stmt.exists(&[&device_address])? {
-                    //     let mut stmt = db.prepare_cached(
-                    //         "INSERT INTO devices (device_address, pubkey) VALUES (?,?)",
-                    //     )?;
-                    //     stmt.execute(&[&device_address, &login.pubkey])?;
-                    //     self.send_info(json!("address created"))?;
-                    // } else {
-                    //     self.send_stored_device_messages(&db, &device_address)?;
-                    // }
-
-                    //finishLogin
-                    self.set_login_completed();
-                //TODO: Seems to handle the temp_pubkey message before the login happen
-                } else {
-                    return self.send_error(Value::from("not a valid login DeviceMessage"));
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    fn on_hub_temp_pubkey(&self, param: Value) -> Result<Value> {
-        let mut try_limit = 20;
-        while try_limit > 0 && self.get_device_address().is_none() {
-            try_limit -= 1;
-            coroutine::sleep(Duration::from_millis(100));
-        }
-
-        let device_address = self.get_device_address();
-        ensure!(device_address.is_some(), "please log in first");
-
-        match serde_json::from_value::<DeviceMessage>(param) {
-            Err(e) => {
-                error!("temp_pubkey serde err={}", e);
-                bail!("wrong temp_pubkey params");
-            }
-
-            Ok(device_message) => {
-                if let DeviceMessage::TempPubkey(ref temp_pubkey) = &device_message {
-                    ensure!(
-                        temp_pubkey.temp_pubkey.len() == ::config::PUBKEY_LENGTH,
-                        "wrong temp_pubkey length"
-                    );
-                    ensure!(
-                        Some(device_message.get_device_address()?) == *self.get_device_address(),
-                        "signed by another pubkey"
-                    );
-
-                    if signature::verify(
-                        &device_message.get_device_message_hash_to_sign(),
-                        &temp_pubkey.signature,
-                        &temp_pubkey.pubkey,
-                    )
-                    .is_err()
-                    {
-                        bail!("wrong signature");
-                    }
-
-                    // TODO: save temp pubkey into db
-                    // let db = db::DB_POOL.get_connection();
-                    // let mut stmt = db.prepare_cached(
-                    //     "UPDATE devices SET temp_pubkey_package=? WHERE device_address=?",
-                    // )?;
-                    // // TODO: here need to add signature back
-                    // stmt.execute(&[&serde_json::to_string(temp_pubkey)?, &*device_address])?;
-
-                    return Ok(Value::from("updated"));
-                } else {
-                    bail!("not a valid temp_pubkey params");
-                }
-            }
-        }
     }
 
     fn on_get_network_info(&self, _param: Value) -> Result<Value> {
@@ -1199,8 +924,8 @@ impl HubConn {
         )
     }
 
-    fn send_hub_challenge(&self) -> Result<()> {
-        self.send_just_saying("hub/challenge", Value::from(CHALLENGE_ID.to_owned()))?;
+    fn send_hub_id(&self) -> Result<()> {
+        self.send_just_saying("hub/challenge", Value::from(HUB_ID.to_owned()))?;
         Ok(())
     }
 
@@ -1209,7 +934,7 @@ impl HubConn {
 
         match self.send_request(
             "subscribe",
-            &json!({ "subscription_id": *CHALLENGE_ID, "last_mci": last_mci.value()}),
+            &json!({ "subscription_id": *HUB_ID, "last_mci": last_mci.value()}),
         ) {
             Ok(_) => self.set_source(),
             Err(e) => {
@@ -1297,6 +1022,56 @@ impl HubConn {
     }
 }
 
+//---------------------------------------------------------------------------------------
+// Global Functions
+//---------------------------------------------------------------------------------------
+
+pub fn auto_connection() {
+    let mut counts = WSS.get_needed_outbound_peers();
+    if counts == 0 {
+        return;
+    }
+
+    let peers = get_unconnected_peers_in_config();
+    for peer in peers {
+        if BAD_CONNECTION.get(&peer).is_some() {
+            continue;
+        }
+        if create_outbound_conn(peer).is_ok() {
+            counts -= 1;
+            if counts == 0 {
+                return;
+            }
+        }
+    }
+
+    let peers = get_unconnected_remote_peers();
+    for peer in peers {
+        if BAD_CONNECTION.get(&peer).is_some() {
+            continue;
+        }
+        if create_outbound_conn(peer).is_ok() {
+            counts -= 1;
+            if counts == 0 {
+                return;
+            }
+        }
+    }
+
+    let peers = get_unconnected_peers_in_db();
+    for peer in peers {
+        if BAD_CONNECTION.get(&peer).is_some() {
+            continue;
+        }
+        if create_outbound_conn(peer).is_ok() {
+            counts -= 1;
+            if counts == 0 {
+                return;
+            }
+        }
+    }
+}
+
 pub fn create_outbound_conn<A: ToSocketAddrs>(address: A) -> Result<Arc<HubConn>> {
     let stream = TcpStream::connect(address)?;
     let peer = match stream.peer_addr() {
@@ -1332,7 +1107,117 @@ pub fn purge_temp_bad_free_joints(timeout: u64) -> Result<()> {
     SDAG_CACHE.purge_old_temp_bad_free_joints(now, timeout)
 }
 
-pub fn start_catchup(ws: Arc<HubConn>) -> Result<()> {
+/// this fn will be called every 8s in a timer
+pub fn re_request_lost_joints() -> Result<()> {
+    let _g = match IS_CATCHING_UP.try_lock() {
+        Some(g) => g,
+        None => return Ok(()),
+    };
+
+    let units = SDAG_CACHE.get_missing_joints();
+    if units.is_empty() {
+        return Ok(());
+    }
+    info!("lost units {:?}", units);
+
+    let ws = match WSS.get_next_peer() {
+        None => bail!("failed to find next peer"),
+        Some(c) => c,
+    };
+    info!("found next peer {}", ws.get_peer());
+
+    // this is not an atomic operation, but it's fine to request the unit in working
+    let new_units = units
+        .iter()
+        .filter(|x| UNIT_IN_WORK.try_lock(vec![(*x).to_owned()]).is_none());
+
+    ws.request_joints(new_units)
+}
+
+pub fn notify_watchers_about_stable_joints(mci: Level) -> Result<()> {
+    use joint::WRITER_MUTEX;
+    // the event was emitted from inside mysql transaction, make sure it completes so that the changes are visible
+    // If the mci became stable in determineIfStableInLaterUnitsAndUpdateStableMcFlag (rare), write lock is released before the validation commits,
+    // so we might not see this mci as stable yet. Hopefully, it'll complete before light/have_updates roundtrip
+    let g = WRITER_MUTEX.lock().unwrap();
+    // we don't need to block writes, we requested the lock just to wait that the current write completes
+    drop(g);
+    info!("notify_watchers_about_stable_joints, mci={:?} ", mci);
+    if mci.value() <= 1 {
+        return Ok(());
+    }
+
+    let last_ball_mci = SDAG_CACHE.get_last_ball_mci_of_mci(mci)?;
+    let prev_last_ball_mci = SDAG_CACHE.get_last_ball_mci_of_mci((mci.value() - 1).into())?;
+
+    if last_ball_mci == prev_last_ball_mci {
+        return Ok(());
+    }
+
+    notify_light_clients_about_stable_joints(prev_last_ball_mci, last_ball_mci)
+}
+
+fn init_connection(ws: &Arc<HubConn>) -> Result<()> {
+    use rand::{thread_rng, Rng};
+
+    // wait for some time for server ready
+    coroutine::sleep(Duration::from_millis(1));
+
+    ws.send_version()?;
+    ws.send_subscribe()?;
+    ws.send_hub_id()?;
+
+    let mut rng = thread_rng();
+    let n: u64 = rng.gen_range(0, 1000);
+    let ws_c = Arc::downgrade(ws);
+
+    // start the heartbeat timer for each connection
+    go!(move || loop {
+        coroutine::sleep(Duration::from_millis(3000 + n));
+        let ws = match ws_c.upgrade() {
+            Some(ws) => ws,
+            None => return,
+        };
+        if ws.get_last_recv_tm().elapsed() < Duration::from_secs(5) {
+            continue;
+        }
+        // heartbeat failed so just close the connection
+        let rsp = ws.send_heartbeat();
+        if rsp.is_err() {
+            error!("heartbeat err= {}", rsp.unwrap_err());
+            ws.close();
+            return;
+        }
+    });
+
+    Ok(())
+}
+
+fn add_peer_host(_bound: Arc<HubConn>) -> Result<()> {
+    // TODO: impl save peer host to database
+    Ok(())
+}
+
+fn get_unconnected_remote_peers() -> Vec<String> {
+    WSS.get_peers_from_remote()
+        .into_iter()
+        .filter(|peer| !WSS.contains(peer))
+        .collect::<Vec<_>>()
+}
+
+fn get_unconnected_peers_in_config() -> Vec<String> {
+    config::get_remote_hub_url()
+        .into_iter()
+        .filter(|peer| !WSS.contains(peer))
+        .collect::<Vec<_>>()
+}
+
+fn get_unconnected_peers_in_db() -> Vec<String> {
+    // TODO: impl
+    Vec::new()
+}
+
+fn start_catchup(ws: Arc<HubConn>) -> Result<()> {
     error!("catchup started");
 
     // before a catchup the hash_tree_ball should be clear
@@ -1374,33 +1259,6 @@ pub fn start_catchup(ws: Arc<HubConn>) -> Result<()> {
     WSS.request_free_joints_from_all_outbound_peers()?;
 
     Ok(())
-}
-
-/// this fn will be called every 8s in a timer
-pub fn re_request_lost_joints() -> Result<()> {
-    let _g = match IS_CATCHING_UP.try_lock() {
-        Some(g) => g,
-        None => return Ok(()),
-    };
-
-    let units = SDAG_CACHE.get_missing_joints();
-    if units.is_empty() {
-        return Ok(());
-    }
-    info!("lost units {:?}", units);
-
-    let ws = match WSS.get_next_peer() {
-        None => bail!("failed to find next peer"),
-        Some(c) => c,
-    };
-    info!("found next peer {}", ws.get_peer());
-
-    // this is not an atomic operation, but it's fine to request the unit in working
-    let new_units = units
-        .iter()
-        .filter(|x| UNIT_IN_WORK.try_lock(vec![(*x).to_owned()]).is_none());
-
-    ws.request_joints(new_units)
 }
 
 #[allow(dead_code)]
@@ -1502,29 +1360,6 @@ fn notify_light_clients_about_stable_joints(_from_mci: Level, _to_mci: Level) ->
 
     // Ok(())
     unimplemented!()
-}
-
-pub fn notify_watchers_about_stable_joints(mci: Level) -> Result<()> {
-    use joint::WRITER_MUTEX;
-    // the event was emitted from inside mysql transaction, make sure it completes so that the changes are visible
-    // If the mci became stable in determineIfStableInLaterUnitsAndUpdateStableMcFlag (rare), write lock is released before the validation commits,
-    // so we might not see this mci as stable yet. Hopefully, it'll complete before light/have_updates roundtrip
-    let g = WRITER_MUTEX.lock().unwrap();
-    // we don't need to block writes, we requested the lock just to wait that the current write completes
-    drop(g);
-    info!("notify_watchers_about_stable_joints, mci={:?} ", mci);
-    if mci.value() <= 1 {
-        return Ok(());
-    }
-
-    let last_ball_mci = SDAG_CACHE.get_last_ball_mci_of_mci(mci)?;
-    let prev_last_ball_mci = SDAG_CACHE.get_last_ball_mci_of_mci((mci.value() - 1).into())?;
-
-    if last_ball_mci == prev_last_ball_mci {
-        return Ok(());
-    }
-
-    notify_light_clients_about_stable_joints(prev_last_ball_mci, last_ball_mci)
 }
 
 fn clear_ball_after_min_retrievable_mci(joint_data: &JointData) -> Result<Joint> {
