@@ -9,7 +9,6 @@ use sdag::business::BUSINESS_CACHE;
 use sdag::cache::{CachedJoint, SDAG_CACHE};
 use sdag::error::Result;
 use sdag::joint::JointSequence;
-use sdag::main_chain;
 use sdag::my_witness::MY_WITNESSES;
 use sdag::utils::AtomicLock;
 use sdag_wallet_base::Base64KeyExt;
@@ -21,8 +20,6 @@ lazy_static! {
     static ref EVENT_TIMER: Arc<RwLock<Option<Instant>>> = Arc::new(RwLock::new(None));
     pub static ref WALLET_PUBK: String = WALLET_INFO._00_address_pubk.to_base64_key();
 }
-
-const THRESHOLD_DISTANCE: i32 = 8;
 
 pub fn witness_timer_check() -> Result<Duration> {
     match check_timeout() {
@@ -64,6 +61,8 @@ fn check_timeout() -> Option<Duration> {
 }
 
 pub fn check_and_witness() -> Result<()> {
+    use rand::{thread_rng, Rng};
+
     info!("check and witness");
     let _g = match IS_WITNESSING.try_lock() {
         Some(g) => g,
@@ -73,46 +72,8 @@ pub fn check_and_witness() -> Result<()> {
         }
     };
 
-    adjust_witnessing_speed(&WALLET_INFO._00_address)?;
-
-    Ok(())
-}
-
-/// adjust witnessing speed: increase speed if (last_mci - my_last_mci) > 8
-fn adjust_witnessing_speed(my_address: &str) -> Result<()> {
-    let timer;
-    let timer_distance;
-
-    let last_mci = main_chain::get_last_stable_mci().value() as i32;
-
-    let my_last_mci = match BUSINESS_CACHE
-        .global_state
-        .get_last_stable_self_joint(my_address)
-    {
-        Some(unit) => SDAG_CACHE.get_joint(&unit)?.read()?.get_mci().value() as i32,
-        None => -1_000,
-    };
-
-    let mci_distance = last_mci - my_last_mci;
-    debug!("max_mci is {}, my_max_mci is {}", last_mci, my_last_mci);
-
-    if mci_distance > THRESHOLD_DISTANCE {
-        debug!("distance above threshold, will witness");
-        timer_distance = THRESHOLD_DISTANCE as f32 / mci_distance as f32;
-        // witnessing the first joint, increase the random range
-        timer = if last_mci < THRESHOLD_DISTANCE && my_last_mci == -1_000 {
-            300
-        } else {
-            100
-        };
-    } else {
-        timer_distance = (THRESHOLD_DISTANCE - mci_distance) as f32;
-        timer = 1_000;
-    }
-
-    use rand::{thread_rng, Rng};
     let mut rng = thread_rng();
-    let timeout = ((timer_distance + rng.gen_range(0.0, 1.0)) * timer as f32).round() as u64;
+    let timeout = ((1.0 + rng.gen_range(0.0, 1.0)) * 500 as f32).round() as u64;
     info!(
         "scheduling unconditional witnessing in {} ms unless a new unit arrives.",
         timeout
