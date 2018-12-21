@@ -314,8 +314,11 @@ fn witness() -> Result<()> {
 
     let joint = sdag::composer::compose_joint(compose_info, &*WALLET_INFO)?;
     let cached_joint = SDAG_CACHE.add_new_joint(joint)?;
-    sdag::validation::validate_ready_joint(cached_joint.clone())?;
     let joint_data = cached_joint.read()?;
+    sdag::validation::validate_ready_joint(cached_joint)?;
+
+    sdag::network::hub::WSS.broadcast_joint(&joint_data)?;
+
     let mut max_parent_level = Level::MINIMUM;
     for parent in joint_data.parents.iter() {
         let level = parent.read()?.get_level();
