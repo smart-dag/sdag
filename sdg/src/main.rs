@@ -495,7 +495,7 @@ fn main() -> Result<()> {
 
         if unit_args.values_of("unhandled").is_some() {
             println!(
-                "\nthe number of bad joints = {}\n",
+                "\nthe number of unhandled joints = {}\n",
                 ws.get_unhandled_joints_list()?
             );
         }
@@ -508,15 +508,15 @@ fn main() -> Result<()> {
             println!("property = {:#?}", resp.1);
         }
 
-        if let Ok(num) = value_t!(unit_args.value_of("mci"), isize) {
-            let joints = ws.get_joints_by_mci(num)?;
+        if let Ok(mci) = value_t!(unit_args.value_of("mci"), isize) {
+            let joints = ws.get_joints_by_mci(mci)?;
 
             for (index, joint) in joints.iter().enumerate() {
                 println!("{}. unit -> {}", index + 1, joint.unit.unit);
             }
 
             if joints.is_empty() {
-                println!("\nthere is no joints with same mci\n");
+                println!("\nthere is no joints with mci={}\n", mci);
             }
         }
     }

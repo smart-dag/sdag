@@ -101,33 +101,37 @@ subcommands:
     - unit:
         about: Show information about unit
         args:
-            - show:
-                help: show some unit information
-                short: s
-                long: show
-                required: false
-                value_names:
-                    - UNIT
-                takes_value: true
+            - info:
+                help: show units statistics information
+                long: info
+                short: i
             - free:
-                help: show all free jonit unit hash
-                short: f
+                help: list current free jonits
                 long: free
+                short: f
             - bad:
-                help: show the number of bad jonits
-                short: b
+                help: list known bad jonits
                 long: bad
+                short: b
             - unhandled:
-                help: show the number of unhandled jonits
-                short: h 
+                help: list unhandled jonits
                 long: unhandled
+                short: u 
             - mci:
-                help: show same mci units 
-                short: m
+                help: list all the units of the specified mci 
                 long: mci
+                short: m
                 required: false
                 value_names:
                     - NUM
+                takes_value: true
+            - show:
+                help: show the specified unit detail
+                long: show
+                short: s
+                required: false
+                value_names:
+                    - UNIT
                 takes_value: true
 
 
