@@ -136,6 +136,7 @@ pub struct JointData {
     valid_parent_num: Arc<AtomicUsize>,
     joint: Joint,
     stable_sem: Arc<Semphore>,
+    peer_id: Option<String>,
     props: Arc<RwLock<JointProperty>>,
 }
 
@@ -320,6 +321,10 @@ impl JointData {
         self.props.read().unwrap().create_time
     }
 
+    pub fn get_peer_id(&self) -> Option<&str> {
+        self.peer_id.as_ref().map(|s| s.as_str())
+    }
+
     pub fn set_stable_prev_self_unit(&self, unit: String) {
         self.props.write().unwrap().prev_stable_self_unit = Some(unit);
     }
@@ -450,6 +455,7 @@ impl JointData {
             best_parent: self.best_parent.clone(),
             valid_parent_num: self.valid_parent_num.clone(),
             stable_sem: self.stable_sem.clone(),
+            peer_id: self.peer_id.clone(),
             joint: self.joint.clone(),
             props: self.props.clone(),
         }
@@ -472,8 +478,8 @@ impl JointData {
     }
 }
 
-impl From<Joint> for JointData {
-    fn from(joint: Joint) -> Self {
+impl JointData {
+    pub fn from_joint(joint: Joint, peer_id: Option<String>) -> Self {
         JointData {
             joint,
             parents: Default::default(),
@@ -482,6 +488,7 @@ impl From<Joint> for JointData {
             props: Default::default(),
             valid_parent_num: Default::default(),
             stable_sem: Arc::new(Semphore::new(0)),
+            peer_id,
         }
     }
 }
@@ -528,6 +535,7 @@ impl LoadFromKv<String> for JointData {
             stable_sem: Arc::new(Semphore::new(props.is_stable as usize)),
             props: Arc::new(RwLock::new(props)),
             valid_parent_num: Arc::new(AtomicUsize::new(valid_parent_num)),
+            peer_id: None,
         })
     }
 

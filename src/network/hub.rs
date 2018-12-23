@@ -292,6 +292,7 @@ pub struct HubData {
     is_subscribed: AtomicBool,
     is_source: AtomicBool,
     is_inbound: AtomicBool,
+    // TODO: change to u64
     peer_id: ArcCell<String>,
     device_address: ArcCell<Option<String>>,
 }
@@ -756,7 +757,7 @@ impl HubConn {
             return Ok(());
         }
 
-        let cached_joint = match SDAG_CACHE.add_new_joint(joint) {
+        let cached_joint = match SDAG_CACHE.add_new_joint(joint, Some(self.get_peer_id())) {
             Ok(j) => j,
             Err(e) => {
                 warn!("add_new_joint: {}", e);
@@ -828,8 +829,6 @@ impl HubConn {
 
         // here we send out the real catchup request
         let last_stable_mci = main_chain::get_last_stable_mci();
-        // TODO: what's this used for?
-        // let last_known_mci = storage::read_last_main_chain_index(db)?;
         let witnesses: &[String] = &::my_witness::MY_WITNESSES;
         let param = json!({
             "witnesses": witnesses,
@@ -878,7 +877,6 @@ impl HubConn {
         from_ball: &str,
         to_ball: &str,
     ) -> Result<Vec<catchup::BallProps>> {
-        // TODO: need reroute if failed to send
         let mut hash_tree = self.send_request(
             "get_hash_tree",
             &json!({
@@ -922,12 +920,6 @@ impl HubConn {
             self.send_joint(&**joint)?;
         }
         self.send_just_saying("free_joints_end", Value::Null)?;
-        Ok(())
-    }
-
-    #[allow(dead_code)]
-    fn send_stored_device_messages(&self, _device_address: &str) -> Result<()> {
-        //TODO: save and send device messages
         Ok(())
     }
 }

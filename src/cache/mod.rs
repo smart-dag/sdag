@@ -196,7 +196,7 @@ impl SDagCache {
 
     /// add a new joint into the unhandled memory cache
     /// we use the returned cached joint for further validation
-    pub fn add_new_joint(&self, joint: Joint) -> Result<CachedJoint> {
+    pub fn add_new_joint(&self, joint: Joint, peer_id: Option<String>) -> Result<CachedJoint> {
         // first check if joint is already known
         let key = HashKey::new(&joint.unit.unit);
         self.check_new_joint(&key)?;
@@ -231,7 +231,7 @@ impl SDagCache {
         }
 
         // at this stage we construct the unhandled joint in cache
-        let joint_data: JointData = joint.into();
+        let joint_data = JointData::from_joint(joint, peer_id);
         for valid_parent in valid_parents {
             joint_data.add_parent(valid_parent);
         }

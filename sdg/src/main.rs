@@ -315,7 +315,7 @@ fn verify_joints(joints: Vec<Joint>, last_mci: usize) -> Result<()> {
         try_go!(move || {
             // check content_hash or unit_hash first!
             validation::validate_unit_hash(&joint.unit)?;
-            let cached_joint = match SDAG_CACHE.add_new_joint(joint) {
+            let cached_joint = match SDAG_CACHE.add_new_joint(joint, None) {
                 Ok(j) => j,
                 Err(e) => {
                     bail!("add_new_joint: err = {}", e);
