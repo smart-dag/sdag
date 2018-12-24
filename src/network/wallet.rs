@@ -215,7 +215,9 @@ impl WalletConn {
 
     fn on_subscribe(&self, _param: Value) -> Result<Value> {
         self.get_data().trigger_init_done();
-        bail!("I'm light, cannot subscribe you to updates");
+        // TODO: use wallet address as the peer_id
+        let self_id =::object_hash::gen_random_string(30);
+        Ok(json!({"peer_id": self_id, "is_source": false}))
     }
 }
 

@@ -417,9 +417,12 @@ impl HubConn {
             self.get_peer_addr()
         );
         self.set_subscribed();
-        self.set_peer_id(subscription_id);
+        // wait connection init done
+        ::utils::wait_cond(None, || WSS.get_connection(self.get_peer_id()).is_some())?;
+        let ws = WSS
+            .get_connection(self.get_peer_id())
+            .ok_or_else(|| format_err!("connection not init done yet"))?;
         // send some joint in a background task
-        let ws = WSS.get_connection(self.get_peer_id()).unwrap();
         let last_mci = param["last_mci"].as_u64();
         try_go!(move || -> Result<()> {
             if let Some(last_mci) = last_mci {
@@ -429,7 +432,7 @@ impl HubConn {
             Ok(())
         });
 
-        Ok(Value::from("subscribed"))
+        Ok(json!({"peer_id": *SELF_HUB_ID, "is_source": true}))
     }
 
     fn on_get_joint(&self, param: Value) -> Result<Value> {
@@ -507,7 +510,7 @@ impl HubConn {
         }
 
         let address: String = serde_json::from_value(param).context("not an address string")?;
-        if !::object_hash::is_chash_valid(&address) {
+        if !object_hash::is_chash_valid(&address) {
             return self.send_error(Value::from("address not valid"));
         }
 
@@ -823,7 +826,27 @@ impl HubConn {
             "subscribe",
             &json!({ "subscription_id": *SELF_HUB_ID, "last_mci": last_mci.value()}),
         ) {
-            Ok(_) => self.set_source(),
+            Ok(value) => {
+                let peer_id = match value["peer_id"].as_str() {
+                    Some(s) => s.to_owned(),
+                    None => {
+                        let id = object_hash::gen_random_string(30);
+                        warn!(
+                            "peer_id is not found, peer_addr={}, use a random one {}",
+                            self.get_peer_addr(),
+                            id
+                        );
+                        id
+                    }
+                };
+
+                self.set_peer_id(&peer_id);
+
+                let is_source = value["is_source"].as_bool().unwrap_or(true);
+                if is_source {
+                    self.set_source();
+                }
+            }
             Err(e) => {
                 warn!(
                     "send subscribe failed, err={}, peer={}",
@@ -1056,9 +1079,6 @@ fn init_connection(ws: &Arc<HubConn>) -> Result<()> {
 
     ws.send_version()?;
     ws.send_subscribe()?;
-
-    // wait peer_id
-    ::utils::wait_cond(None, || ws.get_peer_id().as_str() != "unknown")?;
 
     let mut rng = thread_rng();
     let n: u64 = rng.gen_range(0, 1000);
