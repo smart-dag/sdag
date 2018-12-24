@@ -141,19 +141,16 @@ pub fn gen_genesis_joint(wallets: &SdagInitInfo, total: u64, msg: &str) -> Resul
 
         let foundation_amount = total
             - (amount as usize * WITNESSES_NUM * 8) as u64
-            - unit.headers_commission.unwrap() as u64
-            - unit.payload_commission.unwrap() as u64;
+            - u64::from(unit.headers_commission.unwrap())
+            - u64::from(unit.payload_commission.unwrap());
 
-        match payment_message.payload {
-            Some(Payload::Payment(ref mut x)) => {
-                for output in x.outputs.iter_mut() {
-                    if output.address == wallets.sdag_org._00_address {
-                        output.amount = foundation_amount;
-                    }
+        if let Some(Payload::Payment(ref mut x)) = payment_message.payload {
+            for output in x.outputs.iter_mut() {
+                if output.address == wallets.sdag_org._00_address {
+                    output.amount = foundation_amount;
                 }
-                payment_message.payload_hash = object_hash::get_base64_hash(&x)?;
             }
-            _ => {}
+            payment_message.payload_hash = object_hash::get_base64_hash(&x)?;
         }
     }
 
@@ -223,16 +220,13 @@ pub fn gen_first_payment(
 
     let mut index = 0;
     for message in &genesis_joint.unit.messages {
-        match &message.payload {
-            Some(Payload::Payment(x)) => {
-                for output in &x.outputs {
-                    if output.address == paying_wallet._00_address {
-                        break;
-                    }
-                    index += 1;
+        if let Some(Payload::Payment(x)) = &message.payload {
+            for output in &x.outputs {
+                if output.address == paying_wallet._00_address {
+                    break;
                 }
+                index += 1;
             }
-            _ => {}
         }
     }
 
@@ -294,19 +288,16 @@ pub fn gen_first_payment(
 
         let foundation_amount = foundation_total_amount as u64
             - address_amount as u64
-            - unit.headers_commission.unwrap() as u64
-            - unit.payload_commission.unwrap() as u64;
+            - u64::from(unit.headers_commission.unwrap())
+            - u64::from(unit.payload_commission.unwrap());
 
-        match payment_message.payload {
-            Some(Payload::Payment(ref mut x)) => {
-                for output in x.outputs.iter_mut() {
-                    if output.address == paying_wallet._00_address {
-                        output.amount = foundation_amount;
-                    }
+        if let Some(Payload::Payment(ref mut x)) = payment_message.payload {
+            for output in x.outputs.iter_mut() {
+                if output.address == paying_wallet._00_address {
+                    output.amount = foundation_amount;
                 }
-                payment_message.payload_hash = object_hash::get_base64_hash(&x)?;
             }
-            _ => {}
+            payment_message.payload_hash = object_hash::get_base64_hash(&x)?;
         }
     }
 

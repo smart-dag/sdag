@@ -18,16 +18,16 @@ extern crate serde_json;
 #[macro_use]
 extern crate lazy_static;
 
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
+use std::time::Duration;
+
 use chrono::{Local, TimeZone};
 use clap::App;
 use failure::ResultExt;
 use may::*;
-use sdag_wallet_base::Base64KeyExt;
-use std::sync::atomic::{AtomicUsize, Ordering};
-
 use rand::{thread_rng, Rng};
-use std::sync::Arc;
-use std::{thread, time::Duration};
+use sdag_wallet_base::Base64KeyExt;
 
 mod config;
 mod genesis;
@@ -98,7 +98,7 @@ fn connect_to_remote(peers: &[String]) -> Result<Arc<WalletConn>> {
 fn info(ws: &Arc<WalletConn>, wallet_info: &WalletInfo) -> Result<()> {
     let address_pubk = wallet_info._00_address_pubk.to_base64_key();
 
-    let stable = ws.get_balance(&wallet_info._00_address)? as f64 / 1000_000.0;
+    let stable = ws.get_balance(&wallet_info._00_address)? as f64 / 1_000_000.0;
 
     println!("\ncurrent wallet info:\n");
     println!("wallet_public_key: {}", wallet_info.wallet_pubk.to_string());
@@ -112,11 +112,11 @@ fn info(ws: &Arc<WalletConn>, wallet_info: &WalletInfo) -> Result<()> {
 
 fn show_history(
     ws: &Arc<WalletConn>,
-    address: &String,
+    address: &str,
     index: Option<usize>,
     num: usize,
 ) -> Result<()> {
-    let history = ws.get_latest_history(address.clone(), num)?;
+    let history = ws.get_latest_history(address.to_string(), num)?;
 
     if let Some(index) = index {
         // show special unit's detail information
@@ -125,14 +125,13 @@ fn show_history(
         }
 
         let history = &history.transactions[index - 1];
-        let amount;
-        if &history.to_addr == address {
+        let amount = if history.to_addr == address {
             println!("FROM     : {}", history.from_addr);
-            amount = history.amount;
+            history.amount
         } else {
             println!("TO       : {}", history.to_addr);
-            amount = 0 - history.amount;
-        }
+            0 - history.amount
+        };
         println!("UNIT     : {}", history.unit_hash);
         println!("AMOUNT   : {:.6} MN", amount as f64 / 1_000_000.0);
         println!(
@@ -146,7 +145,7 @@ fn show_history(
             if id > num - 1 {
                 break;
             }
-            let amount = if &transaction.to_addr == address {
+            let amount = if transaction.to_addr == address {
                 transaction.amount
             } else {
                 0 - transaction.amount
@@ -225,12 +224,7 @@ fn send_payment(
     Ok(())
 }
 
-fn is_witness(ws: &Arc<WalletConn>, address: &String) -> Result<bool> {
-    let witnesses = ws.get_witnesses()?;
-    Ok(witnesses.contains(address))
-}
-
-fn continue_sending(ws: Arc<WalletConn>, wallets_info: &Vec<wallet::WalletInfo>) -> Result<()> {
+fn continue_sending(ws: Arc<WalletConn>, wallets_info: &[wallet::WalletInfo]) -> Result<()> {
     let mut rng = thread_rng();
 
     let n1: usize = rng.gen_range(0, 100);
@@ -373,8 +367,9 @@ fn main() -> Result<()> {
         };
 
         let wallet_info = WalletInfo::from_mnemonic(&settings.mnemonic)?;
+        let witnesses = ws.get_witnesses()?;
 
-        if is_witness(&ws, &wallet_info._00_address)? {
+        if witnesses.contains(&wallet_info._00_address) {
             bail!("witness can not send payment by test");
         }
 
@@ -388,13 +383,12 @@ fn main() -> Result<()> {
                 let tmp_ws = Arc::clone(&ws);
                 let tmp_test_wallets = Arc::clone(&test_wallets);
 
-                thread::spawn(move || loop {
+                go!(move || loop {
                     let tmp_ws = Arc::clone(&tmp_ws);
-                    match continue_sending(tmp_ws, &tmp_test_wallets) {
-                        Err(e) => error!("{}", e),
-                        _ => {}
+                    if let Err(e) = continue_sending(tmp_ws, &tmp_test_wallets) {
+                        error!("continue_sending err={}", e);
                     };
-                    thread::yield_now();
+                    coroutine::yield_now();
                     coroutine::sleep(Duration::from_millis(10));
                 });
             }
