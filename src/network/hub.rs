@@ -49,9 +49,17 @@ lazy_static! {
 // HubNetState
 //---------------------------------------------------------------------------------------
 #[derive(Serialize, Deserialize)]
+pub struct ConnState {
+    peer_id: String,
+    peer_addr: String,
+    is_source: bool,
+    is_subscribed: bool,
+}
+#[derive(Serialize, Deserialize)]
 pub struct HubNetState {
-    in_bounds: Vec<String>,
-    out_bounds: Vec<String>,
+    // peer_id, peer_addr, is_source, is_subscribed
+    in_bounds: Vec<ConnState>,
+    out_bounds: Vec<ConnState>,
 }
 
 //---------------------------------------------------------------------------------------
@@ -164,24 +172,34 @@ impl WsConnections {
         Ok(())
     }
 
-    pub fn get_outbound_peers(&self, hub_id: &str) -> Vec<String> {
+    fn get_outbound_peers(&self, hub_id: &str) -> Vec<ConnState> {
         // filter out the connection with the same hub_id
         self.conns
             .read()
             .unwrap()
             .values()
             .filter(|c| !c.is_inbound() && c.get_peer_id().as_str() != hub_id)
-            .map(|c| c.get_peer_addr().to_owned())
+            .map(|c| ConnState {
+                peer_id: c.get_peer_id().to_string(),
+                peer_addr: c.get_peer_addr().to_string(),
+                is_source: c.is_source(),
+                is_subscribed: c.is_subscribed(),
+            })
             .collect()
     }
 
-    pub fn get_inbound_peers(&self) -> Vec<String> {
+    fn get_inbound_peers(&self) -> Vec<ConnState> {
         self.conns
             .read()
             .unwrap()
             .values()
             .filter(|c| c.is_inbound())
-            .map(|c| c.get_peer_addr().to_owned())
+            .map(|c| ConnState {
+                peer_id: c.get_peer_id().to_string(),
+                peer_addr: c.get_peer_addr().to_string(),
+                is_source: c.is_source(),
+                is_subscribed: c.is_subscribed(),
+            })
             .collect()
     }
 

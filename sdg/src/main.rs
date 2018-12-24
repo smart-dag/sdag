@@ -158,7 +158,7 @@ fn info(ws: &Arc<WalletConn>, wallet_info: &WalletInfo, is_json: bool) -> Result
             balance: stable.to_string(),
         };
         serde_json::to_writer_pretty(std::io::stdout(), &info)?;
-        println!("");
+        println!("\n");
     } else {
         println!("\ncurrent wallet info:\n");
         println!("device_address: {}", wallet_info.device_address);
