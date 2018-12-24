@@ -48,7 +48,6 @@ impl Server<WalletData> for WalletData {
     fn on_message(ws: Arc<WalletConn>, subject: String, body: Value) -> Result<()> {
         match subject.as_str() {
             "version" => ws.on_version(body)?,
-            "hub/challenge" => ws.on_hub_challenge(body)?,
             subject => error!("on_message unknown subject: {}", subject),
         }
         Ok(())
@@ -210,18 +209,12 @@ impl WalletConn {
         Ok(())
     }
 
-    fn on_hub_challenge(&self, param: Value) -> Result<()> {
-        // until now the connect hand shake done
-        info!("peer is a hub, challenge = {}", param);
-        self.get_data().trigger_init_done();
-        Ok(())
-    }
-
     fn on_heartbeat(&self, _: Value) -> Result<Value> {
         Ok(Value::Null)
     }
 
     fn on_subscribe(&self, _param: Value) -> Result<Value> {
+        self.get_data().trigger_init_done();
         bail!("I'm light, cannot subscribe you to updates");
     }
 }

@@ -3,6 +3,7 @@ mod cache_impl;
 mod joint_data;
 
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::sync::Arc;
 
 use config;
 use error::Result;
@@ -196,7 +197,7 @@ impl SDagCache {
 
     /// add a new joint into the unhandled memory cache
     /// we use the returned cached joint for further validation
-    pub fn add_new_joint(&self, joint: Joint, peer_id: Option<String>) -> Result<CachedJoint> {
+    pub fn add_new_joint(&self, joint: Joint, peer_id: Option<Arc<String>>) -> Result<CachedJoint> {
         // first check if joint is already known
         let key = HashKey::new(&joint.unit.unit);
         self.check_new_joint(&key)?;

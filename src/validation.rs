@@ -78,7 +78,10 @@ pub fn validate_ready_joint(joint: CachedJoint) -> Result<()> {
         main_chain::MAIN_CHAIN_WORKER.push_ready_joint(joint)?;
     }
 
-    ::utils::event::emit_event(NewJointEvent { joint: joint_data });
+    // only broadcast good joints
+    if joint_data.get_sequence() == JointSequence::Good {
+        ::utils::event::emit_event(NewJointEvent { joint: joint_data });
+    }
 
     Ok(())
 }

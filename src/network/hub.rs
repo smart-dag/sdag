@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::net::ToSocketAddrs;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -19,6 +20,7 @@ use may::coroutine;
 use may::net::TcpStream;
 use may::sync::RwLock;
 use object_hash;
+use rcu_cell::RcuReader;
 use serde_json::{self, Value};
 use tungstenite::client::client;
 use tungstenite::handshake::client::Request;
@@ -39,7 +41,7 @@ lazy_static! {
     static ref UNIT_IN_WORK: MapLock<String> = MapLock::new();
     static ref JOINT_IN_REQ: MapLock<String> = MapLock::new();
     static ref IS_CATCHING_UP: AtomicLock = AtomicLock::new();
-    static ref HUB_ID: String = object_hash::gen_random_string(30);
+    static ref SELF_HUB_ID: String = object_hash::gen_random_string(30);
     static ref BAD_CONNECTION: FifoCache<String, ()> = FifoCache::with_capacity(10);
 }
 
@@ -57,120 +59,66 @@ pub struct HubNetState {
 //---------------------------------------------------------------------------------------
 // global request has no specific ws connections, just find a proper one should be fine
 pub struct WsConnections {
-    inbound: RwLock<Vec<Arc<HubConn>>>,
-    outbound: RwLock<Vec<Arc<HubConn>>>,
-    next_inbound: AtomicUsize,
-    next_outbound: AtomicUsize,
+    // <peer_id, conn>
+    conns: RwLock<HashMap<Arc<String>, Arc<HubConn>>>,
+    next_conn: AtomicUsize,
 }
 
 impl WsConnections {
     fn new() -> Self {
         WsConnections {
-            inbound: RwLock::new(Vec::new()),
-            outbound: RwLock::new(Vec::new()),
-            next_inbound: AtomicUsize::new(0),
-            next_outbound: AtomicUsize::new(0),
+            conns: RwLock::new(HashMap::new()),
+            next_conn: AtomicUsize::new(0),
         }
     }
 
-    pub fn add_inbound(&self, inbound: Arc<HubConn>) -> Result<()> {
-        self.inbound.write().unwrap().push(inbound.clone());
-        inbound.set_inbound();
-        init_connection(&inbound)?;
-        add_peer_host(inbound)
-    }
-
-    pub fn add_outbound(&self, outbound: Arc<HubConn>) -> Result<()> {
-        self.outbound.write().unwrap().push(outbound.clone());
-        init_connection(&outbound)?;
-        add_peer_host(outbound)
+    pub fn add_p2p_conn(&self, conn: Arc<HubConn>, is_inbound: bool) -> Result<()> {
+        init_connection(&conn)?;
+        if is_inbound {
+            conn.set_inbound();
+        }
+        add_peer_host(&conn)?;
+        let peer_id = conn.get_peer_id();
+        info!(
+            "add_p2p_conn peer_id={} peer_addr={}",
+            peer_id,
+            conn.get_peer_addr()
+        );
+        self.conns.write().unwrap().insert(peer_id, conn);
+        Ok(())
     }
 
     pub fn close_all(&self) {
-        let mut g = self.outbound.write().unwrap();
+        let mut g = self.conns.write().unwrap();
         g.clear();
-        let mut g = self.inbound.write().unwrap();
-        g.clear();
-    }
-
-    fn get_ws(&self, conn: &HubConn) -> Arc<HubConn> {
-        let g = self.outbound.read().unwrap();
-        for c in &*g {
-            if c.conn_eq(&conn) {
-                return c.clone();
-            }
-        }
-        drop(g);
-
-        let g = self.inbound.read().unwrap();
-        for c in &*g {
-            if c.conn_eq(&conn) {
-                return c.clone();
-            }
-        }
-
-        unreachable!("can't find a ws connection from global wss!")
     }
 
     fn close(&self, conn: &HubConn) {
         // find out the actor and remove it
-        let mut g = self.outbound.write().unwrap();
-        for i in 0..g.len() {
-            if g[i].conn_eq(&conn) {
-                g.swap_remove(i);
-                return;
-            }
-        }
-        drop(g);
-
-        let mut g = self.inbound.write().unwrap();
-        for i in 0..g.len() {
-            if g[i].conn_eq(&conn) {
-                g.swap_remove(i);
-                return;
-            }
-        }
-    }
-
-    pub fn get_next_inbound(&self) -> Option<Arc<HubConn>> {
-        let g = self.inbound.read().unwrap();
-        let len = g.len();
-        if len == 0 {
-            return None;
-        }
-        let idx = self.next_inbound.fetch_add(1, Ordering::Relaxed) % len;
-        Some(g[idx].clone())
-    }
-
-    pub fn get_next_outbound(&self) -> Option<Arc<HubConn>> {
-        let g = self.outbound.read().unwrap();
-        let len = g.len();
-        if len == 0 {
-            return None;
-        }
-        let idx = self.next_outbound.fetch_add(1, Ordering::Relaxed) % len;
-        Some(g[idx].clone())
+        let mut g = self.conns.write().unwrap();
+        g.remove(&conn.get_peer_id());
     }
 
     pub fn get_next_peer(&self) -> Option<Arc<HubConn>> {
-        self.get_next_outbound().or_else(|| self.get_next_inbound())
-    }
-
-    fn get_peers_from_remote(&self) -> Vec<String> {
-        let mut peers: Vec<String> = Vec::new();
-        let hub_id = Value::from(HUB_ID.as_str());
-        let out_bound_peers = self.outbound.read().unwrap().to_vec();
-        for out_bound_peer in out_bound_peers {
-            if let Ok(value) = out_bound_peer.send_request("get_peers", &hub_id) {
-                if let Ok(mut tmp) = serde_json::from_value(value) {
-                    peers.append(&mut tmp);
-                }
-            }
+        let g = self.conns.read().unwrap();
+        let mut peers = g.values();
+        let len = peers.len();
+        if len == 0 {
+            return None;
         }
 
-        let in_bound_peers = self.inbound.read().unwrap().to_vec();
-        for in_bound_peer in in_bound_peers {
-            if let Ok(value) = in_bound_peer.send_request("get_peers", &hub_id) {
+        let idx = self.next_conn.fetch_add(1, Ordering::Relaxed) % len;
+        peers.nth(idx).cloned()
+    }
+
+    // return all remote peer addresses
+    fn get_peers_from_remote(&self) -> Vec<String> {
+        let mut peers: Vec<String> = Vec::new();
+        let hub_id = Value::from(SELF_HUB_ID.as_str());
+        let g = self.conns.read().unwrap();
+        let conns = g.values();
+        for conn in conns {
+            if let Ok(value) = conn.send_request("get_peers", &hub_id) {
                 if let Ok(mut tmp) = serde_json::from_value(value) {
                     peers.append(&mut tmp);
                 }
@@ -183,71 +131,57 @@ impl WsConnections {
         peers
     }
 
-    pub fn get_connection_by_name(&self, peer: &str) -> Option<Arc<HubConn>> {
-        let g = self.outbound.read().unwrap();
-        for c in &*g {
-            if c.get_peer() == peer {
-                return Some(c.clone());
-            }
-        }
-        drop(g);
-
-        let g = self.inbound.read().unwrap();
-        for c in &*g {
-            if c.get_peer() == peer {
-                return Some(c.clone());
-            }
-        }
-
-        None
+    pub fn get_connection(&self, peer_id: Arc<String>) -> Option<Arc<HubConn>> {
+        let g = self.conns.read().unwrap();
+        g.get(&peer_id).cloned()
     }
 
-    pub fn broadcast_joint(&self, joint: &Joint) -> Result<()> {
+    pub fn broadcast_joint(&self, joint: RcuReader<JointData>) -> Result<()> {
         // disable broadcast during catchup
         let _g = match IS_CATCHING_UP.try_lock() {
             Some(g) => g,
             None => return Ok(()),
         };
 
-        for c in &*self.outbound.read().unwrap() {
-            // we should check if the outbound is subscribed
-            // ref issue #28
-            c.send_joint(&joint)?;
-        }
-
-        for c in &*self.inbound.read().unwrap() {
-            if c.is_subscribed() {
-                c.send_joint(&joint)?;
+        for conn in self.conns.read().unwrap().values().cloned() {
+            // only send to who subsribed and not the source
+            if conn.is_subscribed() && joint.get_peer_id() != Some(conn.get_peer_id().as_str()) {
+                let joint = joint.clone();
+                try_go!(move || conn.send_joint(&joint));
             }
         }
         Ok(())
     }
 
-    pub fn request_free_joints_from_all_outbound_peers(&self) -> Result<()> {
-        let out_bound_peers = self.outbound.read().unwrap().to_vec();
-        for out_bound_peer in out_bound_peers {
-            out_bound_peer.send_just_saying("refresh", Value::Null)?;
+    pub fn request_free_joints_from_all_peers(&self) -> Result<()> {
+        let g = self.conns.read().unwrap();
+        let conns = g.values().cloned();
+        for conn in conns {
+            if conn.is_source() {
+                try_go!(move || conn.send_just_saying("refresh", Value::Null));
+            }
         }
         Ok(())
     }
 
     pub fn get_outbound_peers(&self, hub_id: &str) -> Vec<String> {
         // filter out the connection with the same hub_id
-        self.outbound
+        self.conns
             .read()
             .unwrap()
-            .iter()
-            .filter(|c| c.get_peer_id() != hub_id)
-            .map(|c| c.get_peer().to_owned())
+            .values()
+            .filter(|c| !c.is_inbound() && c.get_peer_id().as_str() != hub_id)
+            .map(|c| c.get_peer_addr().to_owned())
             .collect()
     }
 
     pub fn get_inbound_peers(&self) -> Vec<String> {
-        self.inbound
+        self.conns
             .read()
             .unwrap()
-            .iter()
-            .map(|c| c.get_peer().to_owned())
+            .values()
+            .filter(|c| c.is_inbound())
+            .map(|c| c.get_peer_addr().to_owned())
             .collect()
     }
 
@@ -259,7 +193,7 @@ impl WsConnections {
     }
 
     fn get_needed_outbound_peers(&self) -> usize {
-        let outbound_connecions = self.outbound.read().unwrap().len();
+        let outbound_connecions = self.conns.read().unwrap().len();
         if config::MAX_OUTBOUND_CONNECTIONS > outbound_connecions {
             return config::MAX_OUTBOUND_CONNECTIONS - outbound_connecions;
         }
@@ -267,19 +201,11 @@ impl WsConnections {
     }
 
     fn contains(&self, addr: &str) -> bool {
-        let out_contains = self
-            .outbound
+        self.conns
             .read()
             .unwrap()
-            .iter()
-            .any(|v| v.get_peer() == addr);
-        let in_contains = self
-            .inbound
-            .read()
-            .unwrap()
-            .iter()
-            .any(|v| v.get_peer() == addr);
-        out_contains || in_contains
+            .values()
+            .any(|v| v.get_peer_addr() == addr)
     }
 }
 
@@ -315,8 +241,6 @@ impl Server<HubData> for HubData {
     fn on_message(ws: Arc<HubConn>, subject: String, body: Value) -> Result<()> {
         match subject.as_str() {
             "version" => ws.on_version(body)?,
-            "hub/challenge" => ws.on_peer_hub_id(body)?,
-            "free_joints_end" => {} // not handled
             "error" => error!("receive error: {}", body),
             "info" => info!("receive info: {}", body),
             "result" => info!("receive result: {}", body),
@@ -336,24 +260,23 @@ impl Server<HubData> for HubData {
         let response = match command.as_str() {
             "heartbeat" => ws.on_heartbeat(params)?,
             "subscribe" => ws.on_subscribe(params)?,
-            "get_joint" => ws.on_get_joint(params)?,
             "catchup" => ws.on_catchup(params)?,
-            "get_hash_tree" => ws.on_get_hash_tree(params)?,
-            "get_peers" => ws.on_get_peers(params)?,
-            "get_witnesses" => ws.on_get_witnesses(params)?,
+            "net_state" => ws.on_get_net_state(params)?,
             "post_joint" => ws.on_post_joint(params)?,
+            "light/inputs" => ws.on_get_inputs(params)?,
+            "light/light_props" => ws.on_get_light_props(params)?,
             "light/get_history" => ws.on_get_history(params)?,
             "light/get_link_proofs" => ws.on_get_link_proofs(params)?,
-            "light/inputs" => ws.on_get_inputs(params)?,
+            "get_joint" => ws.on_get_joint(params)?,
+            "get_peers" => ws.on_get_peers(params)?,
             "get_balance" => ws.on_get_balance(params)?,
-            "net_state" => ws.on_get_net_state(params)?,
-            "light/light_props" => ws.on_get_light_props(params)?,
-            // apis for explorer
+            "get_hash_tree" => ws.on_get_hash_tree(params)?,
+            "get_witnesses" => ws.on_get_witnesses(params)?,
             "get_network_info" => ws.on_get_network_info(params)?,
             "get_joints_by_mci" => ws.on_get_joints_by_mci(params)?,
-            "get_joint_by_unit_hash" => ws.on_get_joint_by_unit_hash(params)?,
             "get_free_joints_list" => ws.get_free_joints_list(params)?,
             "get_bad_joints_list" => ws.get_bad_joints_list(params)?,
+            "get_joint_by_unit_hash" => ws.on_get_joint_by_unit_hash(params)?,
             "get_unhandled_joints_list" => ws.get_unhandled_joints_list(params)?,
             command => bail!("on_request unknown command: {}", command),
         };
@@ -397,9 +320,9 @@ impl HubConn {
         data.is_inbound.store(true, Ordering::Relaxed);
     }
 
-    pub fn get_peer_id(&self) -> String {
+    pub fn get_peer_id(&self) -> Arc<String> {
         let data = self.get_data();
-        data.peer_id.get().to_string()
+        data.peer_id.get()
     }
 
     pub fn set_peer_id(&self, peer_id: &str) {
@@ -484,32 +407,29 @@ impl HubConn {
         let subscription_id = param["subscription_id"]
             .as_str()
             .ok_or_else(|| format_err!("no subscription_id"))?;
-        if subscription_id == *HUB_ID {
+        if subscription_id == *SELF_HUB_ID {
             self.close();
             return Err(format_err!("self-connect"));
         }
+        info!(
+            "on_subscribe peer_id={}, peer_addr={}",
+            subscription_id,
+            self.get_peer_addr()
+        );
         self.set_subscribed();
+        self.set_peer_id(subscription_id);
         // send some joint in a background task
-        let ws = WSS.get_ws(self);
+        let ws = WSS.get_connection(self.get_peer_id()).unwrap();
         let last_mci = param["last_mci"].as_u64();
         try_go!(move || -> Result<()> {
             if let Some(last_mci) = last_mci {
                 ws.send_joints_since_mci(Level::from(last_mci as usize))?;
             }
             ws.send_free_joints()?;
-            ws.send_just_saying("free_joints_end", Value::Null)?;
             Ok(())
         });
 
         Ok(Value::from("subscribed"))
-    }
-
-    fn on_peer_hub_id(&self, param: Value) -> Result<()> {
-        info!("peer is a hub, peer_id = {}", param);
-        let peer_id = param.as_str().ok_or_else(|| format_err!("no peer id"))?;
-        // we save the peer's hub id to distingue who it is
-        self.set_peer_id(peer_id);
-        Ok(())
     }
 
     fn on_get_joint(&self, param: Value) -> Result<Value> {
@@ -577,7 +497,6 @@ impl HubConn {
             self.send_joints_since_mci(Level::from(mci as usize))?;
         }
         self.send_free_joints()?;
-        self.send_just_saying("free_joints_end", Value::Null)?;
 
         Ok(())
     }
@@ -592,50 +511,7 @@ impl HubConn {
             return self.send_error(Value::from("address not valid"));
         }
 
-        // let db = db::DB_POOL.get_connection();
-        // let mut stmt = db.prepare_cached(
-        //     "INSERT OR IGNORE INTO watched_light_addresses (peer, address) VALUES (?,?)",
-        // )?;
-        // stmt.execute(&[self.get_peer(), &address])?;
-        // self.send_info(Value::from(format!("now watching {}", address)))?;
-
-        // let mut stmt = db.prepare_cached(
-        //     "SELECT unit, is_stable FROM unit_authors JOIN units USING(unit) WHERE address=? \
-        //      UNION \
-        //      SELECT unit, is_stable FROM outputs JOIN units USING(unit) WHERE address=? \
-        //      ORDER BY is_stable LIMIT 10",
-        // )?;
-
-        // struct TempUnit {
-        //     unit: String,
-        //     is_stable: u32,
-        // }
-
-        // let rows = stmt
-        //     .query_map(&[&address, &address], |row| TempUnit {
-        //         unit: row.get(0),
-        //         is_stable: row.get(1),
-        //     })?
-        //     .collect::<::std::result::Result<Vec<_>, _>>()?;
-
-        // if rows.is_empty() {
-        //     return Ok(());
-        // }
-
-        // if rows.len() == 10 || rows.iter().any(|r| r.is_stable == 1) {
-        //     self.send_just_saying("light/have_updates", Value::Null)?;
-        // }
-
-        // for row in rows {
-        //     if row.is_stable == 1 {
-        //         continue;
-        //     }
-        //     let joint = storage::read_joint(&db, &row.unit)
-        //         .context(format!("watched unit {} not found", row.unit))?;
-        //     self.send_joint(&joint)?;
-        // }
-
-        // Ok(())
+        // TODO: client should report it's interested address
         unimplemented!()
     }
 
@@ -777,7 +653,7 @@ impl HubConn {
         if let Some(ball) = &joint_data.ball {
             if !SDAG_CACHE.is_ball_in_hash_tree(ball) {
                 // need to catchup and keep the joint in unhandled till timeout
-                let ws = WSS.get_ws(self);
+                let ws = WSS.get_connection(self.get_peer_id()).unwrap();
                 try_go!(move || {
                     // if we already in catchup mode, just return
                     let _g = match IS_CATCHING_UP.try_lock() {
@@ -806,7 +682,7 @@ impl HubConn {
     fn write_event(&self, _event: &str) -> Result<()> {
         // TODO: record peer event
         // if event.contains("invalid") || event.contains("nonserial") {
-        //     let host = self.get_peer();
+        //     let host = self.get_peer_addr();
         //     let event_string: String = event.to_string();
         //     let column = format!("count_{}_joints", &event_string);
         //     let sql = format!(
@@ -825,7 +701,7 @@ impl HubConn {
     }
 
     fn request_catchup(&self) -> Result<Vec<String>> {
-        info!("will request catchup from {}", self.get_peer());
+        info!("will request catchup from {}", self.get_peer_addr());
 
         // here we send out the real catchup request
         let last_stable_mci = main_chain::get_last_stable_mci();
@@ -868,7 +744,7 @@ impl HubConn {
             new_units.push(unit.clone());
         }
 
-        self.request_joints(new_units.iter())?;
+        self.request_joints(new_units)?;
         Ok(())
     }
 
@@ -919,7 +795,6 @@ impl HubConn {
             let joint = joint.read()?;
             self.send_joint(&**joint)?;
         }
-        self.send_just_saying("free_joints_end", Value::Null)?;
         Ok(())
     }
 }
@@ -941,23 +816,22 @@ impl HubConn {
         )
     }
 
-    fn send_hub_id(&self) -> Result<()> {
-        self.send_just_saying("hub/challenge", Value::from(HUB_ID.to_owned()))?;
-        Ok(())
-    }
-
     fn send_subscribe(&self) -> Result<()> {
         let last_mci = main_chain::get_last_stable_mci();
 
         match self.send_request(
             "subscribe",
-            &json!({ "subscription_id": *HUB_ID, "last_mci": last_mci.value()}),
+            &json!({ "subscription_id": *SELF_HUB_ID, "last_mci": last_mci.value()}),
         ) {
             Ok(_) => self.set_source(),
             Err(e) => {
-                warn!("send subscribe failed, err={}, peer={}", e, self.get_peer());
+                warn!(
+                    "send subscribe failed, err={}, peer={}",
+                    e,
+                    self.get_peer_addr()
+                );
                 // save the peer address to avoid connect to it again
-                BAD_CONNECTION.insert(self.get_peer().clone(), ());
+                BAD_CONNECTION.insert(self.get_peer_addr().to_string(), ());
             }
         }
 
@@ -976,13 +850,13 @@ impl HubConn {
 
     // remove self from global
     fn close(&self) {
-        info!("close connection: {}", self.get_peer());
+        info!("close connection: {}", self.get_peer_addr());
         // we hope that when all related joints are resolved
         // the connection could drop automatically
         WSS.close(self);
     }
 
-    fn request_joints<'a>(&self, units: impl Iterator<Item = &'a String>) -> Result<()> {
+    fn request_joints(&self, units: impl IntoIterator<Item = String>) -> Result<()> {
         fn request_joint(ws: Arc<HubConn>, unit: &str) -> Result<()> {
             // if the joint is in request, just ignore
             let g = JOINT_IN_REQ.try_lock(vec![unit.to_owned()]);
@@ -998,7 +872,7 @@ impl HubConn {
                 bail!(
                     "unit {} not found with the connection: {}",
                     unit,
-                    ws.get_peer()
+                    ws.get_peer_addr()
                 );
             }
 
@@ -1014,9 +888,9 @@ impl HubConn {
             ws.handle_online_joint(joint)
         }
 
+        let ws = WSS.get_connection(self.get_peer_id()).unwrap();
         for unit in units {
-            let unit = unit.clone();
-            let ws = WSS.get_ws(self);
+            let ws = ws.clone();
             try_go!(move || request_joint(ws, &unit));
         }
         Ok(())
@@ -1101,7 +975,7 @@ pub fn create_outbound_conn<A: ToSocketAddrs>(address: A) -> Result<Arc<HubConn>
 
     let ws = WsConnection::new(conn, HubData::default(), peer, Role::Client)?;
 
-    WSS.add_outbound(ws.clone())?;
+    WSS.add_p2p_conn(ws.clone(), false)?;
     Ok(ws)
 }
 
@@ -1141,11 +1015,11 @@ pub fn re_request_lost_joints() -> Result<()> {
         None => bail!("failed to find next peer"),
         Some(c) => c,
     };
-    info!("found next peer {}", ws.get_peer());
+    info!("found next peer {}", ws.get_peer_addr());
 
     // this is not an atomic operation, but it's fine to request the unit in working
     let new_units = units
-        .iter()
+        .into_iter()
         .filter(|x| UNIT_IN_WORK.try_lock(vec![(*x).to_owned()]).is_none());
 
     ws.request_joints(new_units)
@@ -1178,11 +1052,13 @@ fn init_connection(ws: &Arc<HubConn>) -> Result<()> {
     use rand::{thread_rng, Rng};
 
     // wait for some time for server ready
-    coroutine::sleep(Duration::from_millis(1));
+    // coroutine::sleep(Duration::from_millis(1));
 
     ws.send_version()?;
     ws.send_subscribe()?;
-    ws.send_hub_id()?;
+
+    // wait peer_id
+    ::utils::wait_cond(None, || ws.get_peer_id().as_str() != "unknown")?;
 
     let mut rng = thread_rng();
     let n: u64 = rng.gen_range(0, 1000);
@@ -1210,7 +1086,7 @@ fn init_connection(ws: &Arc<HubConn>) -> Result<()> {
     Ok(())
 }
 
-fn add_peer_host(_bound: Arc<HubConn>) -> Result<()> {
+fn add_peer_host(_bound: &HubConn) -> Result<()> {
     // TODO: impl save peer host to database
     Ok(())
 }
@@ -1273,17 +1149,14 @@ fn start_catchup(ws: Arc<HubConn>) -> Result<()> {
     // wait until there is no more working
     ::utils::wait_cond(None, || UNIT_IN_WORK.get_waiter_num() == 0).ok();
 
-    WSS.request_free_joints_from_all_outbound_peers()?;
+    WSS.request_free_joints_from_all_peers()?;
 
     Ok(())
 }
 
 #[allow(dead_code)]
-fn notify_watchers(joint: &Joint, cur_ws: &HubConn) -> Result<()> {
+fn notify_watchers(joint: &Joint) -> Result<()> {
     let unit = &joint.unit;
-    if unit.messages.is_empty() {
-        return Ok(());
-    }
 
     // already stable, light clients will require a proof
     if joint.ball.is_some() {
@@ -1309,73 +1182,20 @@ fn notify_watchers(joint: &Joint, cur_ws: &HubConn) -> Result<()> {
         }
     }
 
-    // let addresses_str = addresses
-    //     .into_iter()
-    //     .map(|s| format!("'{}'", s))
-    //     .collect::<Vec<_>>()
-    //     .join(", ");
-    // let sql = format!(
-    //     "SELECT peer FROM watched_light_addresses WHERE address IN({})",
-    //     addresses_str
-    // );
-
-    // let mut stmt = db.prepare(&sql)?;
-    // let rows = stmt
-    //     .query_map(&[], |row| row.get(0))?
-    //     .collect::<::std::result::Result<Vec<String>, _>>()?;
     // TODO: find out peers and send the message to them
-    let rows: Vec<String> = Vec::new();
-
-    if rows.is_empty() {
-        return Ok(());
-    }
-
     // light clients need timestamp
     let mut joint = joint.clone();
     joint.unit.timestamp = Some(::time::now() / 1000);
 
-    for peer in rows {
-        if let Some(ws) = WSS.get_connection_by_name(&peer) {
-            if !ws.conn_eq(cur_ws) {
-                ws.send_joint(&joint)?;
-            }
-        }
+    let peer_id = Arc::new(String::from("interestred_id"));
+    if let Some(ws) = WSS.get_connection(peer_id) {
+        ws.send_joint(&joint)?;
     }
 
     Ok(())
 }
 
 fn notify_light_clients_about_stable_joints(_from_mci: Level, _to_mci: Level) -> Result<()> {
-    // let mut stmt = db.prepare_cached(
-    // 	"SELECT peer FROM units JOIN unit_authors USING(unit) JOIN watched_light_addresses USING(address) \
-    // 	WHERE main_chain_index>? AND main_chain_index<=? \
-    // 	UNION \
-    // 	SELECT peer FROM units JOIN outputs USING(unit) JOIN watched_light_addresses USING(address) \
-    // 	WHERE main_chain_index>? AND main_chain_index<=? \
-    // 	UNION \
-    // 	SELECT peer FROM units JOIN watched_light_units USING(unit) \
-    // 	WHERE main_chain_index>? AND main_chain_index<=?")?;
-
-    // let rows = stmt
-    //     .query_map(
-    //         &[&from_mci, &to_mci, &from_mci, &to_mci, &from_mci, &to_mci],
-    //         |row| row.get(0),
-    //     )?
-    //     .collect::<::std::result::Result<Vec<String>, _>>()?;
-    // for peer in rows {
-    //     if let Some(ws) = WSS.get_connection_by_name(&peer) {
-    //         ws.send_just_saying("light/have_updates", Value::Null)?;
-    //     }
-    // }
-
-    // let mut stmt = db.prepare_cached(
-    //     "DELETE FROM watched_light_units \
-    //      WHERE unit IN (SELECT unit FROM units WHERE main_chain_index>? AND main_chain_index<=?)",
-    // )?;
-
-    // stmt.execute(&[&from_mci, &to_mci])?;
-
-    // Ok(())
     unimplemented!()
 }
 

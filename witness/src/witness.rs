@@ -1,6 +1,7 @@
 extern crate sdag_wallet_base;
 
 use std::collections::{HashSet, VecDeque};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -20,7 +21,7 @@ lazy_static! {
     static ref IS_WITNESSING: AtomicLock = AtomicLock::new();
     static ref EVENT_TIMER: Arc<RwLock<Option<Instant>>> = Arc::new(RwLock::new(None));
     static ref WALLET_PUBK: String = WALLET_INFO._00_address_pubk.to_base64_key();
-    static ref SELF_LEVEL: Arc<RwLock<Level>> = Arc::new(RwLock::new(Level::MINIMUM));
+    static ref SELF_LEVEL: AtomicUsize = AtomicUsize::new(0);
 }
 
 const THRESHOLD_DISTANCE: usize = sdag::config::COUNT_WITNESSES * 2 / 3;
@@ -43,13 +44,6 @@ fn set_timeout(sleep_time_ms: u64) {
     let mut g = EVENT_TIMER.write().unwrap();
     if Some(next_expire) > *g {
         *g = Some(next_expire);
-    }
-}
-
-fn set_self_level(level: Level) {
-    let mut g = SELF_LEVEL.write().unwrap();
-    if level > *g {
-        *g = level;
     }
 }
 
@@ -94,7 +88,7 @@ fn adjust_witnessing_speed() -> Result<()> {
     use rand::{thread_rng, Rng};
     let mut rng = thread_rng();
     let time;
-    let self_level = *SELF_LEVEL.read()?;
+    let self_level = SELF_LEVEL.load(Ordering::Relaxed).into();
     if self_level == Level::MINIMUM {
         time = (rng.gen_range(0.0, 1.0) * 3_000.0) as u64;
     } else {
@@ -317,8 +311,6 @@ fn witness() -> Result<()> {
     let joint_data = cached_joint.read()?;
     sdag::validation::validate_ready_joint(cached_joint)?;
 
-    sdag::network::hub::WSS.broadcast_joint(&joint_data)?;
-
     let mut max_parent_level = Level::MINIMUM;
     for parent in joint_data.parents.iter() {
         let level = parent.read()?.get_level();
@@ -327,7 +319,9 @@ fn witness() -> Result<()> {
             max_parent_level = level;
         }
     }
-    set_self_level(max_parent_level + 1);
+    SELF_LEVEL.store(max_parent_level.value() + 1, Ordering::Relaxed);
+
+    sdag::network::hub::WSS.broadcast_joint(joint_data)?;
 
     Ok(())
 }

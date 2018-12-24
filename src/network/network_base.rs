@@ -70,7 +70,7 @@ pub struct WsConnection<T> {
     // lock proected inner
     ws: RwLock<WsInner>,
     // peer name is never changed once init
-    peer: String,
+    peer_addr: String,
     // the waiting request
     req_map: Arc<WaiterMap<usize, Value>>,
     // the listening coroutine
@@ -85,9 +85,9 @@ impl<T> Sender for WsConnection<T> {
     fn send_json(&self, value: Value) -> Result<()> {
         let msg = serde_json::to_string(&value)?;
         if msg.len() < 1000 {
-            debug!("SENDING to {}: {}", self.peer, msg);
+            debug!("SENDING to {}: {}", self.peer_addr, msg);
         } else {
-            debug!("SENDING to {}: huge message", self.peer);
+            debug!("SENDING to {}: huge message", self.peer_addr);
         }
 
         let mut g = self.ws.write().unwrap();
@@ -98,8 +98,8 @@ impl<T> Sender for WsConnection<T> {
 
 impl<T> WsConnection<T> {
     // use &String instead of &str for db
-    pub fn get_peer(&self) -> &String {
-        &self.peer
+    pub fn get_peer_addr(&self) -> &str {
+        &self.peer_addr
     }
 
     pub fn get_last_recv_tm(&self) -> Instant {
@@ -146,7 +146,7 @@ impl<T> WsConnection<T> {
                 ws,
                 last_recv: Instant::now(),
             }),
-            peer,
+            peer_addr: peer,
             req_map,
             listener: AtomicOption::none(),
             data,
@@ -185,9 +185,9 @@ impl<T> WsConnection<T> {
                     None => return,
                 };
                 if msg.len() < 1000 {
-                    debug!("RECV from {}: {}", ws.peer, msg);
+                    debug!("RECV from {}: {}", ws.peer_addr, msg);
                 } else {
-                    debug!("RECV from {}: huge message!", ws.peer);
+                    debug!("RECV from {}: huge message!", ws.peer_addr);
                 }
 
                 ws.set_last_recv_tm(Instant::now());
@@ -290,11 +290,6 @@ impl<T> WsConnection<T> {
             bail!("{} err: {}", command, rsp.response["error"]);
         }
         Ok(rsp.response)
-    }
-
-    #[inline]
-    pub fn conn_eq(&self, other: &WsConnection<T>) -> bool {
-        ::std::ptr::eq(self, other)
     }
 }
 

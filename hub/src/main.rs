@@ -46,7 +46,7 @@ fn start_ws_server() -> Result<::may::coroutine::JoinHandle<()>> {
     let port = config::get_hub_server_port();
 
     let server = WsServer::start(("0.0.0.0", port), |c| {
-        t!(WSS.add_inbound(c));
+        t!(WSS.add_p2p_conn(c, true));
     })?;
     println!("Websocket server running on ws://0.0.0.0:{}", port);
 
@@ -76,7 +76,7 @@ fn register_event_handlers() {
     use validation::NewJointEvent;
 
     // MciStableEvent::add_handler(|v| t!(network::hub::notify_watchers_about_stable_joints(v.mci)));
-    NewJointEvent::add_handler(|e| t!(network::hub::WSS.broadcast_joint(&e.joint)));
+    NewJointEvent::add_handler(|e| t!(network::hub::WSS.broadcast_joint(e.joint.clone())));
 }
 
 // the hub server logic that run in coroutine context
@@ -104,7 +104,7 @@ fn main() -> Result<()> {
     config::show_config();
 
     // uncomment it to test read joint from db
-    go!(|| run_hub_server())
+    go!(run_hub_server)
         .join()
         .expect("panic inside run_hub_server")?;
     // wait user input a ctrl_c to exit

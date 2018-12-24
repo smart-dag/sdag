@@ -136,7 +136,7 @@ pub struct JointData {
     valid_parent_num: Arc<AtomicUsize>,
     joint: Joint,
     stable_sem: Arc<Semphore>,
-    peer_id: Option<String>,
+    peer_id: Option<Arc<String>>,
     props: Arc<RwLock<JointProperty>>,
 }
 
@@ -479,7 +479,7 @@ impl JointData {
 }
 
 impl JointData {
-    pub fn from_joint(joint: Joint, peer_id: Option<String>) -> Self {
+    pub fn from_joint(joint: Joint, peer_id: Option<Arc<String>>) -> Self {
         JointData {
             joint,
             parents: Default::default(),
