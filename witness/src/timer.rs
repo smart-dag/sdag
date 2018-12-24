@@ -30,11 +30,11 @@ pub fn start_global_timers() {
     });
 
     // auto connection if peers count is under threshold
-    // go!(move || loop {
-    //     coroutine::sleep(Duration::from_secs(30));
-    //     info!("auto connect to other peers");
-    //     hub::auto_connection();
-    // });
+    go!(move || loop {
+        coroutine::sleep(Duration::from_secs(30));
+        info!("auto connect to other peers");
+        hub::auto_connection();
+    });
 
     // witness compose and send joint
     go!(move || loop {

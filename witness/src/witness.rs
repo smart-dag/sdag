@@ -321,7 +321,10 @@ fn witness() -> Result<()> {
     }
     SELF_LEVEL.store(max_parent_level.value() + 1, Ordering::Relaxed);
 
-    sdag::network::hub::WSS.broadcast_joint(joint_data)?;
+    // we just post the joint to one hub
+    if let Some(ws) = sdag::network::hub::WSS.get_next_peer() {
+        ws.post_joint(&joint_data)?;
+    }
 
     Ok(())
 }
