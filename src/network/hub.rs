@@ -218,9 +218,7 @@ pub struct HubData {
     is_subscribed: AtomicBool,
     is_source: AtomicBool,
     is_inbound: AtomicBool,
-    // TODO: change to u64
     peer_id: ArcCell<String>,
-    device_address: ArcCell<Option<String>>,
 }
 
 pub type HubConn = WsConnection<HubData>;
@@ -232,7 +230,6 @@ impl Default for HubData {
             is_source: AtomicBool::new(false),
             is_inbound: AtomicBool::new(false),
             peer_id: ArcCell::new(Arc::new("unknown".to_owned())),
-            device_address: ArcCell::new(Arc::new(None)),
         }
     }
 }
@@ -329,18 +326,6 @@ impl HubConn {
         let data = self.get_data();
         data.peer_id.set(Arc::new(peer_id.to_owned()));
     }
-
-    pub fn get_device_address(&self) -> Arc<Option<String>> {
-        let data = self.get_data();
-        data.device_address.get()
-    }
-
-    pub fn set_device_address(&self, device_address: &str) {
-        info!("set_device_address {}", device_address);
-        let data = self.get_data();
-        data.device_address
-            .set(Arc::new(Some(device_address.to_owned())));
-    }
 }
 
 // the server side impl
@@ -417,14 +402,17 @@ impl HubConn {
             self.get_peer_addr()
         );
         self.set_subscribed();
-        // wait connection init done
-        ::utils::wait_cond(None, || WSS.get_connection(self.get_peer_id()).is_some())?;
-        let ws = WSS
-            .get_connection(self.get_peer_id())
-            .ok_or_else(|| format_err!("connection not init done yet"))?;
+        self.set_peer_id(subscription_id);
+
         // send some joint in a background task
         let last_mci = param["last_mci"].as_u64();
+        let peer_id = self.get_peer_id();
         try_go!(move || -> Result<()> {
+            // wait connection init done
+            ::utils::wait_cond(None, || WSS.get_connection(peer_id.clone()).is_some())?;
+            let ws = WSS
+                .get_connection(peer_id)
+                .ok_or_else(|| format_err!("connection not init done yet"))?;
             if let Some(last_mci) = last_mci {
                 ws.send_joints_since_mci(Level::from(last_mci as usize))?;
             }
@@ -827,20 +815,21 @@ impl HubConn {
             &json!({ "subscription_id": *SELF_HUB_ID, "last_mci": last_mci.value()}),
         ) {
             Ok(value) => {
-                let peer_id = match value["peer_id"].as_str() {
-                    Some(s) => s.to_owned(),
-                    None => {
-                        let id = object_hash::gen_random_string(30);
-                        warn!(
-                            "peer_id is not found, peer_addr={}, use a random one {}",
-                            self.get_peer_addr(),
-                            id
-                        );
-                        id
+                // the peer id may be ready set in on_subscribe
+                // the light client peer_id is the return value
+                match value["peer_id"].as_str() {
+                    Some(peer_id) => {
+                        if self.get_peer_id().as_str() == "unknown" {
+                            self.set_peer_id(peer_id);
+                        }
                     }
-                };
-
-                self.set_peer_id(&peer_id);
+                    // the client must send it peer id back, or this would wait for ever!
+                    None => {
+                        ::utils::wait_cond(Some(Duration::from_secs(10)), || {
+                            self.get_peer_id().as_str() != "unknown"
+                        })?;
+                    }
+                }
 
                 let is_source = value["is_source"].as_bool().unwrap_or(true);
                 if is_source {
@@ -848,13 +837,13 @@ impl HubConn {
                 }
             }
             Err(e) => {
-                warn!(
+                // save the peer address to avoid connect to it again
+                BAD_CONNECTION.insert(self.get_peer_addr().to_string(), ());
+                bail!(
                     "send subscribe failed, err={}, peer={}",
                     e,
                     self.get_peer_addr()
                 );
-                // save the peer address to avoid connect to it again
-                BAD_CONNECTION.insert(self.get_peer_addr().to_string(), ());
             }
         }
 

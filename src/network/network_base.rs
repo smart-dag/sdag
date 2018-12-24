@@ -245,7 +245,6 @@ impl<T> WsConnection<T> {
                                 continue;
                             }
                         };
-                        debug!("got response for tag={}", tag);
                         req_map_1.set_rsp(&tag, value).ok();
                     }
                     s => {
