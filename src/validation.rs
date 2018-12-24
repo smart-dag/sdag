@@ -448,7 +448,12 @@ fn validate_parents(joint: &JointData) -> Result<()> {
     let last_ball_joint_data = last_ball_joint.read()?;
     // last_ball_unit is on main chain
     if !last_ball_joint_data.is_on_main_chain() {
-        bail!("last ball {} is not on MC", last_ball_unit_hash);
+        bail!(
+            "last ball {} is not on MC, mci is {:?}, limci is {:?}",
+            last_ball_unit_hash,
+            last_ball_joint_data.get_mci(),
+            last_ball_joint_data.get_limci()
+        );
     }
 
     if last_ball_joint_data.ball.is_none() {
@@ -593,12 +598,17 @@ fn validate_authors(joint: &JointData) -> Result<()> {
                 return Ok(());
             }
 
-            let (_, definition) = SDAG_CACHE.get_definition(&author.address).ok_or_else(|| {
-                format_err!(
-                    "definition bound to address {} is not defined",
-                    author.address
-                )
-            })?;
+            let (unit, definition) =
+                SDAG_CACHE.get_definition(&author.address).ok_or_else(|| {
+                    format_err!(
+                        "definition bound to address {} is not defined",
+                        author.address
+                    )
+                })?;
+
+            if !SDAG_CACHE.get_joint(&unit)?.read()?.is_stable() {
+                bail!("definition is not stable, unit = {}", unit)
+            }
 
             let unit_hash = joint.unit.calc_unit_hash_to_sign();
             validate_authentifiers(&Value::Null, &definition, &unit_hash, &author.authentifiers)?;

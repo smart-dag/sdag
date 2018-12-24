@@ -39,7 +39,7 @@ use sdag::network::wallet::WalletConn;
 use self::wallet::WalletInfo;
 
 lazy_static! {
-    pub static ref TRANSANTION_NUM: AtomicUsize = AtomicUsize::new(0);
+    pub static ref TRANSANTION_NUM: AtomicUsize = AtomicUsize::new(1);
 }
 
 fn init_log(verbosity: u64) {
@@ -239,7 +239,7 @@ fn continue_sending(ws: Arc<WalletConn>, wallets_info: &Vec<wallet::WalletInfo>)
     let wallets = vec![(wallets_info[n1]._00_address.clone(), 0.001)];
 
     if let Err(e) = send_payment(&ws, wallets, &wallets_info[n2]) {
-        thread::sleep(Duration::from_secs(10));
+        coroutine::sleep(Duration::from_secs(10));
         eprintln!("{}", e);
     }
 
@@ -395,12 +395,12 @@ fn main() -> Result<()> {
                         _ => {}
                     };
                     thread::yield_now();
-                    thread::sleep(Duration::from_millis(10));
+                    coroutine::sleep(Duration::from_millis(10));
                 });
             }
 
             loop {
-                thread::sleep(Duration::from_secs(1));
+                coroutine::sleep(Duration::from_secs(1));
             }
         }
 
@@ -413,7 +413,7 @@ fn main() -> Result<()> {
             if let Some(index) = cycle_index {
                 for _ in 0..index {
                     while let Err(e) = send_payment(&ws, address_amount.clone(), &wallet_info) {
-                        thread::sleep(Duration::from_secs(10));
+                        coroutine::sleep(Duration::from_secs(10));
                         eprintln!("{}", e);
                     }
                 }
