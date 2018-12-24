@@ -1075,7 +1075,7 @@ fn init_connection(ws: &Arc<HubConn>) -> Result<()> {
     use rand::{thread_rng, Rng};
 
     // wait for some time for server ready
-    // coroutine::sleep(Duration::from_millis(1));
+    coroutine::sleep(Duration::from_millis(1));
 
     ws.send_version()?;
     ws.send_subscribe()?;
