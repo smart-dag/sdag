@@ -124,7 +124,9 @@ impl WsConnections {
         let mut peers: Vec<String> = Vec::new();
         let hub_id = Value::from(SELF_HUB_ID.as_str());
         let g = self.conns.read().unwrap();
-        let conns = g.values();
+
+        // only get peers from source connections
+        let conns = g.values().filter(|c| c.is_source());
         for conn in conns {
             if let Ok(value) = conn.send_request("get_peers", &hub_id) {
                 if let Ok(mut tmp) = serde_json::from_value(value) {

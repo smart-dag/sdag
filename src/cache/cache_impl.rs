@@ -197,6 +197,7 @@ impl SDagCacheInner {
             }
             // insert into known bad
             let err = error.take().unwrap_or_else(|| String::from("bad parent"));
+            error!("add known bad joint = {}, err={}", key, err);
             self.known_bad_joints.entry(key).or_insert(err);
         }
     }
