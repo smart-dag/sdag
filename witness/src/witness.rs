@@ -89,8 +89,8 @@ fn adjust_witnessing_speed() -> Result<()> {
     let mut rng = thread_rng();
     let time;
     let self_level = SELF_LEVEL.load(Ordering::Relaxed).into();
-    if self_level == Level::MINIMUM {
-        time = (rng.gen_range(0.0, 1.0) * 3_000.0) as u64;
+    if self_level == Level::from(0) {
+        time = (rng.gen_range(0.0, 1.0) * 2_000.0) as u64;
     } else {
         let free_joints = SDAG_CACHE.get_free_joints()?;
         let free_joint_level = sdag::main_chain::find_best_joint(free_joints.iter())?
@@ -99,9 +99,9 @@ fn adjust_witnessing_speed() -> Result<()> {
             .get_level();
         let distance = free_joint_level - self_level;
         if distance < THRESHOLD_DISTANCE {
-            time = ((THRESHOLD_DISTANCE - distance) * 300) as u64;
+            time = ((THRESHOLD_DISTANCE - distance) * 200) as u64;
         } else {
-            time = ((THRESHOLD_DISTANCE / distance) * 300) as u64;
+            time = ((THRESHOLD_DISTANCE / distance) * 200) as u64;
         }
     }
     info!(
