@@ -214,7 +214,11 @@ impl SDagCacheInner {
 
     /// return all the missing joints
     pub fn get_all_missing_joints(&self) -> Vec<String> {
-        self.missing_parents.keys().cloned().collect()
+        self.missing_parents
+            .keys()
+            .filter(|key| !self.unhandled_joints.contains_key(*key))
+            .cloned()
+            .collect()
     }
 
     /// remove the parent and all it's descendants

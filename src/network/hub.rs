@@ -527,7 +527,8 @@ impl HubConn {
     fn on_get_peers(&self, param: Value) -> Result<Value> {
         let peer_id = param.as_str();
         let peers = WSS.get_outbound_peers(peer_id.unwrap_or("unknown"));
-        Ok(serde_json::to_value(peers)?)
+        let peer_addrs = peers.into_iter().map(|p| p.peer_addr).collect::<Vec<_>>();
+        Ok(serde_json::to_value(peer_addrs)?)
     }
 
     fn on_get_net_state(&self, _param: Value) -> Result<Value> {
@@ -1039,7 +1040,6 @@ pub fn re_request_lost_joints() -> Result<()> {
     if units.is_empty() {
         return Ok(());
     }
-    info!("lost units {:?}", units);
 
     let ws = match WSS.get_next_peer() {
         None => bail!("failed to find next peer"),
@@ -1050,7 +1050,10 @@ pub fn re_request_lost_joints() -> Result<()> {
     // this is not an atomic operation, but it's fine to request the unit in working
     let new_units = units
         .into_iter()
-        .filter(|x| UNIT_IN_WORK.try_lock(vec![(*x).to_owned()]).is_none());
+        .filter(|x| UNIT_IN_WORK.try_lock(vec![(*x).to_owned()]).is_some())
+        .collect::<Vec<_>>();
+
+    info!("lost units {:?}", new_units);
 
     ws.request_joints(new_units)
 }
