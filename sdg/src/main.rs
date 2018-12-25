@@ -475,7 +475,7 @@ fn main() -> Result<()> {
     if let Some(unit_args) = m.subcommand_matches("unit") {
         //show the list of free joint
         if unit_args.values_of("free").is_some() {
-            let units_hash = ws.get_free_joints_list()?;
+            let units_hash = ws.get_free_joints()?;
 
             for (index, hash) in units_hash.iter().enumerate() {
                 println!("{}. unit -> {}", index + 1, hash);

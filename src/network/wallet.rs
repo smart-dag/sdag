@@ -142,8 +142,8 @@ impl WalletConn {
     }
 
     //returned free joint list
-    pub fn get_free_joints_list(&self) -> Result<Vec<String>> {
-        let response = self.send_request("get_free_joints_list", &Value::Null)?;
+    pub fn get_free_joints(&self) -> Result<Vec<String>> {
+        let response = self.send_request("get_free_joints", &Value::Null)?;
 
         Ok(serde_json::from_value(response)?)
     }
