@@ -486,18 +486,17 @@ fn main() -> Result<()> {
             }
         }
 
-        if unit_args.values_of("bad").is_some() {
-            println!(
-                "\nthe number of bad joints = {}\n",
-                ws.get_bad_joints_list()?
-            );
-        }
+        if unit_args.values_of("info").is_some() {
+            let sdag::light::NumOfUnit {
+                valid_unit,
+                known_bad,
+                unhandled,
+            } = ws.get_joints_info()?;
 
-        if unit_args.values_of("unhandled").is_some() {
-            println!(
-                "\nthe number of unhandled joints = {}\n",
-                ws.get_unhandled_joints_list()?
-            );
+            println!("the number of various joint\n");
+            println!("normal joint      : {}", valid_unit);
+            println!("known bad joints  : {}", known_bad);
+            println!("unhandled joints  : {}", unhandled);
         }
 
         //show joint and properties

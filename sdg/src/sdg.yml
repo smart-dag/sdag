@@ -109,14 +109,6 @@ subcommands:
                 help: list current free jonits
                 long: free
                 short: f
-            - bad:
-                help: list known bad jonits
-                long: bad
-                short: b
-            - unhandled:
-                help: list unhandled jonits
-                long: unhandled
-                short: u 
             - mci:
                 help: list all the units of the specified mci 
                 long: mci

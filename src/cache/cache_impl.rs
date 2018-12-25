@@ -59,6 +59,10 @@ impl SDagCacheInner {
         self.normal_joints.get(key).cloned()
     }
 
+    pub fn get_num_of_normal_joints(&self) -> usize {
+        self.normal_joints.len()
+    }
+
     /// add empty joint into the cache
     /// this is used when there are some (parents) refs that need to create
     pub fn add_empty_joint(&mut self, key: &str) -> CachedJoint {
@@ -123,9 +127,10 @@ impl SDagCacheInner {
         self.unhandled_joints.contains_key(key)
     }
 
-    pub fn get_known_unhandled_joints(&self) -> usize {
-        self.unhandled_joints.keys().len()
+    pub fn get_num_of_unhandled_joints(&self) -> usize {
+        self.unhandled_joints.len()
     }
+
     /// move a joint from unhandled to normal
     pub fn transfer_joint_to_normal(&mut self, key: &str) {
         if let Some((k, v)) = self.unhandled_joints.remove_entry(key) {
@@ -138,8 +143,8 @@ impl SDagCacheInner {
         self.known_bad_joints.contains_key(key)
     }
 
-    pub fn get_known_bad_joints(&self) -> usize {
-        self.known_bad_joints.keys().len()
+    pub fn get_num_of_known_bad_joints(&self) -> usize {
+        self.known_bad_joints.len()
     }
 
     /// remove the missing parent entry if the parent is validate good

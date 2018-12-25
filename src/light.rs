@@ -14,6 +14,13 @@ pub struct LightProps {
 }
 
 #[derive(Serialize, Deserialize)]
+pub struct NumOfUnit {
+    pub valid_unit: usize,
+    pub known_bad: usize,
+    pub unhandled: usize,
+}
+
+#[derive(Serialize, Deserialize)]
 pub struct HistoryRequest {
     pub address: String,
     #[serde(default)]

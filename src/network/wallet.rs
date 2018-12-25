@@ -148,14 +148,8 @@ impl WalletConn {
         Ok(serde_json::from_value(response)?)
     }
 
-    pub fn get_bad_joints_list(&self) -> Result<usize> {
-        let response = self.send_request("get_bad_joints_list", &Value::Null)?;
-
-        Ok(serde_json::from_value(response)?)
-    }
-
-    pub fn get_unhandled_joints_list(&self) -> Result<usize> {
-        let response = self.send_request("get_unhandled_joints_list", &Value::Null)?;
+    pub fn get_joints_info(&self) -> Result<light::NumOfUnit> {
+        let response = self.send_request("get_joints_info", &Value::Null)?;
 
         Ok(serde_json::from_value(response)?)
     }

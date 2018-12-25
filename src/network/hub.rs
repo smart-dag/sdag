@@ -276,23 +276,23 @@ impl Server<HubData> for HubData {
             "heartbeat" => ws.on_heartbeat(params)?,
             "subscribe" => ws.on_subscribe(params)?,
             "catchup" => ws.on_catchup(params)?,
-            "net_state" => ws.on_get_net_state(params)?,
             "post_joint" => ws.on_post_joint(params)?,
+            "net_state" => ws.on_get_net_state(params)?,
             "light/inputs" => ws.on_get_inputs(params)?,
-            "light/light_props" => ws.on_get_light_props(params)?,
             "light/get_history" => ws.on_get_history(params)?,
+            "light/light_props" => ws.on_get_light_props(params)?,
             "light/get_link_proofs" => ws.on_get_link_proofs(params)?,
             "get_joint" => ws.on_get_joint(params)?,
             "get_peers" => ws.on_get_peers(params)?,
             "get_balance" => ws.on_get_balance(params)?,
             "get_hash_tree" => ws.on_get_hash_tree(params)?,
             "get_witnesses" => ws.on_get_witnesses(params)?,
+            "get_free_joints" => ws.get_free_joints(params)?,
+            "get_joints_info" => ws.on_get_joints_info(params)?,
             "get_network_info" => ws.on_get_network_info(params)?,
             "get_joints_by_mci" => ws.on_get_joints_by_mci(params)?,
-            "get_free_joints_list" => ws.get_free_joints_list(params)?,
-            "get_bad_joints_list" => ws.get_bad_joints_list(params)?,
             "get_joint_by_unit_hash" => ws.on_get_joint_by_unit_hash(params)?,
-            "get_unhandled_joints_list" => ws.get_unhandled_joints_list(params)?,
+
             command => bail!("on_request unknown command: {}", command),
         };
         Ok(response)
@@ -380,6 +380,14 @@ impl HubConn {
         Ok(serde_json::to_value(ret)?)
     }
 
+    fn on_get_joints_info(&self, _param: Value) -> Result<Value> {
+        Ok(json!(light::NumOfUnit {
+            valid_unit: SDAG_CACHE.get_num_of_normal_joints(),
+            known_bad: SDAG_CACHE.get_num_of_bad_joints(),
+            unhandled: SDAG_CACHE.get_num_of_unhandled_joints(),
+        }))
+    }
+
     fn on_get_light_props(&self, param: Value) -> Result<Value> {
         if !self.is_inbound() {
             bail!("light clients have to be inbound");
@@ -454,7 +462,7 @@ impl HubConn {
         }
     }
 
-    fn get_free_joints_list(&self, _param: Value) -> Result<Value> {
+    fn get_free_joints(&self, _param: Value) -> Result<Value> {
         match SDAG_CACHE.get_free_joints() {
             Ok(joints) => Ok(json!(joints
                 .iter()
@@ -466,14 +474,6 @@ impl HubConn {
                 bail!("{}", e);
             }
         }
-    }
-
-    fn get_bad_joints_list(&self, _param: Value) -> Result<Value> {
-        Ok(json!(SDAG_CACHE.get_bad_joints()))
-    }
-
-    fn get_unhandled_joints_list(&self, _param: Value) -> Result<Value> {
-        Ok(json!(SDAG_CACHE.get_unhandled_joints()))
     }
 
     fn on_joint(&self, param: Value) -> Result<()> {
