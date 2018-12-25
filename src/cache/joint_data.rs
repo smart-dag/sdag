@@ -226,15 +226,11 @@ impl JointData {
 
     pub fn wait_stable(&self) {
         use std::time::Duration;
-        loop {
-            let timeout = !self.stable_sem.wait_timeout(Duration::from_secs(1));
-            self.stable_sem.post();
-            if timeout {
-                error!("wait stable timeout! unit={}", self.unit.unit);
-            } else {
-                return;
-            }
+        while !self.stable_sem.wait_timeout(Duration::from_secs(1)) {
+            error!("wait stable timeout! unit={}", self.unit.unit);
         }
+        // release the semphore to unblock others
+        self.stable_sem.post();
     }
 
     pub fn set_stable(&self) {
