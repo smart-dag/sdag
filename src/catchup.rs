@@ -36,8 +36,8 @@ pub fn prepare_catchup_chain(catchup_req: CatchupReq) -> Result<CatchupChain> {
 
     let mut stable_last_ball_joints = Vec::new();
 
-    if last_stable_mci >= last_known_mci && (last_known_mci > 0 || last_stable_mci > 0) {
-        bail!("last_stable_mci >= last_known_mci");
+    if last_stable_mci > last_known_mci && (last_known_mci > 0 || last_stable_mci > 0) {
+        bail!("last_stable_mci > last_known_mci");
     };
     ensure!(witnesses.len() == 12, "invalid witness list");
 
