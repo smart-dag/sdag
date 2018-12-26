@@ -373,6 +373,8 @@ fn calc_min_wl_included_by_later_joints(
 ) -> Result<Level> {
     let mut witness_joints =
         collect_witnesses_all_best_children(first_unstable_joint, later_joints)?;
+    //collect_witnesses_along_best_parent(first_unstable_joint, later_joints)?;
+    //collect_witnesses_along_best_parent_from_best_joint(first_unstable_joint, later_joints)?;
 
     witness_joints.sort_by_key(|j| j.get_wl().value());
 
@@ -393,6 +395,7 @@ fn calc_min_wl_included_by_later_joints(
 }
 
 #[allow(dead_code)]
+/// The original witnesses collecting algorithm, it collects all best children included by later joints
 fn collect_witnesses_all_best_children(
     first_unstable_joint: &CachedJoint,
     later_joints: &[CachedJoint],
@@ -424,6 +427,85 @@ fn collect_witnesses_all_best_children(
         if joint_data.unit.is_authored_by_witness() {
             witness_joints.push(joint_data);
         }
+    }
+
+    Ok(witness_joints)
+}
+
+#[allow(dead_code)]
+/// Alternative witnesses collecting algorithm, from all later joints travel along best parent link
+/// It returns a subset of the original one, as some best children are only reachable via parents link not best parent
+fn collect_witnesses_along_best_parent(
+    earlier_joint: &CachedJoint,
+    later_joints: &[CachedJoint],
+) -> Result<Vec<RcuReader<JointData>>> {
+    let mut witness_joints = Vec::new();
+    let mut visited = Vec::new();
+
+    for later_joint in later_joints {
+        witness_joints.append(&mut collect_witnesses_single_chain(
+            earlier_joint,
+            later_joint,
+            &mut visited,
+        )?);
+    }
+
+    Ok(witness_joints)
+}
+
+#[allow(dead_code)]
+/// Another alternative witnesses collecting algorithm, from best later joint travel along best parent link
+/// It returns a subset of the above one, but it is the same algorithm to decide the main chain joint stable
+fn collect_witnesses_along_best_parent_from_best_joint(
+    earlier_joint: &CachedJoint,
+    later_joints: &[CachedJoint],
+) -> Result<Vec<RcuReader<JointData>>> {
+    if let Some(later_joint) = find_best_joint(later_joints.iter())? {
+        let mut visited = Vec::new();
+        return collect_witnesses_single_chain(earlier_joint, &later_joint, &mut visited);
+    }
+
+    Ok(Vec::new())
+}
+
+#[allow(dead_code)]
+/// Collect witnesses along the best parent from the later joint to earlier joint, both earlier and later joints included
+/// returns a empty vec if the best parent path does not contain earlier joint
+fn collect_witnesses_single_chain(
+    earlier_joint: &CachedJoint,
+    later_joint: &CachedJoint,
+    visited: &mut Vec<CachedJoint>,
+) -> Result<Vec<RcuReader<JointData>>> {
+    let mut witness_joints = Vec::new();
+    let mut joint = later_joint.clone();
+    let earlier_joint_data = earlier_joint.read()?;
+
+    loop {
+        let joint_data = joint.read()?;
+
+        // The best parent path does not pass earlier joint, no witness should be collected
+        if joint_data.get_props() < earlier_joint_data.get_props() {
+            return Ok(Vec::new());
+        }
+
+        // Already visited, no need to collect again
+        if visited.contains(&joint) {
+            break;
+        }
+
+        visited.push(joint.clone());
+
+        // Collect witness joints
+        if joint_data.unit.is_authored_by_witness() {
+            witness_joints.push(joint_data.clone());
+        }
+
+        // Meet the earlier_joint, done collecting
+        if joint == *earlier_joint {
+            break;
+        }
+
+        joint = joint_data.get_best_parent();
     }
 
     Ok(witness_joints)
@@ -494,7 +576,7 @@ pub fn is_stable_in_later_joints(
     let min_wl = calc_min_wl_included_by_later_joints(earlier_joint, &later_joints)?;
 
     let is_stable = min_wl > max_alt_level;
-    Ok(is_stable)
+    Ok(!is_stable)
 }
 
 /// Returns current unstable main chain from the best free joint
