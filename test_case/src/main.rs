@@ -169,6 +169,7 @@ fn send_payment(
     ws: &Arc<WalletConn>,
     address_amount: Vec<(String, f64)>,
     wallet_info: &WalletInfo,
+    flag: &str,
 ) -> Result<()> {
     let light_props = ws.get_light_props(&wallet_info._00_address)?;
 
@@ -188,7 +189,7 @@ fn send_payment(
         false,               // is_spend_all
     )?;
 
-    let compose_info = sdag::composer::ComposeInfo {
+    let mut compose_info = sdag::composer::ComposeInfo {
         paid_address: wallet_info._00_address.clone(),
         change_address: wallet_info._00_address.clone(),
         outputs,
@@ -199,7 +200,7 @@ fn send_payment(
         pubk: wallet_info._00_address_pubk.to_base64_key(),
     };
 
-    let joint = sdag::composer::compose_joint(compose_info, wallet_info)?;
+    let joint = sdag::composer::compose_joint(compose_info.clone(), wallet_info)?;
 
     if let Err(e) = ws.post_joint(&joint) {
         eprintln!("post_joint err={}", e);
@@ -208,7 +209,7 @@ fn send_payment(
 
     println!("FROM  : {}", wallet_info._00_address);
     println!("TO    : ");
-    for (address, amount) in address_amount {
+    for (address, amount) in address_amount.clone() {
         println!("      address : {}, amount : {}", address, amount);
     }
     println!("UNIT  : {}", joint.unit.unit);
@@ -221,6 +222,50 @@ fn send_payment(
     );
     println!("Total :{}", TRANSANTION_NUM.fetch_add(1, Ordering::SeqCst));
 
+    println!("\n the original joint: \n [{:#?}] \n", joint);
+
+    match flag {
+        "good" => return Ok(()),
+        "nonserial" => {
+            compose_info.inputs = ws.get_inputs_from_hub(
+                &wallet_info._00_address,
+                total_amount + 1000, // we need another 1000 sdg (usually 431 + 197)
+                false,               // is_spend_all
+            )?;
+
+            let joint = sdag::composer::compose_joint(compose_info, wallet_info)?;
+
+            if let Err(e) = ws.post_joint(&joint) {
+                eprintln!("post_joint err={}", e);
+                return Err(e);
+            }
+
+            println!("\n non serial joint: \n [{:#?}] \n", joint);
+        }
+        "doublespend" => {
+            compose_info.light_props.parent_units = vec![joint.unit.unit];
+            let joint = sdag::composer::compose_joint(compose_info, wallet_info)?;
+
+            if let Err(e) = ws.post_joint(&joint) {
+                eprintln!("post_joint err={}", e);
+                return Err(e);
+            }
+
+            println!("\n double spend joint: \n [{:#?}] \n", joint);
+        }
+        "samejoint" => {
+            let joint = sdag::composer::compose_joint(compose_info, wallet_info)?;
+
+            if let Err(e) = ws.post_joint(&joint) {
+                eprintln!("post_joint err={}", e);
+                return Err(e);
+            }
+
+            println!("\n the same joint: \n [{:#?}] \n", joint);
+        }
+        _ => bail!("flag is invalid"),
+    }
+
     Ok(())
 }
 
@@ -232,7 +277,7 @@ fn continue_sending(ws: Arc<WalletConn>, wallets_info: &[wallet::WalletInfo]) ->
 
     let wallets = vec![(wallets_info[n1]._00_address.clone(), 0.001)];
 
-    if let Err(e) = send_payment(&ws, wallets, &wallets_info[n2]) {
+    if let Err(e) = send_payment(&ws, wallets, &wallets_info[n2], "good") {
         coroutine::sleep(Duration::from_secs(10));
         eprintln!("{}", e);
     }
@@ -406,16 +451,71 @@ fn main() -> Result<()> {
 
             if let Some(index) = cycle_index {
                 for _ in 0..index {
-                    while let Err(e) = send_payment(&ws, address_amount.clone(), &wallet_info) {
+                    while let Err(e) =
+                        send_payment(&ws, address_amount.clone(), &wallet_info, "good")
+                    {
                         coroutine::sleep(Duration::from_secs(10));
                         eprintln!("{}", e);
                     }
                 }
             } else {
-                send_payment(&ws, address_amount, &wallet_info)?;
+                send_payment(&ws, address_amount, &wallet_info, "good")?;
             }
             return Ok(());
         }
+    }
+
+    //Send one payment to address
+    // Example:
+    // 1) pay LWFAESN3EB5E5VFXJ7JWIJB7K5MDQCZE 1
+    // 2) pay LWFAESN3EB5E5VFXJ7JWIJB7K5MDQCZE 1 -ns
+    // 3) pay LWFAESN3EB5E5VFXJ7JWIJB7K5MDQCZE 1 -ds
+    // 4) pay LWFAESN3EB5E5VFXJ7JWIJB7K5MDQCZE 1 -sa
+    if let Some(pay) = m.subcommand_matches("pay") {
+        let wallet_info = WalletInfo::from_mnemonic(&settings.mnemonic)?;
+        let witnesses = ws.get_witnesses()?;
+        if witnesses.contains(&wallet_info._00_address) {
+            bail!("witness can not send payment by sdg");
+        }
+
+        let mut address_amount = Vec::new();
+        if let Some(address) = pay.value_of("ADDRESS") {
+            if !sdag::object_hash::is_chash_valid(address) {
+                eprintln!("invalid address, please check");
+                return Ok(());
+            }
+            if let Some(v) = pay.value_of("AMOUNT") {
+                let amount = v.parse::<f64>().context("invalid amount arg")?;
+                if amount > std::u64::MAX as f64 || amount < 0.000_001 {
+                    eprintln!("invalid amount, please check");
+                    return Ok(());
+                }
+                address_amount.push((address.to_string(), amount));
+            }
+        }
+
+        if address_amount.is_empty() {
+            eprintln!("address or amount is none");
+            return Ok(());
+        }
+
+        let mut flag = "good";
+        if pay.values_of("ns").is_some() {
+            flag = "nonserial";
+        }
+        if pay.values_of("ds").is_some() {
+            flag = "doublespend";
+        }
+        if pay.values_of("sa").is_some() {
+            flag = "samejoint";
+        }
+        let flags = vec!["good", "nonserial", "doublespend", "samejoint"];
+        if !flags.contains(&flag) {
+            eprintln!("flag is invalid, valid flag [{:#?}]", flags);
+            return Ok(());
+        }
+
+        send_payment(&ws, address_amount, &wallet_info, flag)?;
     }
 
     //balance

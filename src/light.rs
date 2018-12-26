@@ -48,7 +48,7 @@ pub struct InputsRequest {
     pub is_spend_all: bool,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct InputsResponse {
     pub inputs: Vec<Input>,
     pub amount: u64,

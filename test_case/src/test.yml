@@ -65,7 +65,31 @@ subcommands:
                 long: text
                 takes_value: true
                 required: false
-                
+
+    - pay:
+        about: payment test case
+        args:
+            - ADDRESS:
+                    help: pay SDG to the address
+                    takes_value: true
+                    required: true
+            - AMOUNT:
+                    help: pay AMOUNT SDGs to the address
+                    takes_value: true
+                    required: true
+            - ns:
+                    help: send non serial joints
+                    short: ns
+                    value_name: nonserial
+            - ds:
+                    help: send double spend joints
+                    short: ds
+                    value_name: doublespend
+            - sa:
+                    help: send the same joints
+                    short: sa
+                    value_name: samejoint
+
     - genesis:
         about: create genesis
     - balance:

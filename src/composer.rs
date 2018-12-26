@@ -17,7 +17,7 @@ pub struct ParentsAndLastBall {
     pub last_ball_unit: String,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct ComposeInfo {
     pub paid_address: String,
     pub change_address: String,
