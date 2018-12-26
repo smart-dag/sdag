@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::collections::VecDeque;
 
-use cache::{CachedJoint, SDagCache, SDAG_CACHE};
+use cache::{CachedJoint, JointData, SDagCache, SDAG_CACHE};
 use error::Result;
 use failure::ResultExt;
 use joint::Level;
@@ -143,41 +143,58 @@ fn calc_max_alt_level(alternative_roots: Vec<CachedJoint>) -> Result<Option<Leve
     Ok(max_alt_level)
 }
 
-fn mark_main_chain_joint_stable(joint: CachedJoint, mci: Level) -> Result<()> {
-    let main_chain_joint_data = joint.read()?;
+fn mark_main_chain_joint_stable(main_chain_joint: CachedJoint, mci: Level) -> Result<()> {
+    use rcu_cell::RcuReader;
+
+    let main_chain_joint_data = main_chain_joint.read()?;
     main_chain_joint_data.set_limci(mci);
+
+    struct VisitedJoint {
+        joint: CachedJoint,
+        joint_data: RcuReader<JointData>,
+    }
+
+    impl PartialEq for VisitedJoint {
+        fn eq(&self, other: &Self) -> bool {
+            self.joint == other.joint
+        }
+    }
 
     let mut joints = VecDeque::new();
     let mut sorted = Vec::new();
-    joints.push_back(joint.clone());
+    joints.push_back(main_chain_joint.clone());
 
     while let Some(joint) = joints.pop_front() {
         let joint_data = joint.read()?;
 
+        let visit_joint = VisitedJoint { joint_data, joint };
+
         //Mci has been already set but not stable yet, still waiting for balls
-        if joint_data.get_mci().is_valid() {
+        if sorted.contains(&visit_joint) || visit_joint.joint_data.get_mci().is_valid() {
             continue;
         }
-
-        sorted.push(joint.clone());
 
         // parent_units is ordered, joint.parents is not ordered
-        for parent_unit in &joint_data.unit.parent_units {
-            joints.push_back(SDAG_CACHE.get_joint(parent_unit)?);
+        for parent in visit_joint.joint_data.parents.iter() {
+            joints.push_back(parent.clone());
         }
+
+        sorted.push(visit_joint);
     }
 
-    let mut visited = HashSet::new();
-    let mut sub_mci = Level::ZERO;
-
-    while let Some(joint) = sorted.pop() {
-        //Ignore the second visit to keep the order right
-        if !visited.insert(joint.key.clone()) {
-            continue;
+    // first sort by level, then unit hash
+    sorted.sort_by(|a, b| {
+        use std::cmp::Ordering;
+        match PartialOrd::partial_cmp(&a.joint_data.get_level(), &b.joint_data.get_level()) {
+            Some(Ordering::Equal) => Ord::cmp(&a.joint.key, &b.joint.key),
+            Some(r) => r,
+            None => unreachable!("invalid level cmp"),
         }
+    });
 
-        let joint_data = joint.read()?;
-
+    let mut sub_mci = Level::ZERO;
+    for VisitedJoint { joint_data, joint } in sorted {
+        // set sub_mci
         joint_data.set_sub_mci(sub_mci);
         sub_mci += 1;
 
@@ -196,21 +213,22 @@ fn mark_main_chain_joint_stable(joint: CachedJoint, mci: Level) -> Result<()> {
             joint_data.set_limci(limci);
         }
 
+        // set mci
         joint_data.set_mci(mci);
 
-        if joint_data.is_on_main_chain() {
-            SDAG_CACHE.set_mc_unit_hash(mci, joint_data.unit.unit.clone())?;
-        }
-
+        // push it to the business logic
         ::business::BUSINESS_WORKER.push_stable_joint(joint)?;
     }
+
+    // update the global property
+    SDAG_CACHE.set_mc_unit_hash(mci, main_chain_joint.key.to_string())?;
+    *LAST_STABLE_JOINT.write().unwrap() = main_chain_joint;
 
     info!(
         "main chain update: last_stable_joint = {:?}",
         main_chain_joint_data.get_props()
     );
 
-    *LAST_STABLE_JOINT.write().unwrap() = joint;
     ::utils::event::emit_event(MciStableEvent { mci });
 
     Ok(())
