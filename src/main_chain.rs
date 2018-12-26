@@ -7,6 +7,7 @@ use failure::ResultExt;
 use joint::Level;
 use may::coroutine::JoinHandle;
 use may::sync::{mpsc, RwLock};
+use rcu_cell::RcuReader;
 
 lazy_static! {
     pub static ref MAIN_CHAIN_WORKER: MainChainWorker = MainChainWorker::default();
@@ -370,6 +371,32 @@ fn calc_min_wl_included_by_later_joints(
     first_unstable_joint: &CachedJoint,
     later_joints: &[CachedJoint],
 ) -> Result<Level> {
+    let mut witness_joints =
+        collect_witnesses_all_best_children(first_unstable_joint, later_joints)?;
+
+    witness_joints.sort_by_key(|j| j.get_wl().value());
+
+    let mut collected_witnesses = HashSet::new();
+    while let Some(joint_data) = witness_joints.pop() {
+        for author in &joint_data.unit.authors {
+            if !collected_witnesses.insert(author.address.clone()) {
+                continue;
+            }
+
+            if collected_witnesses.len() >= ::config::MAJORITY_OF_WITNESSES {
+                return Ok(joint_data.get_wl());
+            }
+        }
+    }
+
+    Ok(Level::MINIMUM)
+}
+
+#[allow(dead_code)]
+fn collect_witnesses_all_best_children(
+    first_unstable_joint: &CachedJoint,
+    later_joints: &[CachedJoint],
+) -> Result<Vec<RcuReader<JointData>>> {
     let mut joints = vec![first_unstable_joint.clone()];
     let mut witness_joints = Vec::new();
 
@@ -399,22 +426,7 @@ fn calc_min_wl_included_by_later_joints(
         }
     }
 
-    witness_joints.sort_by_key(|j| j.get_wl().value());
-
-    let mut collected_witnesses = HashSet::new();
-    while let Some(joint_data) = witness_joints.pop() {
-        for author in &joint_data.unit.authors {
-            if !collected_witnesses.insert(author.address.clone()) {
-                continue;
-            }
-
-            if collected_witnesses.len() >= ::config::MAJORITY_OF_WITNESSES {
-                return Ok(joint_data.get_wl());
-            }
-        }
-    }
-
-    Ok(Level::MINIMUM)
+    Ok(witness_joints)
 }
 
 //---------------------------------------------------------------------------------------
