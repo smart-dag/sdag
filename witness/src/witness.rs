@@ -1,7 +1,7 @@
 extern crate sdag_wallet_base;
 
 use std::collections::{HashSet, VecDeque};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicIsize, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -21,10 +21,10 @@ lazy_static! {
     static ref IS_WITNESSING: AtomicLock = AtomicLock::new();
     static ref EVENT_TIMER: Arc<RwLock<Option<Instant>>> = Arc::new(RwLock::new(None));
     static ref WALLET_PUBK: String = WALLET_INFO._00_address_pubk.to_base64_key();
-    static ref SELF_LEVEL: AtomicUsize = AtomicUsize::new(0);
+    static ref SELF_LEVEL: AtomicIsize = AtomicIsize::new(-2);
 }
 
-const THRESHOLD_DISTANCE: usize = sdag::config::COUNT_WITNESSES * 2 / 3;
+const THRESHOLD_DISTANCE: isize = sdag::config::COUNT_WITNESSES as isize * 2 / 3;
 
 pub fn witness_timer_check() -> Result<Duration> {
     match check_timeout() {
@@ -88,15 +88,16 @@ fn adjust_witnessing_speed() -> Result<()> {
     use rand::{thread_rng, Rng};
     let mut rng = thread_rng();
     let time;
-    let self_level = SELF_LEVEL.load(Ordering::Relaxed).into();
-    if self_level == Level::from(0) {
+    let self_level = SELF_LEVEL.load(Ordering::Relaxed);
+    if self_level < 0 {
         time = (rng.gen_range(0.0, 1.0) * 2_000.0) as u64;
     } else {
         let free_joints = SDAG_CACHE.get_free_joints()?;
         let free_joint_level = sdag::main_chain::find_best_joint(free_joints.iter())?
             .ok_or_else(|| format_err!("empty best joint among free joints"))?
             .read()?
-            .get_level();
+            .get_level()
+            .value() as isize;
         let distance = free_joint_level - self_level;
         if distance < THRESHOLD_DISTANCE {
             time = ((THRESHOLD_DISTANCE - distance) * 200) as u64;
@@ -319,7 +320,7 @@ fn witness() -> Result<()> {
             max_parent_level = level;
         }
     }
-    SELF_LEVEL.store(max_parent_level.value() + 1, Ordering::Relaxed);
+    SELF_LEVEL.store(max_parent_level.value() as isize + 1, Ordering::Relaxed);
 
     // we just post the joint to one hub
     if let Some(ws) = sdag::network::hub::WSS.get_next_peer() {
