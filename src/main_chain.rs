@@ -485,7 +485,7 @@ fn collect_witnesses_single_chain(
         let joint_data = joint.read()?;
 
         // The best parent path does not pass earlier joint, no witness should be collected
-        if joint_data.get_props() < earlier_joint_data.get_props() {
+        if *joint_data < *earlier_joint_data {
             return Ok(Vec::new());
         }
 
