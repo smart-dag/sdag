@@ -331,6 +331,7 @@ fn calc_last_stable_joint(cache: &SDagCache) -> Result<CachedJoint> {
     }
 }
 
+#[allow(dead_code)]
 fn calc_max_alt_level_included_by_later_joints(
     alternative_roots: Vec<CachedJoint>,
     later_joints: &[CachedJoint],
@@ -372,9 +373,9 @@ fn calc_min_wl_included_by_later_joints(
     later_joints: &[CachedJoint],
 ) -> Result<Level> {
     let mut witness_joints =
-        collect_witnesses_all_best_children(first_unstable_joint, later_joints)?;
-    //collect_witnesses_along_best_parent(first_unstable_joint, later_joints)?;
-    //collect_witnesses_along_best_parent_from_best_joint(first_unstable_joint, later_joints)?;
+        // collect_witnesses_all_best_children(first_unstable_joint, later_joints)?;
+        // collect_witnesses_along_best_parent(first_unstable_joint, later_joints)?;
+        collect_witnesses_along_best_parent_from_best_joint(first_unstable_joint, later_joints)?;
 
     witness_joints.sort_by_key(|j| j.get_wl().value());
 
@@ -565,18 +566,19 @@ pub fn is_stable_in_later_joints(
             continue;
         }
 
-        if child.read()?.get_props().is_ancestor(later_joints.iter())? {
-            alt_branches_roots.push(child.clone());
-        }
+        // if child.read()?.get_props().is_ancestor(later_joints.iter())? {
+        alt_branches_roots.push(child.clone());
+        // }
     }
+
     let max_alt_level =
-        calc_max_alt_level_included_by_later_joints(alt_branches_roots, &later_joints)?
-            .unwrap_or_else(|| best_parent.get_level());
+        calc_max_alt_level(alt_branches_roots)?.unwrap_or_else(|| best_parent.get_level());
+    // calc_max_alt_level_included_by_later_joints(alt_branches_roots, &later_joints)?;
 
     let min_wl = calc_min_wl_included_by_later_joints(earlier_joint, &later_joints)?;
 
     let is_stable = min_wl > max_alt_level;
-    Ok(!is_stable)
+    Ok(is_stable)
 }
 
 /// Returns current unstable main chain from the best free joint
