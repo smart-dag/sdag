@@ -222,7 +222,6 @@ fn mark_main_chain_joint_stable(main_chain_joint: CachedJoint, mci: Level) -> Re
 
     // update the global property
     SDAG_CACHE.set_mc_unit_hash(mci, main_chain_joint.key.to_string())?;
-    *LAST_STABLE_JOINT.write().unwrap() = main_chain_joint;
 
     info!(
         "main chain update: last_stable_joint = {:?}",
@@ -508,4 +507,9 @@ pub fn get_last_stable_mci() -> Level {
 /// get the stable point joint
 pub fn get_last_stable_joint() -> CachedJoint {
     LAST_STABLE_JOINT.read().unwrap().clone()
+}
+
+// set the last stable joint
+pub fn set_last_stable_joint(joint: &CachedJoint) {
+    *LAST_STABLE_JOINT.write().unwrap() = joint.clone();
 }
