@@ -307,6 +307,9 @@ fn verify_joints(joints: Vec<Joint>, last_mci: usize) -> Result<()> {
         return Ok(());
     }
 
+    println!("\n===================");
+    println!("start to verify");
+
     let now = Instant::now();
     let sem = Arc::new(Semphore::new(0));
     let total_joints = joints.len();
@@ -538,6 +541,8 @@ fn main() -> Result<()> {
             use std::fs::File;
             let mut joints = Vec::new();
             let mut last_mci = 0;
+            println!("===================");
+            println!("get all data from hub");
             for i in 0.. {
                 let mut stable_joints = ws.get_joints_by_mci(i)?;
                 if stable_joints.is_empty() {
@@ -545,6 +550,7 @@ fn main() -> Result<()> {
                     println!("last mci = {}", last_mci);
                     break;
                 }
+                println!("mci={}, joints_num={}", i, stable_joints.len());
                 joints.append(&mut stable_joints);
             }
             let mut unstable_joints = ws.get_joints_by_mci(-1)?;
@@ -552,8 +558,11 @@ fn main() -> Result<()> {
             println!("total unit num = {}", joints.len());
 
             // save all the joints
+            println!("\n===================");
+            println!("write data to file: {}", file);
             let file = File::create(file)?;
             serde_json::to_writer_pretty(&file, &joints)?;
+
             // verify the joints
             verify_joints(joints, last_mci)?;
         }
