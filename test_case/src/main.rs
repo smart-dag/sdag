@@ -346,6 +346,7 @@ fn main() -> Result<()> {
 
     let settings = config::get_settings();
     let ws = connect_to_remote(&settings.hub_url).context("sdfsd")?;
+    let witnesses = ws.get_witnesses()?;
 
     // init command
     if let Some(init_arg) = m.subcommand_matches("init") {
@@ -412,7 +413,6 @@ fn main() -> Result<()> {
         };
 
         let wallet_info = WalletInfo::from_mnemonic(&settings.mnemonic)?;
-        let witnesses = ws.get_witnesses()?;
 
         if witnesses.contains(&wallet_info._00_address) {
             bail!("witness can not send payment by test");
@@ -444,10 +444,17 @@ fn main() -> Result<()> {
         }
 
         if let Some(num) = amount {
-            let address_amount = test_wallets
+            let mut address_amount = test_wallets
                 .iter()
                 .map(|w| (w._00_address.clone(), num as f64))
                 .collect::<Vec<(String, f64)>>();
+
+            address_amount.append(
+                &mut witnesses
+                    .iter()
+                    .map(|w| (w.clone(), num as f64))
+                    .collect::<Vec<(String, f64)>>(),
+            );
 
             if let Some(index) = cycle_index {
                 for _ in 0..index {
