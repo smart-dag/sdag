@@ -454,7 +454,6 @@ fn collect_witnesses_along_best_parent(
     Ok(witness_joints)
 }
 
-#[allow(dead_code)]
 /// Another alternative witnesses collecting algorithm, from best later joint travel along best parent link
 /// It returns a subset of the above one, but it is the same algorithm to decide the main chain joint stable
 fn collect_witnesses_along_best_parent_from_best_joint(
@@ -469,7 +468,6 @@ fn collect_witnesses_along_best_parent_from_best_joint(
     Ok(Vec::new())
 }
 
-#[allow(dead_code)]
 /// Collect witnesses along the best parent from the later joint to earlier joint, both earlier and later joints included
 /// returns a empty vec if the best parent path does not contain earlier joint
 fn collect_witnesses_single_chain(
@@ -479,13 +477,14 @@ fn collect_witnesses_single_chain(
 ) -> Result<Vec<RcuReader<JointData>>> {
     let mut witness_joints = Vec::new();
     let mut joint = later_joint.clone();
-    let earlier_joint_data = earlier_joint.read()?;
+    let earlier_mci = earlier_joint.read()?.get_mci();
 
     loop {
         let joint_data = joint.read()?;
 
         // The best parent path does not pass earlier joint, no witness should be collected
-        if *joint_data < *earlier_joint_data {
+        // we only use this in last stable joint compare, so this is fine to use the mci and limci
+        if joint_data.get_mci() < earlier_mci {
             return Ok(Vec::new());
         }
 
