@@ -87,7 +87,7 @@ impl WsConnections {
         }
         add_peer_host(&conn)?;
         let peer_id = conn.get_peer_id();
-        info!(
+        error!(
             "add_p2p_conn peer_id={} peer_addr={}",
             peer_id,
             conn.get_peer_addr()
@@ -462,7 +462,13 @@ impl HubConn {
             Ok(joint) => Ok(json!({ "joint": clear_ball_after_min_retrievable_mci(&joint)?})),
 
             Err(e) => {
-                error!("read joint {} failed, err={}", unit, e);
+                error!(
+                    "read joint {} failed, err={}, peer_addr={}",
+                    unit,
+                    e,
+                    self.get_peer_addr()
+                );
+
                 Ok(json!({ "joint_not_found": unit }))
             }
         }
@@ -968,14 +974,14 @@ pub fn auto_connection() {
 
     let peers = get_unconnected_peers_in_config();
     for peer in peers {
-        if BAD_CONNECTION.get(&peer).is_some() {
-            continue;
-        }
-        if create_outbound_conn(peer).is_ok() {
-            counts -= 1;
-            if counts == 0 {
-                return;
+        match create_outbound_conn(&peer) {
+            Ok(_) => {
+                counts -= 1;
+                if counts == 0 {
+                    return;
+                }
             }
+            Err(e) => error!("failed to connect to config peer={}, err={}", peer, e),
         }
     }
 

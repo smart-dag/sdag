@@ -119,6 +119,7 @@ impl<T> WsConnection<T> {
 
 impl<T> Drop for WsConnection<T> {
     fn drop(&mut self) {
+        error!("connection dropped. peer_addr={}", self.get_peer_addr());
         if ::std::thread::panicking() {
             return;
         }
