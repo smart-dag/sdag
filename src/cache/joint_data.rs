@@ -560,13 +560,15 @@ impl PartialOrd for JointData {
 
         // fast include detection
         match PartialOrd::partial_cmp(&props_a, &props_b) {
-            Some(cmp::Ordering::Equal) => unreachable!(),
+            Some(cmp::Ordering::Equal) => unreachable!(), // already checked at beginning
             Some(cmp::Ordering::Less) => return Some(cmp::Ordering::Less),
             Some(cmp::Ordering::Greater) => return Some(cmp::Ordering::Greater),
             None => {}
         }
 
         match PartialOrd::partial_cmp(&props_a.level, &props_b.level) {
+            // when Level are equal they must not connect
+            Some(cmp::Ordering::Equal) => return None,
             Some(cmp::Ordering::Greater) => {
                 // fast not include detection
                 if props_a.not_included(&props_b) {
@@ -596,8 +598,7 @@ impl PartialOrd for JointData {
             }
             // None and Equal are not possible here
             // None means joint level is not set
-            // when Level are equal they must not connect
-            _ => unreachable!(),
+            _ => unreachable!("invalid level can't compared!"),
         }
 
         None
