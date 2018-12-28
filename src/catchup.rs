@@ -293,7 +293,7 @@ pub fn prepare_hash_tree(hash_tree_req: HashTreeReq) -> Result<Vec<BallProps>> {
 pub fn process_hash_tree(balls: &[BallProps]) -> Result<()> {
     for ball_prop in balls {
         // skip the already known ones
-        if SDAG_CACHE.get_ball_unit_hash(&ball_prop.ball)?.is_some() {
+        if SDAG_CACHE.get_joint(&ball_prop.unit).is_ok() {
             continue;
         }
 
