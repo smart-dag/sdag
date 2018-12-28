@@ -181,7 +181,7 @@ struct NakedUnit<'a> {
 
 #[inline]
 lazy_static! {
-    static ref GENESIS_UNIT: String = ::config::get_genesis_unit();
+    pub static ref GENESIS_UNIT: String = ::config::get_genesis_unit();
 }
 
 pub fn is_genesis_unit(unit: &str) -> bool {

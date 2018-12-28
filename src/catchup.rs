@@ -2,7 +2,6 @@ use cache::SDAG_CACHE;
 use error::Result;
 use joint::{Joint, JointSequence};
 use main_chain;
-use spec;
 use witness_proof;
 
 #[derive(Serialize, Deserialize)]
@@ -36,9 +35,12 @@ pub fn prepare_catchup_chain(catchup_req: CatchupReq) -> Result<CatchupChain> {
 
     let mut stable_last_ball_joints = Vec::new();
 
-    if last_stable_mci > last_known_mci && (last_known_mci > 0 || last_stable_mci > 0) {
-        bail!("last_stable_mci > last_known_mci");
-    };
+    ensure!(
+        last_stable_mci <= last_known_mci,
+        "CatchupReq last_stable_mci={} > last_known_mci={}",
+        last_stable_mci,
+        last_known_mci,
+    );
     ensure!(witnesses.len() == 12, "invalid witness list");
 
     if SDAG_CACHE
@@ -140,13 +142,8 @@ pub fn process_catchup_chain(catchup_chain: CatchupChain) -> Result<Vec<String>>
         ensure!(len >= 1, "chain_balls length is not bigger enough");
 
         let joint = match SDAG_CACHE.get_ball_unit_hash(&chain_balls[len - 1])? {
-            None => {
-                if spec::is_genesis_ball(&chain_balls[len - 1]) {
-                    return Ok(());
-                }
-                bail!("first chain ball {} is not known", chain_balls[len - 1]);
-            }
             Some(unit) => SDAG_CACHE.get_joint(&unit)?.read()?,
+            None => bail!("first chain ball {} is not known", chain_balls[len - 1]),
         };
 
         ensure!(
@@ -225,29 +222,20 @@ pub fn prepare_hash_tree(hash_tree_req: HashTreeReq) -> Result<Vec<BallProps>> {
 
     // this is only for main chain balls
     let from_joint = match SDAG_CACHE.get_ball_unit_hash(&from_ball)? {
-        None => {
-            if spec::is_genesis_ball(&from_ball) {
-                let genesis_unit = ::config::get_genesis_unit();
-                SDAG_CACHE.get_joint(&genesis_unit)?.read()?
-            } else {
-                bail!("from_ball {} is not known", from_ball);
-            }
-        }
         Some(unit) => SDAG_CACHE.get_joint(&unit)?.read()?,
+        None => bail!("from_ball {} is not known", from_ball),
     };
 
     let to_joint = match SDAG_CACHE.get_ball_unit_hash(&to_ball)? {
-        None => bail!("to_ball {} is not known", from_ball),
         Some(unit) => SDAG_CACHE.get_joint(&unit)?.read()?,
+        None => bail!("to_ball {} is not known", from_ball),
     };
 
     let mut from_mci = from_joint.get_mci();
     let to_mci = to_joint.get_mci();
     ensure!(from_mci < to_mci, "from is after to");
-
-    if from_mci.value() > 0 {
-        from_mci += 1;
-    }
+    // no need to catchup the already known joints
+    from_mci += 1;
 
     let mut balls = Vec::new();
     while from_mci <= to_mci {
@@ -304,6 +292,11 @@ pub fn prepare_hash_tree(hash_tree_req: HashTreeReq) -> Result<Vec<BallProps>> {
 
 pub fn process_hash_tree(balls: &[BallProps]) -> Result<()> {
     for ball_prop in balls {
+        // skip the already known ones
+        if SDAG_CACHE.get_ball_unit_hash(&ball_prop.ball)?.is_some() {
+            continue;
+        }
+
         let ball = ::object_hash::calc_ball_hash(
             &ball_prop.unit,
             &ball_prop.parent_balls,

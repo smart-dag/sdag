@@ -145,10 +145,6 @@ fn network_cleanup() {
 }
 
 fn main() -> Result<()> {
-    if !sdag::my_witness::MY_WITNESSES.contains(&WALLET_INFO._00_address) {
-        bail!("address {} is not witness");
-    }
-
     init()?;
 
     connect_to_remote()?;
@@ -157,6 +153,23 @@ fn main() -> Result<()> {
 
     // add new_joint event
     register_event_handlers();
+
+    // at least wait for genesis got stable
+    sdag::utils::wait_cond(None, || {
+        let genesis = match sdag::cache::SDAG_CACHE.get_joint(&*sdag::spec::GENESIS_UNIT) {
+            Ok(j) => j,
+            _ => return false,
+        };
+
+        match genesis.read() {
+            Ok(data) => data.is_stable(),
+            _ => false,
+        }
+    })?;
+
+    if !sdag::my_witness::MY_WITNESSES.contains(&WALLET_INFO._00_address) {
+        bail!("address {} is not witness");
+    }
 
     // wait user input a ctrl_c to exit
     may_signal::ctrl_c().recv().unwrap();

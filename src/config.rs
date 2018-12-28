@@ -52,12 +52,6 @@ pub fn show_config() {
     println!("\n");
 }
 
-pub fn get_witnesses() -> [String; 12] {
-    let cfg = CONFIG.read().unwrap();
-    cfg.get::<[String; 12]>("witnesses")
-        .expect("failed to read witnesses")
-}
-
 pub fn get_genesis_unit() -> String {
     let cfg = CONFIG.read().unwrap();
     cfg.get::<String>("genesis_unit").unwrap_or_else(|e| {

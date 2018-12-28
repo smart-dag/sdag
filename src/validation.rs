@@ -229,7 +229,8 @@ fn validate_ball(joint: &JointData) -> Result<()> {
 }
 
 fn validate_parent_basic(unit: &Unit) -> Result<()> {
-    if unit.is_genesis_unit() {
+    if ::spec::is_genesis_unit(&unit.unit) {
+        ::my_witness::init_my_witnesses(&unit.witnesses);
         return Ok(());
     }
 

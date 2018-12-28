@@ -443,6 +443,10 @@ impl HubConn {
                 .ok_or_else(|| format_err!("connection not init done yet"))?;
             if let Some(last_mci) = last_mci {
                 ws.send_joints_since_mci(Level::from(last_mci as usize))?;
+            } else {
+                // send genesis unit
+                let genesis = SDAG_CACHE.get_joint(&::spec::GENESIS_UNIT)?.read()?;
+                ws.send_joint(&*genesis)?;
             }
             ws.send_free_joints()?;
             Ok(())
@@ -717,7 +721,7 @@ impl HubConn {
 
         // here we send out the real catchup request
         let last_stable_mci = main_chain::get_last_stable_mci();
-        let witnesses: &[String] = &::my_witness::MY_WITNESSES;
+        let witnesses = &*::my_witness::MY_WITNESSES;
         let param = json!({
             "witnesses": witnesses,
             "last_stable_mci": last_stable_mci.value(),
@@ -791,6 +795,12 @@ impl HubConn {
         // peer no need catchup
         if mci >= last_stable_mci {
             return Ok(());
+        }
+
+        if mci <= Level::ZERO {
+            // send genesis unit first to define the witnesses
+            let genesis = SDAG_CACHE.get_joint(&::spec::GENESIS_UNIT)?.read()?;
+            self.send_joint(&*genesis)?;
         }
 
         // only send latest stable joints
