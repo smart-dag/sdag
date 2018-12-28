@@ -473,7 +473,7 @@ fn main() -> Result<()> {
 
     //show joint and properties
     if let Some(unit_args) = m.subcommand_matches("unit") {
-        //show the list of free joint
+        // show all valid free joints
         if unit_args.values_of("free").is_some() {
             let units_hash = ws.get_free_joints()?;
 
@@ -483,6 +483,19 @@ fn main() -> Result<()> {
 
             if units_hash.is_empty() {
                 println!("\nthere is no free joints\n");
+            }
+        }
+
+        // show the miss joints
+        if unit_args.values_of("lost").is_some() {
+            let units_hash = ws.get_missing_joints()?;
+
+            for (index, hash) in units_hash.iter().enumerate() {
+                println!("{}. unit -> {}", index + 1, hash);
+            }
+
+            if units_hash.is_empty() {
+                println!("\nthere is no missing joints\n");
             }
         }
 

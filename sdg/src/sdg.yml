@@ -106,9 +106,13 @@ subcommands:
                 long: info
                 short: i
             - free:
-                help: list current free jonits
+                help: list current free joints
                 long: free
                 short: f
+            - lost:
+                help: list the missing joints
+                long: lost
+                short: l
             - mci:
                 help: list all the units of the specified mci 
                 long: mci

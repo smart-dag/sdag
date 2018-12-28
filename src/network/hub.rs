@@ -299,6 +299,7 @@ impl Server<HubData> for HubData {
             "get_joints_info" => ws.on_get_joints_info(params)?,
             "get_network_info" => ws.on_get_network_info(params)?,
             "get_joints_by_mci" => ws.on_get_joints_by_mci(params)?,
+            "get_missing_joints" => ws.get_missing_joints(params)?,
             "get_joint_by_unit_hash" => ws.on_get_joint_by_unit_hash(params)?,
 
             command => bail!("on_request unknown command: {}", command),
@@ -492,6 +493,11 @@ impl HubConn {
                 bail!("{}", e);
             }
         }
+    }
+
+    fn get_missing_joints(&self, _param: Value) -> Result<Value> {
+        let joints = SDAG_CACHE.get_missing_joints();
+        Ok(json!(joints))
     }
 
     fn on_joint(&self, param: Value) -> Result<()> {
