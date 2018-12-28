@@ -213,7 +213,13 @@ impl WsConnections {
     }
 
     fn get_needed_outbound_peers(&self) -> usize {
-        let outbound_connecions = self.conns.read().unwrap().len();
+        let outbound_connecions = self
+            .conns
+            .read()
+            .unwrap()
+            .values()
+            .filter(|c| !c.is_inbound())
+            .count();
         if config::MAX_OUTBOUND_CONNECTIONS > outbound_connecions {
             return config::MAX_OUTBOUND_CONNECTIONS - outbound_connecions;
         }
