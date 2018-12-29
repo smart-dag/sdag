@@ -216,13 +216,15 @@ fn is_normal_joint_behind_min_retrievable(free_joints: &[CachedJoint]) -> Result
     let mut queue = VecDeque::new();
     let mut visited = HashSet::new();
     for joint in free_joints {
-        queue.push_back(joint.clone());
+        if visited.insert(joint.key.clone()) {
+            queue.push_back(joint.clone());
+        }
     }
 
     while let Some(joint) = queue.pop_front() {
         let joint_data = joint.read()?;
         let mci = joint_data.get_mci();
-        if !visited.insert(joint.key.clone()) || mci <= min_retrievable_mci {
+        if mci <= min_retrievable_mci {
             continue;
         }
         for author in &joint_data.unit.authors {
@@ -233,7 +235,9 @@ fn is_normal_joint_behind_min_retrievable(free_joints: &[CachedJoint]) -> Result
             }
         }
         for p in joint_data.parents.iter() {
-            queue.push_back(p.clone());
+            if visited.insert(joint.key.clone()) {
+                queue.push_back(p.clone());
+            }
         }
     }
 

@@ -81,7 +81,6 @@ pub mod kv_store;
 pub mod business;
 pub mod config;
 pub mod error;
-pub mod headers_commission;
 
 pub mod my_witness;
 pub mod network;

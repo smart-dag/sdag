@@ -58,7 +58,9 @@ impl UnitProps {
         let mut visited = HashSet::new();
 
         for joint in later_joints {
-            joints.push_back(joint.read()?);
+            if visited.insert(joint.key.clone()) {
+                joints.push_back(joint.read()?);
+            }
         }
 
         while let Some(joint) = joints.pop_front() {

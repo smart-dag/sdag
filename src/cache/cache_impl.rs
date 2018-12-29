@@ -95,14 +95,12 @@ impl SDagCacheInner {
         let mut free_joints = Vec::new();
         let mut joints = self.free_joints.values().cloned().collect::<VecDeque<_>>();
         let mut visited = HashSet::new();
+        for joint in &joints {
+            visited.insert(joint.key.clone());
+        }
 
         while let Some(joint) = joints.pop_front() {
             let joint_data = joint.read()?;
-            let key = joint.key.clone();
-
-            if !visited.insert(key) {
-                continue;
-            }
 
             if joint_data.get_sequence() == JointSequence::Good
                 || joint_data.unit.is_authored_by_witness()
@@ -115,7 +113,9 @@ impl SDagCacheInner {
 
             // the joint is now temp-bad
             for parent in joint_data.parents.iter() {
-                joints.push_back(parent.clone());
+                if visited.insert(parent.key.clone()) {
+                    joints.push_back(parent.clone());
+                }
             }
         }
 

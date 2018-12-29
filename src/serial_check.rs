@@ -68,20 +68,24 @@ fn get_unstable_ancestor_units(
     let mut result = HashSet::new();
 
     for joint in joints {
-        queue.push_back(joint);
+        if visited.insert(joint.key.clone()) {
+            queue.push_back(joint);
+        }
     }
 
     while let Some(joint) = queue.pop_front() {
         let joint_data = joint.read()?;
 
-        if !visited.insert(joint.key.clone()) || joint_data.is_stable() {
+        if joint_data.is_stable() {
             continue;
         }
 
         result.insert(joint.key.clone());
 
         for p in joint_data.parents.iter() {
-            queue.push_back(p.clone());
+            if visited.insert(p.key.clone()) {
+                queue.push_back(p.clone());
+            }
         }
     }
 

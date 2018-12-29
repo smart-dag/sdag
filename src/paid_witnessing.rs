@@ -100,15 +100,16 @@ fn read_descendant_units_by_authors_before_mc_index(
     let mut visited = HashSet::new();
 
     let mut result = Vec::new();
-
-    joints.push_back(earlier_joint.read()?);
+    if visited.insert(earlier_joint.key.clone()) {
+        joints.push_back(earlier_joint.read()?);
+    }
 
     while let Some(joint) = joints.pop_front() {
         for child in joint.children.iter() {
             let child_data = child.read()?;
             let child_mci = child_data.get_mci();
 
-            if !visited.insert(child.key.clone()) || child_mci > to_mci {
+            if child_mci > to_mci {
                 continue;
             }
 
@@ -117,8 +118,9 @@ fn read_descendant_units_by_authors_before_mc_index(
                     result.push((&*child).clone());
                 }
             }
-
-            joints.push_back(child_data);
+            if visited.insert(child.key.clone()) {
+                joints.push_back(child_data);
+            }
         }
     }
 

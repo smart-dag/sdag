@@ -143,21 +143,24 @@ impl SDagCache {
         let mut joints = Vec::new();
 
         for joint in self.get_free_joints()? {
-            queue.push_back(joint);
+            if visited.insert(joint.key.clone()) {
+                queue.push_back(joint);
+            }
         }
 
         while let Some(joint) = queue.pop_front() {
             let joint_data = joint.read()?;
-            let key = joint.key.clone();
 
-            if !visited.insert(key) || joint_data.is_stable() {
+            if joint_data.is_stable() {
                 continue;
             }
 
             joints.push(joint);
 
             for parent in joint_data.parents.iter() {
-                queue.push_back(parent.clone());
+                if visited.insert(parent.key.clone()) {
+                    queue.push_back(parent.clone());
+                }
             }
         }
 
@@ -328,20 +331,23 @@ impl SDagCache {
         let mut queue = VecDeque::new();
         let mut visited = HashSet::new();
         let mut joints = Vec::new();
-        queue.push_back(joint);
+        if visited.insert(joint.key.clone()) {
+            queue.push_back(joint);
+        }
 
         while let Some(joint) = queue.pop_front() {
             let joint_data = joint.read()?;
-            let key = joint.key.clone();
 
-            if !visited.insert(key) || joint_data.get_mci() != mci {
+            if joint_data.get_mci() != mci {
                 continue;
             }
 
             let sub_mci = joint_data.get_sub_mci();
             joints.push((sub_mci, joint));
             for parent in joint_data.parents.iter() {
-                queue.push_back(parent.clone());
+                if visited.insert(parent.key.clone()) {
+                    queue.push_back(parent.clone());
+                }
             }
         }
 
