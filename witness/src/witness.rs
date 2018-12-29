@@ -235,7 +235,7 @@ fn is_normal_joint_behind_min_retrievable(free_joints: &[CachedJoint]) -> Result
             }
         }
         for p in joint_data.parents.iter() {
-            if visited.insert(joint.key.clone()) {
+            if visited.insert(p.key.clone()) {
                 queue.push_back(p.clone());
             }
         }
