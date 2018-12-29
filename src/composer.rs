@@ -31,26 +31,34 @@ pub struct ComposeInfo {
 
 pub fn pick_parents_and_last_ball(_address: &str) -> Result<ParentsAndLastBall> {
     let free_joints = SDAG_CACHE.get_free_joints()?;
-    let last_stable_joint = ::main_chain::get_last_stable_joint();
 
-    let best_joint = ::main_chain::find_best_joint(free_joints.iter())?.unwrap();
-    let min_wl = best_joint.read()?.get_min_wl();
+    // must include best joint, last stable point is sure stable to it
+    let best_joint = ::main_chain::find_best_joint(free_joints.iter())?
+        .ok_or_else(|| format_err!("free joints is empty now"))?;
+    // TODO: must include last unstable self joint
 
-    for group in free_joints.chunks(config::MAX_PARENT_PER_UNIT) {
-        if ::main_chain::is_stable_in_later_joints(&last_stable_joint, &group, min_wl)? {
-            let mut parents = group.iter().map(|p| p.key.to_string()).collect::<Vec<_>>();
-            parents.sort();
-            let lsj_data = last_stable_joint.read()?;
+    // pick other joints freely
+    let mut parents = vec![best_joint.key.to_string()];
+    for joint in free_joints {
+        // skip the best joint
+        if joint == best_joint {
+            continue;
+        }
 
-            return Ok(ParentsAndLastBall {
-                parents,
-                last_ball: lsj_data.ball.clone().expect("ball in joint is none"),
-                last_ball_unit: lsj_data.unit.unit.clone(),
-            });
+        parents.push(joint.key.to_string());
+        if parents.len() >= config::MAX_PARENT_PER_UNIT {
+            break;
         }
     }
 
-    bail!("fail to choose parents")
+    parents.sort();
+    let lsj_data = ::main_chain::get_last_stable_joint().read()?;
+
+    Ok(ParentsAndLastBall {
+        parents,
+        last_ball: lsj_data.ball.clone().expect("ball in joint is none"),
+        last_ball_unit: lsj_data.unit.unit.clone(),
+    })
 }
 
 /// create a pure text message
