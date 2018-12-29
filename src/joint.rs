@@ -176,7 +176,7 @@ impl Default for JointProperty {
             is_stable: false,
             is_wl_increased: false,
             is_min_wl_increased: false,
-            sequence: JointSequence::Good,
+            sequence: JointSequence::TempBad,
             best_parent_unit: String::new(),
             create_time: crate::time::now(),
             prev_stable_self_unit: None,
