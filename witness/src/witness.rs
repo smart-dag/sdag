@@ -98,6 +98,8 @@ fn adjust_witnessing_speed() -> Result<()> {
             .read()?
             .get_level()
             .value() as isize;
+
+        // free_joint_level may less than self_level, so distance and SELF_LEVEL can not be usize
         let distance = free_joint_level - self_level;
         if distance < THRESHOLD_DISTANCE {
             time = ((THRESHOLD_DISTANCE - distance) * 200) as u64;

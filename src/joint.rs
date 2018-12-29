@@ -161,6 +161,7 @@ pub struct JointProperty {
     pub prev_stable_self_unit: Option<String>,
     pub related_units: Vec<String>,
     pub balance: u64,
+    pub is_validate_authors_done: bool,
 }
 
 impl Default for JointProperty {
@@ -181,6 +182,7 @@ impl Default for JointProperty {
             prev_stable_self_unit: None,
             related_units: Vec::new(),
             balance: 0,
+            is_validate_authors_done: false,
         }
     }
 }

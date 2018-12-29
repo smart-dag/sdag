@@ -344,6 +344,14 @@ impl JointData {
     pub fn get_balance(&self) -> u64 {
         self.props.read().unwrap().balance
     }
+
+    pub fn set_is_validate_authors_done(&self, is_done: bool) {
+        self.props.write().unwrap().is_validate_authors_done = is_done;
+    }
+
+    pub fn is_validate_authors_done(&self) -> bool {
+        self.props.read().unwrap().is_validate_authors_done
+    }
 }
 
 impl JointData {

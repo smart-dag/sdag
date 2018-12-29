@@ -205,7 +205,9 @@ impl SDagCache {
         let key = HashKey::new(&joint.unit.unit);
         self.check_new_joint(&key)?;
 
-        if let Err(e) = validation::basic_validate(&joint) {
+        let joint_data = JointData::from_joint(joint, peer_id);
+
+        if let Err(e) = validation::basic_validate(&joint_data) {
             // need to record as known bad joint
             self.purge_bad_joint(&key, e.to_string());
             bail!("base validation failed, err={}", e);
@@ -215,7 +217,7 @@ impl SDagCache {
         let mut missing_parents = SmallVec::<[String; config::MAX_PARENT_PER_UNIT]>::new();
 
         let mut g = self.joints.write().unwrap();
-        for parent in &joint.unit.parent_units {
+        for parent in &joint_data.unit.parent_units {
             // check if it's a known bad joint
             if g.is_known_bad_joint(parent) {
                 bail!("joint parents contains known bad joint");
@@ -235,7 +237,6 @@ impl SDagCache {
         }
 
         // at this stage we construct the unhandled joint in cache
-        let joint_data = JointData::from_joint(joint, peer_id);
         for valid_parent in valid_parents {
             joint_data.add_parent(valid_parent);
         }
