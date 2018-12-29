@@ -537,6 +537,8 @@ fn main() -> Result<()> {
     }
 
     if let Some(dump_args) = m.subcommand_matches("dump") {
+        let is_verbose = dump_args.values_of("verbose").is_some();
+
         if let Some(file) = dump_args.value_of("FILE") {
             use std::fs::File;
             let mut joints = Vec::new();
@@ -550,7 +552,9 @@ fn main() -> Result<()> {
                     println!("last mci = {}", last_mci);
                     break;
                 }
-                println!("mci={}, joints_num={}", i, stable_joints.len());
+                if is_verbose {
+                    println!("mci={}, joints_num={}", i, stable_joints.len());
+                }
                 joints.append(&mut stable_joints);
             }
             let mut unstable_joints = ws.get_joints_by_mci(-1)?;

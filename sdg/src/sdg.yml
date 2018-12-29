@@ -93,6 +93,9 @@ subcommands:
     - dump:
         about: dmup all units to a file and verify data
         args:
+            - verbose:
+                help: show each mci total joints number
+                short: v
             - FILE:
                 help: file to save the joints
                 takes_value: true
