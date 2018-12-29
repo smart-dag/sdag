@@ -117,16 +117,18 @@ fn build_unstable_main_chain_from_joint(
 
 fn calc_max_alt_level(alternative_roots: Vec<CachedJoint>) -> Result<Option<Level>> {
     let mut max_alt_level = None;
-    let mut joints = alternative_roots;
+    let mut joints = Vec::new();
+
+    for j in alternative_roots {
+        joints.push(j.read()?);
+    }
 
     //Go down to collect best children
     //Best children should never intersect, no need to check revisit
-    while let Some(joint) = joints.pop() {
-        let joint_data = joint.read()?;
-
+    while let Some(joint_data) = joints.pop() {
         if joint_data.is_wl_increased() {
             let level = joint_data.get_level();
-            if level > max_alt_level.unwrap_or(Level::ZERO) {
+            if level > max_alt_level.unwrap_or(Level::MINIMUM) {
                 max_alt_level = Some(level);
             }
         }
@@ -135,8 +137,8 @@ fn calc_max_alt_level(alternative_roots: Vec<CachedJoint>) -> Result<Option<Leve
             let child = &*child;
             let child_data = child.read()?;
 
-            if child_data.get_best_parent() == joint {
-                joints.push(child.clone());
+            if child_data.get_best_parent().key.as_str() == joint_data.unit.unit {
+                joints.push(child_data);
             }
         }
     }
@@ -331,23 +333,28 @@ fn calc_last_stable_joint(cache: &SDagCache) -> Result<CachedJoint> {
     }
 }
 
-#[allow(dead_code)]
 fn calc_max_alt_level_included_by_later_joints(
     alternative_roots: Vec<CachedJoint>,
     later_joints: &[CachedJoint],
 ) -> Result<Option<Level>> {
     let mut max_alt_level = None;
-    let mut joints = alternative_roots;
+
+    let mut joints = Vec::new();
+    for j in alternative_roots {
+        joints.push(j.read()?);
+    }
+
+    let mut max_level = Level::MINIMUM;
+    for j in later_joints {
+        let level = j.read()?.get_level();
+        if level > max_level {
+            max_level = level;
+        }
+    }
 
     //Go down to collect best children
     //Best children should never intersect, no need to check revisit
-    while let Some(joint) = joints.pop() {
-        let joint_data = joint.read()?;
-
-        if !joint_data.get_props().is_ancestor(later_joints.iter())? {
-            continue;
-        }
-
+    while let Some(joint_data) = joints.pop() {
         if joint_data.is_wl_increased() {
             let level = joint_data.get_level();
             if level > max_alt_level.unwrap_or(Level::MINIMUM) {
@@ -359,8 +366,11 @@ fn calc_max_alt_level_included_by_later_joints(
             let child = &*child;
             let child_data = child.read()?;
 
-            if child_data.get_best_parent() == joint {
-                joints.push(child.clone());
+            // the best child level can't execeed the max laster joints level
+            if child_data.get_best_parent().key.as_str() == joint_data.unit.unit
+                && joint_data.get_level() <= max_level
+            {
+                joints.push(child_data);
             }
         }
     }
@@ -368,6 +378,7 @@ fn calc_max_alt_level_included_by_later_joints(
     Ok(max_alt_level)
 }
 
+#[allow(dead_code)]
 fn calc_min_wl_included_by_later_joints(
     first_unstable_joint: &CachedJoint,
     later_joints: &[CachedJoint],
@@ -454,6 +465,7 @@ fn collect_witnesses_along_best_parent(
     Ok(witness_joints)
 }
 
+#[allow(dead_code)]
 /// Another alternative witnesses collecting algorithm, from best later joint travel along best parent link
 /// It returns a subset of the above one, but it is the same algorithm to decide the main chain joint stable
 fn collect_witnesses_along_best_parent_from_best_joint(
@@ -468,6 +480,7 @@ fn collect_witnesses_along_best_parent_from_best_joint(
     Ok(Vec::new())
 }
 
+#[allow(dead_code)]
 /// Collect witnesses along the best parent from the later joint to earlier joint, both earlier and later joints included
 /// returns a empty vec if the best parent path does not contain earlier joint
 fn collect_witnesses_single_chain(
@@ -543,6 +556,7 @@ pub fn find_best_joint<'a, I: IntoIterator<Item = &'a CachedJoint>>(
 pub fn is_stable_in_later_joints(
     earlier_joint: &CachedJoint,
     later_joints: &[CachedJoint],
+    min_wl: Level,
 ) -> Result<bool> {
     let earlier_joint_data = earlier_joint.read()?;
 
@@ -571,10 +585,10 @@ pub fn is_stable_in_later_joints(
     }
 
     let max_alt_level =
-        calc_max_alt_level(alt_branches_roots)?.unwrap_or_else(|| best_parent.get_level());
-    // calc_max_alt_level_included_by_later_joints(alt_branches_roots, &later_joints)?;
+        calc_max_alt_level_included_by_later_joints(alt_branches_roots, &later_joints)?
+            .unwrap_or_else(|| best_parent.get_level());
 
-    let min_wl = calc_min_wl_included_by_later_joints(earlier_joint, &later_joints)?;
+    // let min_wl = calc_min_wl_included_by_later_joints(earlier_joint, &later_joints)?;
 
     let is_stable = min_wl > max_alt_level;
     Ok(is_stable)

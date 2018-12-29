@@ -345,7 +345,7 @@ impl JointData {
         self.props.read().unwrap().balance
     }
 
-    pub fn set_is_validate_authors_done(&self, is_done: bool) {
+    pub fn set_validate_authors_done(&self, is_done: bool) {
         self.props.write().unwrap().is_validate_authors_done = is_done;
     }
 

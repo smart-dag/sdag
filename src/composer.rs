@@ -33,8 +33,11 @@ pub fn pick_parents_and_last_ball(_address: &str) -> Result<ParentsAndLastBall> 
     let free_joints = SDAG_CACHE.get_free_joints()?;
     let last_stable_joint = ::main_chain::get_last_stable_joint();
 
+    let best_joint = ::main_chain::find_best_joint(free_joints.iter())?.unwrap();
+    let min_wl = best_joint.read()?.get_min_wl();
+
     for group in free_joints.chunks(config::MAX_PARENT_PER_UNIT) {
-        if ::main_chain::is_stable_in_later_joints(&last_stable_joint, &group)? {
+        if ::main_chain::is_stable_in_later_joints(&last_stable_joint, &group, min_wl)? {
             let mut parents = group.iter().map(|p| p.key.to_string()).collect::<Vec<_>>();
             parents.sort();
             let lsj_data = last_stable_joint.read()?;

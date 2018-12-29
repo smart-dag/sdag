@@ -159,7 +159,7 @@ pub fn basic_validate(joint: &JointData) -> Result<()> {
 
     // validate authors move here for improving TPS
     match validate_authors(joint) {
-        Ok(true) => joint.set_is_validate_authors_done(true),
+        Ok(true) => joint.set_validate_authors_done(true),
         Ok(false) => {}
         Err(e) => bail!("validate authors failed, err = {:?}", e),
     }
@@ -450,7 +450,8 @@ fn validate_parents(joint: &JointData) -> Result<()> {
     };
 
     // Check if it is stable in view of the parents
-    if !main_chain::is_stable_in_later_joints(&last_ball_joint, &new_parents)? {
+    let min_wl = joint.get_best_parent().read()?.get_min_wl();
+    if !main_chain::is_stable_in_later_joints(&last_ball_joint, &new_parents, min_wl)? {
         bail!(
             "{}: last ball unit {} is not stable in view of your parents {:?}",
             joint.unit.unit,
