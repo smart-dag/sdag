@@ -161,7 +161,8 @@ pub struct JointProperty {
     pub prev_stable_self_unit: Option<String>,
     pub related_units: Vec<String>,
     pub balance: u64,
-    pub is_validate_authors_done: bool,
+    // the first bit is validate result, the second bit is stage
+    pub validate_authors_state: u8,
 }
 
 impl Default for JointProperty {
@@ -182,7 +183,7 @@ impl Default for JointProperty {
             prev_stable_self_unit: None,
             related_units: Vec::new(),
             balance: 0,
-            is_validate_authors_done: false,
+            validate_authors_state: 0,
         }
     }
 }

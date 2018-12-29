@@ -101,16 +101,7 @@ fn normal_validate(joint: &JointData) -> Result<()> {
         validate_skip_list(&joint.skiplist_units)?;
     }
 
-    // move validate authors to basic validate for improving TPS
-    if !joint.is_validate_authors_done() {
-        match validate_authors(joint) {
-            Ok(true) => {}
-            Ok(false) => bail!(
-                "validate authors failed as get_definition failed or definition unit is not stable"
-            ),
-            Err(e) => bail!("validate authors failed, err is {:?}", e),
-        }
-    }
+    validate_authors(joint)?;
 
     // check if include last self unit
     business::BUSINESS_CACHE.is_include_last_stable_self_joint(joint)?;
@@ -158,11 +149,7 @@ pub fn basic_validate(joint: &JointData) -> Result<()> {
     validate_ball_basic(joint)?;
 
     // validate authors move here for improving TPS
-    match validate_authors(joint) {
-        Ok(true) => joint.set_validate_authors_done(true),
-        Ok(false) => {}
-        Err(e) => bail!("validate authors failed, err = {:?}", e),
-    }
+    validate_authors(joint)?;
 
     Ok(())
 }
@@ -589,9 +576,19 @@ fn validate_witnesses(joint: &JointData) -> Result<()> {
     Ok(())
 }
 
-// return Ok(false) means basic validate failed, and shouled validate authors again in normal validate
-// return Ok(true) means basic validate success
-fn validate_authors(joint: &Joint) -> Result<bool> {
+fn validate_authors(joint: &JointData) -> Result<()> {
+    let validate_author_state = joint.get_validate_authors_state();
+    // this must be the scond call in normal validate stage
+    // the basic validation has done it already
+    if validate_author_state & 0x01 == 0x01 {
+        return Ok(());
+    }
+
+    // when content is cleared, unit_hash is not correct
+    if joint.unit.content_hash.is_some() {
+        return Ok(());
+    }
+
     for author in &joint.unit.authors {
         if !author.definition.is_null() {
             // only first joint need take definition
@@ -612,17 +609,19 @@ fn validate_authors(joint: &Joint) -> Result<bool> {
             let unit_hash = joint.unit.calc_unit_hash_to_sign();
             validate_authentifiers(&Value::Null, definition, &unit_hash, &author.authentifiers)?;
         } else {
-            // when content is cleared, unit_hash is not correct
-            if joint.unit.content_hash.is_some() {
-                return Ok(true);
-            }
-
-            // get_definitons failed, or definition unit is not stable, basic validate can set is_validate_authors_done true
+            // get_definitons failed, or definition unit is not stable,
+            // basic validate can set validate_authors_state 0x10|0x11
             let definition = match get_definition(&author.address) {
                 Ok(v) => v,
                 Err(e) => {
-                    error!("get definition failed, err[{:?}]", e);
-                    return Ok(false);
+                    // in normal validation stage just bail out the error
+                    if validate_author_state & 0x10 == 0x10 {
+                        bail!("get definition failed, err[{:?}]", e);
+                    }
+                    // in basic validation stage just return
+                    // delay to normal validation
+                    joint.set_validate_authors_state(0x10);
+                    return Ok(());
                 }
             };
             let unit_hash = joint.unit.calc_unit_hash_to_sign();
@@ -630,7 +629,7 @@ fn validate_authors(joint: &Joint) -> Result<bool> {
         };
     }
 
-    fn get_definition(address: &String) -> Result<Value> {
+    fn get_definition(address: &str) -> Result<Value> {
         let (unit, definition) = SDAG_CACHE
             .get_definition(address)
             .ok_or_else(|| format_err!("definition bound to address {} is not defined", address))?;
@@ -641,7 +640,8 @@ fn validate_authors(joint: &Joint) -> Result<bool> {
         Ok(definition)
     }
 
-    Ok(true)
+    joint.set_validate_authors_state(0x11);
+    Ok(())
 }
 
 #[derive(Deserialize)]

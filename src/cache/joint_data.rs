@@ -347,12 +347,12 @@ impl JointData {
         self.props.read().unwrap().balance
     }
 
-    pub fn set_validate_authors_done(&self, is_done: bool) {
-        self.props.write().unwrap().is_validate_authors_done = is_done;
+    pub fn set_validate_authors_state(&self, state: u8) {
+        self.props.write().unwrap().validate_authors_state = state;
     }
 
-    pub fn is_validate_authors_done(&self) -> bool {
-        self.props.read().unwrap().is_validate_authors_done
+    pub fn get_validate_authors_state(&self) -> u8 {
+        self.props.read().unwrap().validate_authors_state
     }
 }
 
