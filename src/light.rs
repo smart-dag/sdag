@@ -18,6 +18,7 @@ pub struct NumOfUnit {
     pub valid_unit: usize,
     pub known_bad: usize,
     pub unhandled: usize,
+    pub last_stable_mci: ::joint::Level,
 }
 
 #[derive(Serialize, Deserialize)]

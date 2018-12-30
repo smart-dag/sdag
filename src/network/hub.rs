@@ -394,6 +394,7 @@ impl HubConn {
             valid_unit: SDAG_CACHE.get_num_of_normal_joints(),
             known_bad: SDAG_CACHE.get_num_of_bad_joints(),
             unhandled: SDAG_CACHE.get_num_of_unhandled_joints(),
+            last_stable_mci: main_chain::get_last_stable_mci(),
         }))
     }
 

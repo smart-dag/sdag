@@ -492,64 +492,7 @@ fn main() -> Result<()> {
 
     //show joint and properties
     if let Some(unit_args) = m.subcommand_matches("unit") {
-        // show all valid free joints
-        if unit_args.values_of("free").is_some() {
-            let units_hash = ws.get_free_joints()?;
-
-            for (index, hash) in units_hash.iter().enumerate() {
-                println!("{}. unit -> {}", index + 1, hash);
-            }
-
-            if units_hash.is_empty() {
-                println!("\nthere is no free joints\n");
-            }
-        }
-
-        // show the miss joints
-        if unit_args.values_of("lost").is_some() {
-            let units_hash = ws.get_missing_joints()?;
-
-            for (index, hash) in units_hash.iter().enumerate() {
-                println!("{}. unit -> {}", index + 1, hash);
-            }
-
-            if units_hash.is_empty() {
-                println!("\nthere is no missing joints\n");
-            }
-        }
-
-        if unit_args.values_of("info").is_some() {
-            let sdag::light::NumOfUnit {
-                valid_unit,
-                known_bad,
-                unhandled,
-            } = ws.get_joints_info()?;
-
-            println!("the number of various joint\n");
-            println!("normal joint      : {}", valid_unit);
-            println!("known bad joints  : {}", known_bad);
-            println!("unhandled joints  : {}", unhandled);
-        }
-
-        //show joint and properties
-        if let Some(hash) = unit_args.value_of("show") {
-            let resp = ws.get_joint_by_unit_hash(hash)?;
-
-            println!("joint = {:#?}", resp.0);
-            println!("property = {:#?}", resp.1);
-        }
-
-        if let Ok(mci) = value_t!(unit_args.value_of("mci"), isize) {
-            let joints = ws.get_joints_by_mci(mci)?;
-
-            for (index, joint) in joints.iter().enumerate() {
-                println!("{}. unit -> {}", index + 1, joint.unit.unit);
-            }
-
-            if joints.is_empty() {
-                println!("\nthere is no joints with mci={}\n", mci);
-            }
-        }
+        return handle_subcommand_unit(unit_args, &ws);
     }
 
     if let Some(dump_args) = m.subcommand_matches("dump") {
@@ -587,6 +530,66 @@ fn main() -> Result<()> {
             verify_joints(joints, last_mci)?;
         }
         return Ok(());
+    }
+
+    Ok(())
+}
+
+#[inline]
+fn print_unit_hash_list(list: Vec<String>, item_type: &str) {
+    for (index, hash) in list.iter().enumerate() {
+        println!("{}. unit -> {}", index + 1, hash);
+    }
+
+    if list.is_empty() {
+        println!("\nthere is no {} joints\n", item_type);
+    }
+}
+
+fn handle_subcommand_unit(unit_args: &clap::ArgMatches, ws: &Arc<WalletConn>) -> Result<()> {
+    // show all valid free joints
+    if unit_args.values_of("free").is_some() {
+        print_unit_hash_list(ws.get_free_joints()?, "free");
+    }
+
+    // show the miss joints
+    if unit_args.values_of("lost").is_some() {
+        print_unit_hash_list(ws.get_missing_joints()?, "missing");
+    }
+
+    // joints of a specified mci
+    if let Ok(mci) = value_t!(unit_args.value_of("mci"), isize) {
+        print_unit_hash_list(
+            ws.get_joints_by_mci(mci)?
+                .into_iter()
+                .map(|j| j.unit.unit)
+                .collect::<Vec<_>>(),
+            &format!("mci={}", mci),
+        );
+    }
+
+    // overall statistics
+    if unit_args.values_of("info").is_some() {
+        let sdag::light::NumOfUnit {
+            valid_unit,
+            known_bad,
+            unhandled,
+            last_stable_mci,
+        } = ws.get_joints_info()?;
+
+        println!("the number of various joint\n");
+        println!("normal joint      : {}", valid_unit);
+        println!("known bad joints  : {}", known_bad);
+        println!("unhandled joints  : {}", unhandled);
+        println!("last stable mci   : {:?}", last_stable_mci);
+    }
+
+    // show joint and properties of a specified unit hash
+    if let Some(hash) = unit_args.value_of("show") {
+        let resp = ws.get_joint_by_unit_hash(hash)?;
+
+        println!("joint = {:#?}", resp.0);
+        println!("property = {:#?}", resp.1);
     }
 
     Ok(())
