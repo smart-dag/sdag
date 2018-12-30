@@ -300,6 +300,7 @@ impl Server<HubData> for HubData {
             "get_network_info" => ws.on_get_network_info(params)?,
             "get_joints_by_mci" => ws.on_get_joints_by_mci(params)?,
             "get_missing_joints" => ws.get_missing_joints(params)?,
+            "get_temp_bad_joints" => ws.on_get_temp_bad_joints(params)?,
             "get_joint_by_unit_hash" => ws.on_get_joint_by_unit_hash(params)?,
 
             command => bail!("on_request unknown command: {}", command),
@@ -650,6 +651,29 @@ impl HubConn {
             .get_joint(&unit)
             .and_then(|j| j.read())
             .and_then(|j| Ok(json!({ "joint": (**j).clone(), "property": j.get_props()})))
+    }
+
+    fn on_get_temp_bad_joints(&self, _param: Value) -> Result<Value> {
+        let temp_bad_joints = SDAG_CACHE
+            .get_unstable_joints()?
+            .into_iter()
+            .filter_map(|j| {
+                if let Ok(joint) = j.read() {
+                    info!(
+                        "unstable joint {} sequence {:?}",
+                        joint.unit.unit,
+                        joint.get_sequence()
+                    );
+                    if joint.get_sequence() == JointSequence::TempBad {
+                        return Some(joint.unit.unit.clone());
+                    }
+                }
+
+                None
+            })
+            .collect::<Vec<_>>();
+
+        Ok(serde_json::to_value(temp_bad_joints)?)
     }
 }
 

@@ -155,6 +155,12 @@ impl WalletConn {
         Ok(serde_json::from_value(response)?)
     }
 
+    pub fn get_temp_bad_joints(&self) -> Result<Vec<String>> {
+        let response = self.send_request("get_temp_bad_joints", &Value::Null)?;
+
+        Ok(serde_json::from_value(response)?)
+    }
+
     pub fn get_joints_info(&self) -> Result<light::NumOfUnit> {
         let response = self.send_request("get_joints_info", &Value::Null)?;
 

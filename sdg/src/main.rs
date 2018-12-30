@@ -538,7 +538,7 @@ fn main() -> Result<()> {
 #[inline]
 fn print_unit_hash_list(list: Vec<String>, item_type: &str) {
     for (index, hash) in list.iter().enumerate() {
-        println!("{}. unit -> {}", index + 1, hash);
+        println!("{:>4}. unit -> {}", index + 1, hash);
     }
 
     if list.is_empty() {
@@ -555,6 +555,11 @@ fn handle_subcommand_unit(unit_args: &clap::ArgMatches, ws: &Arc<WalletConn>) ->
     // show the miss joints
     if unit_args.values_of("lost").is_some() {
         print_unit_hash_list(ws.get_missing_joints()?, "missing");
+    }
+
+    // show the temp-bad joints
+    if unit_args.values_of("bad").is_some() {
+        print_unit_hash_list(ws.get_temp_bad_joints()?, "temp-bad");
     }
 
     // joints of a specified mci
