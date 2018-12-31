@@ -86,6 +86,11 @@ subcommands:
 
     - net:
         about: Show the hub net connections
+        args:
+            - info:
+                help: brief net connections numbers
+                short: i
+                long: info
 
     - balance:
         about: Show the wallet balance

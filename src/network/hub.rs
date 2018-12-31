@@ -58,8 +58,8 @@ pub struct ConnState {
 #[derive(Serialize, Deserialize)]
 pub struct HubNetState {
     // peer_id, peer_addr, is_source, is_subscribed
-    in_bounds: Vec<ConnState>,
-    out_bounds: Vec<ConnState>,
+    pub in_bounds: Vec<ConnState>,
+    pub out_bounds: Vec<ConnState>,
 }
 
 //---------------------------------------------------------------------------------------

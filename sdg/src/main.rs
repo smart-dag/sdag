@@ -179,6 +179,18 @@ fn net_state(ws: &Arc<WalletConn>) -> Result<()> {
     Ok(())
 }
 
+
+fn net_state_info(ws: &Arc<WalletConn>) -> Result<()> {
+    let net_state = ws.get_net_state()?;
+
+    let inbound_num = net_state.in_bounds.len();
+    let outbound_num = net_state.out_bounds.len();
+
+    println!("Inbound  : {:>4}", inbound_num);
+    println!("Outbound : {:>4}", outbound_num);
+    Ok(())
+}
+
 fn show_history(
     ws: &Arc<WalletConn>,
     address: &str,
@@ -413,7 +425,11 @@ fn main() -> Result<()> {
     }
 
     //net
-    if m.subcommand_matches("net").is_some() {
+    if let Some(net) = m.subcommand_matches("net"){
+        if net.values_of("info").is_some() {
+            return net_state_info(&ws);
+            }
+
         return net_state(&ws);
     }
 
