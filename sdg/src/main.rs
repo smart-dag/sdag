@@ -597,5 +597,10 @@ fn handle_subcommand_unit(unit_args: &clap::ArgMatches, ws: &Arc<WalletConn>) ->
         println!("property = {:#?}", resp.1);
     }
 
+    // show all children of a specified unit hash
+    if let Some(hash) = unit_args.value_of("children") {
+        print_unit_hash_list(ws.get_children(hash)?, &format!("{}'s children", hash));
+    }
+
     Ok(())
 }

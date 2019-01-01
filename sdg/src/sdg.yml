@@ -126,7 +126,7 @@ subcommands:
                 long: bad
                 short: b
             - mci:
-                help: list all the units of the specified mci 
+                help: list all the units of the specified mci
                 long: mci
                 short: m
                 required: false
@@ -137,6 +137,14 @@ subcommands:
                 help: show the specified unit detail
                 long: show
                 short: s
+                required: false
+                value_names:
+                    - UNIT
+                takes_value: true
+            - children:
+                help: show all children of the specified unit
+                long: children
+                short: c
                 required: false
                 value_names:
                     - UNIT

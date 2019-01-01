@@ -302,6 +302,7 @@ impl Server<HubData> for HubData {
             "get_missing_joints" => ws.get_missing_joints(params)?,
             "get_temp_bad_joints" => ws.on_get_temp_bad_joints(params)?,
             "get_joint_by_unit_hash" => ws.on_get_joint_by_unit_hash(params)?,
+            "get_children" => ws.on_get_children(params)?,
 
             command => bail!("on_request unknown command: {}", command),
         };
@@ -674,6 +675,19 @@ impl HubConn {
             .collect::<Vec<_>>();
 
         Ok(serde_json::to_value(temp_bad_joints)?)
+    }
+
+    fn on_get_children(&self, param: Value) -> Result<Value> {
+        let unit: String = serde_json::from_value(param)?;
+
+        let joint = SDAG_CACHE.get_joint(&unit)?.read()?;
+        let children = joint
+            .children
+            .iter()
+            .map(|c| c.key.to_string())
+            .collect::<Vec<_>>();
+
+        Ok(serde_json::to_value(children)?)
     }
 }
 

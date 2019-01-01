@@ -161,6 +161,13 @@ impl WalletConn {
         Ok(serde_json::from_value(response)?)
     }
 
+    // return all children of a unit
+    pub fn get_children(&self, unit: &str) -> Result<Vec<String>> {
+        let response = self.send_request("get_children", &serde_json::to_value(unit)?)?;
+
+        Ok(serde_json::from_value(response)?)
+    }
+
     pub fn get_joints_info(&self) -> Result<light::NumOfUnit> {
         let response = self.send_request("get_joints_info", &Value::Null)?;
 
