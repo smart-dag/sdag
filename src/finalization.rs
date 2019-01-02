@@ -74,7 +74,9 @@ fn finalize_joint(cached_joint: CachedJoint) -> Result<()> {
     //Reread the joint data after updating joint
     let joint_data = cached_joint.read()?;
     joint_data.set_stable();
-    ::main_chain::set_last_stable_joint(&cached_joint);
+    if joint_data.is_on_main_chain() {
+        ::main_chain::set_last_stable_joint(&cached_joint);
+    }
     KV_STORE.save_joint(&joint_data)?;
 
     Ok(())
