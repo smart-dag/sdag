@@ -92,34 +92,51 @@ impl SDagCacheInner {
             Ok(true)
         }
 
-        let mut free_joints = Vec::new();
-        let mut joints = self.free_joints.values().cloned().collect::<VecDeque<_>>();
-        let mut visited = HashSet::new();
-        for joint in &joints {
-            visited.insert(joint.key.clone());
-        }
-
-        while let Some(joint) = joints.pop_front() {
-            let joint_data = joint.read()?;
-
-            if joint_data.get_sequence() == JointSequence::Good
-                || joint_data.unit.is_authored_by_witness()
-            {
-                if is_all_children_bad(&joint_data)? {
-                    free_joints.push(joint);
-                }
-                continue;
+        fn try_get_free_joints(cache: &SDagCacheInner) -> Result<Vec<CachedJoint>> {
+            let mut free_joints = Vec::new();
+            let mut joints = cache.free_joints.values().cloned().collect::<VecDeque<_>>();
+            let mut visited = HashSet::new();
+            for joint in &joints {
+                visited.insert(joint.key.clone());
             }
 
-            // the joint is now temp-bad
-            for parent in joint_data.parents.iter() {
-                if visited.insert(parent.key.clone()) {
-                    joints.push_back(parent.clone());
+            while let Some(joint) = joints.pop_front() {
+                let joint_data = joint.read()?;
+
+                if joint_data.get_sequence() == JointSequence::Good
+                    || joint_data.unit.is_authored_by_witness()
+                {
+                    if is_all_children_bad(&joint_data)? {
+                        free_joints.push(joint);
+                    }
+                    continue;
+                }
+
+                // the joint is now temp-bad
+                for parent in joint_data.parents.iter() {
+                    if visited.insert(parent.key.clone()) {
+                        joints.push_back(parent.clone());
+                    }
                 }
             }
+
+            Ok(free_joints)
         }
 
-        Ok(free_joints)
+        for i in 0..10 {
+            let free_joints = try_get_free_joints(self)?;
+            if free_joints.is_empty() {
+                warn!(
+                    "free joints is empty, try get free joints again, times [{}] no more than 10",
+                    i
+                );
+            } else {
+                return Ok(free_joints);
+            }
+        }
+        warn!("get free joints still empty after try 10 times");
+
+        Ok(Vec::new())
     }
 
     /// query if joint is in unhandled joints

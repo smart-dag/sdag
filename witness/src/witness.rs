@@ -104,7 +104,7 @@ fn adjust_witnessing_speed() -> Result<()> {
         if distance < THRESHOLD_DISTANCE {
             time = ((THRESHOLD_DISTANCE - distance) * 200) as u64;
         } else {
-            time = ((THRESHOLD_DISTANCE / distance) * 200) as u64;
+            time = ((THRESHOLD_DISTANCE as f64 / distance as f64) * 200.0) as u64;
         }
     }
     info!(
