@@ -363,18 +363,26 @@ pub fn find_best_joint<'a, I: IntoIterator<Item = &'a CachedJoint>>(
 #[inline]
 pub fn is_stable_to_joint(earlier_joint: &CachedJoint, joint: &JointData) -> Result<bool> {
     let earlier_joint_data = earlier_joint.read()?;
-    // earlier unit must be ancestor of joint
-    let is_ancestor = &*earlier_joint_data < joint;
-    if !is_ancestor {
+    let mut is_ancestor = false;
+    let mut best_parent = joint.get_best_parent().read()?;
+
+    // min_wl must bigger that earlier unit level
+    let min_wl = best_parent.get_min_wl();
+    let level = earlier_joint_data.get_level();
+    if min_wl <= level {
         return Ok(false);
     }
 
-    // min_wl must bigger that earlier unit level
-    let min_wl = joint.get_best_parent().read()?.get_min_wl();
-    let level = earlier_joint_data.get_level();
+    // earlier unit must be ancestor of joint on main chain
+    while best_parent.get_level() > level {
+        if earlier_joint.key.as_str() == best_parent.unit.unit {
+            is_ancestor = true;
+            break;
+        }
+        best_parent = best_parent.get_best_parent().read()?;
+    }
 
-    let is_stable = min_wl > level;
-    Ok(is_stable)
+    Ok(is_ancestor)
 }
 
 /// Returns current unstable main chain from the best free joint
