@@ -1,4 +1,3 @@
-use std::collections::HashSet;
 use std::collections::VecDeque;
 
 use cache::{CachedJoint, JointData, SDagCache, SDAG_CACHE};
@@ -7,7 +6,6 @@ use failure::ResultExt;
 use joint::Level;
 use may::coroutine::JoinHandle;
 use may::sync::{mpsc, RwLock};
-use rcu_cell::RcuReader;
 
 lazy_static! {
     pub static ref MAIN_CHAIN_WORKER: MainChainWorker = MainChainWorker::default();
@@ -333,197 +331,6 @@ fn calc_last_stable_joint(cache: &SDagCache) -> Result<CachedJoint> {
     }
 }
 
-fn calc_max_alt_level_included_by_later_joints(
-    alternative_roots: Vec<CachedJoint>,
-    later_joints: &[CachedJoint],
-) -> Result<Option<Level>> {
-    let mut max_alt_level = None;
-
-    let mut joints = Vec::new();
-    for j in alternative_roots {
-        joints.push(j.read()?);
-    }
-
-    let mut max_level = Level::MINIMUM;
-    for j in later_joints {
-        let level = j.read()?.get_level();
-        if level > max_level {
-            max_level = level;
-        }
-    }
-
-    //Go down to collect best children
-    //Best children should never intersect, no need to check revisit
-    while let Some(joint_data) = joints.pop() {
-        if joint_data.is_wl_increased() {
-            let level = joint_data.get_level();
-            if level > max_alt_level.unwrap_or(Level::MINIMUM) {
-                max_alt_level = Some(level);
-            }
-        }
-
-        for child in joint_data.children.iter() {
-            let child = &*child;
-            let child_data = child.read()?;
-
-            // the best child level can't execeed the max laster joints level
-            if child_data.get_best_parent().key.as_str() == joint_data.unit.unit
-                && joint_data.get_level() <= max_level
-            {
-                joints.push(child_data);
-            }
-        }
-    }
-
-    Ok(max_alt_level)
-}
-
-#[allow(dead_code)]
-fn calc_min_wl_included_by_later_joints(
-    first_unstable_joint: &CachedJoint,
-    later_joints: &[CachedJoint],
-) -> Result<Level> {
-    let mut witness_joints =
-        // collect_witnesses_all_best_children(first_unstable_joint, later_joints)?;
-        // collect_witnesses_along_best_parent(first_unstable_joint, later_joints)?;
-        collect_witnesses_along_best_parent_from_best_joint(first_unstable_joint, later_joints)?;
-
-    witness_joints.sort_by_key(|j| j.get_wl().value());
-
-    let mut collected_witnesses = HashSet::new();
-    while let Some(joint_data) = witness_joints.pop() {
-        for author in &joint_data.unit.authors {
-            if !collected_witnesses.insert(author.address.clone()) {
-                continue;
-            }
-
-            if collected_witnesses.len() >= ::config::MAJORITY_OF_WITNESSES {
-                return Ok(joint_data.get_wl());
-            }
-        }
-    }
-
-    Ok(Level::MINIMUM)
-}
-
-#[allow(dead_code)]
-/// The original witnesses collecting algorithm, it collects all best children included by later joints
-fn collect_witnesses_all_best_children(
-    first_unstable_joint: &CachedJoint,
-    later_joints: &[CachedJoint],
-) -> Result<Vec<RcuReader<JointData>>> {
-    let mut joints = vec![first_unstable_joint.clone()];
-    let mut witness_joints = Vec::new();
-
-    //Go down to collect best children
-    //Best children should never intersect, no need to check revisit
-    while let Some(joint) = joints.pop() {
-        let joint_data = joint.read()?;
-
-        if !joint_data.get_props().is_ancestor(later_joints.iter())? {
-            continue;
-        }
-
-        if !later_joints.contains(&joint) {
-            for child in joint_data.children.iter() {
-                let child = &*child;
-                let child_data = child.read()?;
-
-                if child_data.get_best_parent() == joint {
-                    joints.push(child.clone());
-                }
-            }
-        }
-
-        //Collect witness joints
-        if joint_data.unit.is_authored_by_witness() {
-            witness_joints.push(joint_data);
-        }
-    }
-
-    Ok(witness_joints)
-}
-
-#[allow(dead_code)]
-/// Alternative witnesses collecting algorithm, from all later joints travel along best parent link
-/// It returns a subset of the original one, as some best children are only reachable via parents link not best parent
-fn collect_witnesses_along_best_parent(
-    earlier_joint: &CachedJoint,
-    later_joints: &[CachedJoint],
-) -> Result<Vec<RcuReader<JointData>>> {
-    let mut witness_joints = Vec::new();
-    let mut visited = Vec::new();
-
-    for later_joint in later_joints {
-        witness_joints.append(&mut collect_witnesses_single_chain(
-            earlier_joint,
-            later_joint,
-            &mut visited,
-        )?);
-    }
-
-    Ok(witness_joints)
-}
-
-#[allow(dead_code)]
-/// Another alternative witnesses collecting algorithm, from best later joint travel along best parent link
-/// It returns a subset of the above one, but it is the same algorithm to decide the main chain joint stable
-fn collect_witnesses_along_best_parent_from_best_joint(
-    earlier_joint: &CachedJoint,
-    later_joints: &[CachedJoint],
-) -> Result<Vec<RcuReader<JointData>>> {
-    if let Some(later_joint) = find_best_joint(later_joints.iter())? {
-        let mut visited = Vec::new();
-        return collect_witnesses_single_chain(earlier_joint, &later_joint, &mut visited);
-    }
-
-    Ok(Vec::new())
-}
-
-#[allow(dead_code)]
-/// Collect witnesses along the best parent from the later joint to earlier joint, both earlier and later joints included
-/// returns a empty vec if the best parent path does not contain earlier joint
-fn collect_witnesses_single_chain(
-    earlier_joint: &CachedJoint,
-    later_joint: &CachedJoint,
-    visited: &mut Vec<CachedJoint>,
-) -> Result<Vec<RcuReader<JointData>>> {
-    let mut witness_joints = Vec::new();
-    let mut joint = later_joint.clone();
-    let earlier_mci = earlier_joint.read()?.get_mci();
-
-    loop {
-        let joint_data = joint.read()?;
-
-        // The best parent path does not pass earlier joint, no witness should be collected
-        // we only use this in last stable joint compare, so this is fine to use the mci and limci
-        if joint_data.get_mci() < earlier_mci {
-            return Ok(Vec::new());
-        }
-
-        // Already visited, no need to collect again
-        if visited.contains(&joint) {
-            break;
-        }
-
-        visited.push(joint.clone());
-
-        // Collect witness joints
-        if joint_data.unit.is_authored_by_witness() {
-            witness_joints.push(joint_data.clone());
-        }
-
-        // Meet the earlier_joint, done collecting
-        if joint == *earlier_joint {
-            break;
-        }
-
-        joint = joint_data.get_best_parent();
-    }
-
-    Ok(witness_joints)
-}
-
 //---------------------------------------------------------------------------------------
 // pub APIs
 //---------------------------------------------------------------------------------------
@@ -552,45 +359,21 @@ pub fn find_best_joint<'a, I: IntoIterator<Item = &'a CachedJoint>>(
     Ok(Some(best_joint.clone()))
 }
 
-/// judge if earlier_joint is relative stable to later_joints
-pub fn is_stable_in_later_joints(
-    earlier_joint: &CachedJoint,
-    later_joints: &[CachedJoint],
-    min_wl: Level,
-) -> Result<bool> {
+/// judge if earlier_joint is relative stable to later_joint
+#[inline]
+pub fn is_stable_to_joint(earlier_joint: &CachedJoint, joint: &JointData) -> Result<bool> {
     let earlier_joint_data = earlier_joint.read()?;
-
-    //Genesis
-    if earlier_joint_data.unit.is_genesis_unit() {
-        return Ok(true);
-    }
-
-    //Free joint
-    if earlier_joint_data.is_free() {
+    // earlier unit must be ancestor of joint
+    let is_ancestor = &*earlier_joint_data < joint;
+    if !is_ancestor {
         return Ok(false);
     }
 
-    let best_parent = earlier_joint_data.get_best_parent().read()?;
+    // min_wl must bigger that earlier unit level
+    let min_wl = joint.get_best_parent().read()?.get_min_wl();
+    let level = earlier_joint_data.get_level();
 
-    let mut alt_branches_roots = Vec::new();
-    for child in best_parent.children.iter() {
-        let child = &*child;
-        if child.key == earlier_joint.key {
-            continue;
-        }
-
-        // if child.read()?.get_props().is_ancestor(later_joints.iter())? {
-        alt_branches_roots.push(child.clone());
-        // }
-    }
-
-    let max_alt_level =
-        calc_max_alt_level_included_by_later_joints(alt_branches_roots, &later_joints)?
-            .unwrap_or_else(|| best_parent.get_level());
-
-    // let min_wl = calc_min_wl_included_by_later_joints(earlier_joint, &later_joints)?;
-
-    let is_stable = min_wl > max_alt_level;
+    let is_stable = min_wl > level;
     Ok(is_stable)
 }
 

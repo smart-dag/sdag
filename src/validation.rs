@@ -437,8 +437,7 @@ fn validate_parents(joint: &JointData) -> Result<()> {
     };
 
     // Check if it is stable in view of the parents
-    let min_wl = joint.get_best_parent().read()?.get_min_wl();
-    if !main_chain::is_stable_in_later_joints(&last_ball_joint, &new_parents, min_wl)? {
+    if !main_chain::is_stable_to_joint(&last_ball_joint, &joint)? {
         bail!(
             "{}: last ball unit {} is not stable in view of your parents {:?}",
             joint.unit.unit,
