@@ -360,6 +360,7 @@ pub fn find_best_joint<'a, I: IntoIterator<Item = &'a CachedJoint>>(
 }
 
 /// judge if earlier_joint is relative stable to later_joint
+#[inline]
 pub fn is_stable_to_joint(earlier_joint: &CachedJoint, joint: &JointData) -> Result<bool> {
     let earlier_joint_data = earlier_joint.read()?;
     let mut is_ancestor = false;
@@ -377,7 +378,6 @@ pub fn is_stable_to_joint(earlier_joint: &CachedJoint, joint: &JointData) -> Res
     }
 
     // earlier unit must be ancestor of joint on main chain
-    let level = earlier_joint_data.get_level();
     while best_parent.get_level() > level {
         if earlier_joint.key.as_str() == best_parent.unit.unit {
             is_ancestor = true;
