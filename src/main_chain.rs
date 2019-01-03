@@ -366,6 +366,10 @@ pub fn is_stable_to_joint(earlier_joint: &CachedJoint, joint: &JointData) -> Res
     let mut is_ancestor = false;
     let mut best_parent = joint.get_best_parent().read()?;
 
+    if earlier_joint_data.unit.is_genesis_unit() {
+        return Ok(true);
+    }
+
     // min_wl must bigger that earlier unit level
     let min_wl = best_parent.get_min_wl();
     let level = earlier_joint_data.get_level();
