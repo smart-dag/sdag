@@ -11,6 +11,7 @@ extern crate num_cpus;
 extern crate serde_json;
 
 mod timer;
+use sdag::error::Result;
 use sdag::*;
 
 fn log_init() {

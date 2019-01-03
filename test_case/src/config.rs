@@ -1,6 +1,6 @@
 use std::fs::File;
 
-use sdag::Result;
+use sdag::error::Result;
 use sdag_wallet_base::*;
 use serde::ser::Serialize;
 use serde_json;
