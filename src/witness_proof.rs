@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 
 use cache::SDAG_CACHE;
+use error::Result;
 use joint::{Joint, JointSequence};
 use main_chain;
 use my_witness::MY_WITNESSES;
 use serde_json::Value;
 use spec::Unit;
-use {error::Result, SdagError};
 
 pub struct PrepareWitnessProof {
     pub unstable_mc_joints: Vec<Joint>,
@@ -67,7 +67,7 @@ pub fn prepare_witness_proof(
     let (last_ball_unit, last_ball_mci) = last_ball_units.pop().unwrap();
 
     if last_stable_mci >= last_ball_mci && last_stable_mci > 0 {
-        return Err(SdagError::CatchupAlreadyCurrent.into());
+        bail!("catchup already current");
     }
 
     let witness_change_and_definition =

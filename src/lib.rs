@@ -101,4 +101,3 @@ pub mod signature;
 pub mod time;
 pub mod validation;
 pub mod witness_proof;
-pub use error::{Result, SdagError};
