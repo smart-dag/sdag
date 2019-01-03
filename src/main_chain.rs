@@ -372,7 +372,7 @@ pub fn is_stable_to_joint(earlier_joint: &CachedJoint, joint: &JointData) -> Res
 
     // min_wl must bigger that earlier unit level
     let min_wl = best_parent.get_min_wl();
-    let level = earlier_joint_data.get_level();
+    let level = earlier_joint_data.get_best_parent().read()?.get_level();
     if min_wl <= level {
         return Ok(false);
     }
