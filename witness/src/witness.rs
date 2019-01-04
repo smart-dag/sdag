@@ -259,8 +259,25 @@ struct TimeStamp {
     timestamp: u64,
 }
 
-/// compose witness joint and validate, save, broadcast
+/// compose witness joint and validate, save, post
 fn witness() -> Result<()> {
+    let free_joints = SDAG_CACHE.get_free_joints()?;
+    for joint in &free_joints {
+        let joint_data = joint.read()?;
+        for author in &joint_data.unit.authors {
+            if author.address == WALLET_INFO._00_address {
+                warn!(
+                    "my witness unit [{:?}] is free joint, post the block joint again, and cancel post a new joint",
+                    joint_data.unit.unit
+                );
+
+                if let Some(ws) = sdag::network::hub::WSS.get_next_peer() {
+                    return ws.post_joint(&joint_data);
+                }
+            }
+        }
+    }
+
     // divide one output into two outputs, to increase witnessing concurrent performance
     // let amount = divide_money(&WALLET_INFO._00_address)?;
     let sdag::composer::ParentsAndLastBall {
