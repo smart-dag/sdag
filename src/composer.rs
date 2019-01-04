@@ -29,9 +29,13 @@ pub struct ComposeInfo {
     pub pubk: String,
 }
 
+/// we should pick last stable ball firstly.
+/// if we pick parents firstly, last ball we picked may not be last ball in the view of parents
+/// the last ball belong to the newer unit coming on main chain after parents
 pub fn pick_parents_and_last_ball(_address: &str) -> Result<ParentsAndLastBall> {
-    let free_joints = SDAG_CACHE.get_free_joints()?;
+    let lsj_data = ::main_chain::get_last_stable_joint().read()?;
 
+    let free_joints = SDAG_CACHE.get_free_joints()?;
     // must include best joint, last stable point is sure stable to it
     let best_joint = ::main_chain::find_best_joint(free_joints.iter())?
         .ok_or_else(|| format_err!("free joints is empty now"))?;
@@ -52,7 +56,6 @@ pub fn pick_parents_and_last_ball(_address: &str) -> Result<ParentsAndLastBall> 
     }
 
     parents.sort();
-    let lsj_data = ::main_chain::get_last_stable_joint().read()?;
 
     Ok(ParentsAndLastBall {
         parents,
