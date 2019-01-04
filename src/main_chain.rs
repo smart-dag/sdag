@@ -5,12 +5,14 @@ use error::Result;
 use failure::ResultExt;
 use joint::Level;
 use may::coroutine::JoinHandle;
-use may::sync::{mpsc, RwLock};
+use may::sync::mpsc;
+use rcu_cell::RcuCell;
 
 lazy_static! {
     pub static ref MAIN_CHAIN_WORKER: MainChainWorker = MainChainWorker::default();
-    static ref LAST_STABLE_JOINT: RwLock<CachedJoint> =
-        RwLock::new(calc_last_stable_joint(&SDAG_CACHE).expect("failed to read last stable joint"));
+    static ref LAST_STABLE_JOINT: RcuCell<CachedJoint> = RcuCell::new(Some(
+        calc_last_stable_joint(&SDAG_CACHE).expect("failed to read last stable joint")
+    ));
 }
 
 //---------------------------------------------------------------------------------------
@@ -409,10 +411,17 @@ pub fn get_last_stable_mci() -> Level {
 
 /// get the stable point joint
 pub fn get_last_stable_joint() -> CachedJoint {
-    LAST_STABLE_JOINT.read().unwrap().clone()
+    let joint = LAST_STABLE_JOINT.read().expect("no last stable joint");
+    joint.as_ref().clone()
 }
 
-// set the last stable joint
+/// set the last stable joint
 pub fn set_last_stable_joint(joint: &CachedJoint) {
-    *LAST_STABLE_JOINT.write().unwrap() = joint.clone();
+    let mut g = loop {
+        match LAST_STABLE_JOINT.try_lock() {
+            None => error!("failed to lock last stable ball"),
+            Some(g) => break g,
+        }
+    };
+    g.update(Some(joint.clone()));
 }
