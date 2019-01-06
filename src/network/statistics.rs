@@ -57,6 +57,22 @@ impl Default for ConnectionStats {
     }
 }
 
+impl ConnectionStatsPerPeriod {
+    fn reset(&self) {
+        self.rx_good.store(0, Ordering::Relaxed);
+        self.rx_bad.store(0, Ordering::Relaxed);
+        self.tx_total.store(0, Ordering::Relaxed);
+    }
+
+    fn get(&self) -> ConnStatsPerPeriod {
+        ConnStatsPerPeriod {
+            rx_good: self.rx_good.load(Ordering::Relaxed),
+            rx_bad: self.rx_bad.load(Ordering::Relaxed),
+            tx_total: self.tx_total.load(Ordering::Relaxed),
+        }
+    }
+}
+
 impl ConnectionStats {
     fn increase_rx_good(&self) {
         self.sec.rx_good.fetch_add(1, Ordering::Relaxed);
@@ -80,59 +96,35 @@ impl ConnectionStats {
     }
 
     pub fn reset_sec(&self) {
-        self.sec.rx_good.store(0, Ordering::Relaxed);
-        self.sec.rx_bad.store(0, Ordering::Relaxed);
-        self.sec.tx_total.store(0, Ordering::Relaxed);
+        self.sec.reset();
     }
 
     pub fn reset_min(&self) {
-        self.min.rx_good.store(0, Ordering::Relaxed);
-        self.min.rx_bad.store(0, Ordering::Relaxed);
-        self.min.tx_total.store(0, Ordering::Relaxed);
+        self.min.reset();
     }
 
     pub fn reset_hour(&self) {
-        self.hour.rx_good.store(0, Ordering::Relaxed);
-        self.hour.rx_bad.store(0, Ordering::Relaxed);
-        self.hour.tx_total.store(0, Ordering::Relaxed);
+        self.hour.reset();
     }
 
     pub fn reset_day(&self) {
-        self.day.rx_good.store(0, Ordering::Relaxed);
-        self.day.rx_bad.store(0, Ordering::Relaxed);
-        self.day.tx_total.store(0, Ordering::Relaxed);
+        self.sec.reset();
     }
 
     pub fn get_sec(&self) -> ConnStatsPerPeriod {
-        ConnStatsPerPeriod {
-            rx_good: self.sec.rx_good.load(Ordering::Relaxed),
-            rx_bad: self.sec.rx_bad.load(Ordering::Relaxed),
-            tx_total: self.sec.tx_total.load(Ordering::Relaxed),
-        }
+        self.sec.get()
     }
 
     pub fn get_min(&self) -> ConnStatsPerPeriod {
-        ConnStatsPerPeriod {
-            rx_good: self.min.rx_good.load(Ordering::Relaxed),
-            rx_bad: self.min.rx_bad.load(Ordering::Relaxed),
-            tx_total: self.min.tx_total.load(Ordering::Relaxed),
-        }
+        self.min.get()
     }
 
     pub fn get_hour(&self) -> ConnStatsPerPeriod {
-        ConnStatsPerPeriod {
-            rx_good: self.hour.rx_good.load(Ordering::Relaxed),
-            rx_bad: self.hour.rx_bad.load(Ordering::Relaxed),
-            tx_total: self.hour.tx_total.load(Ordering::Relaxed),
-        }
+        self.hour.get()
     }
 
     pub fn get_day(&self) -> ConnStatsPerPeriod {
-        ConnStatsPerPeriod {
-            rx_good: self.day.rx_good.load(Ordering::Relaxed),
-            rx_bad: self.day.rx_bad.load(Ordering::Relaxed),
-            tx_total: self.day.tx_total.load(Ordering::Relaxed),
-        }
+        self.day.get()
     }
 }
 
