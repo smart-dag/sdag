@@ -179,6 +179,41 @@ fn net_state(ws: &Arc<WalletConn>) -> Result<()> {
     Ok(())
 }
 
+fn net_statistics(ws: &Arc<WalletConn>) -> Result<()> {
+    let net_stats = ws.get_net_statistics()?;
+
+    for conn in net_stats {
+        println!("PEER_ID : {}", conn.peer_id);
+        println!("PEER_ADDR : {}", conn.peer_addr);
+        println!("|           | RCV_GOOD |  RCV_BAD |   SEND   |");
+        println!(
+            "| LAST_SEC  | {:>8} | {:>8} | {:>8} |",
+            conn.stats_per_sec.received_good,
+            conn.stats_per_sec.received_bad,
+            conn.stats_per_sec.send_total
+        );
+        println!(
+            "| LAST_MIN  | {:>8} | {:>8} | {:>8} |",
+            conn.stats_per_min.received_good,
+            conn.stats_per_min.received_bad,
+            conn.stats_per_min.send_total
+        );
+        println!(
+            "| LAST_HOUR | {:>8} | {:>8} | {:>8} |",
+            conn.stats_per_hour.received_good,
+            conn.stats_per_hour.received_bad,
+            conn.stats_per_hour.send_total
+        );
+        println!(
+            "| LAST_DAY  | {:>8} | {:>8} | {:>8} |\n",
+            conn.stats_per_day.received_good,
+            conn.stats_per_day.received_bad,
+            conn.stats_per_day.send_total
+        );
+    }
+
+    Ok(())
+}
 
 fn net_state_info(ws: &Arc<WalletConn>) -> Result<()> {
     let net_state = ws.get_net_state()?;
@@ -425,10 +460,14 @@ fn main() -> Result<()> {
     }
 
     //net
-    if let Some(net) = m.subcommand_matches("net"){
+    if let Some(net) = m.subcommand_matches("net") {
         if net.values_of("info").is_some() {
             return net_state_info(&ws);
-            }
+        }
+
+        if net.values_of("stats").is_some() {
+            return net_statistics(&ws);
+        }
 
         return net_state(&ws);
     }

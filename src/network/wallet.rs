@@ -129,6 +129,12 @@ impl WalletConn {
         Ok(serde_json::from_value(response)?)
     }
 
+    // get the network statistics
+    pub fn get_net_statistics(&self) -> Result<Vec<super::hub::ConnStats>> {
+        let response = self.send_request("net_statistics", &Value::Null)?;
+        Ok(serde_json::from_value(response)?)
+    }
+
     //returned joint and joint property
     pub fn get_joint_by_unit_hash(&self, unit: &str) -> Result<(Joint, UnitProps)> {
         let mut response =

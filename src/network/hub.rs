@@ -212,6 +212,10 @@ impl WsConnections {
         }
     }
 
+    fn get_net_statistics(&self) -> Vec<ConnStats> {
+        vec![ConnStats::default(), ConnStats::default()]
+    }
+
     fn get_needed_outbound_peers(&self) -> usize {
         let outbound_connecions = self
             .conns
@@ -286,6 +290,7 @@ impl Server<HubData> for HubData {
             "catchup" => ws.on_catchup(params)?,
             "post_joint" => ws.on_post_joint(params)?,
             "net_state" => ws.on_get_net_state(params)?,
+            "net_statistics" => ws.on_get_net_statistics(params)?,
             "light/inputs" => ws.on_get_inputs(params)?,
             "light/get_history" => ws.on_get_history(params)?,
             "light/light_props" => ws.on_get_light_props(params)?,
@@ -561,6 +566,11 @@ impl HubConn {
     fn on_get_net_state(&self, _param: Value) -> Result<Value> {
         let net_state = WSS.get_net_state();
         Ok(serde_json::to_value(net_state)?)
+    }
+
+    fn on_get_net_statistics(&self, _param: Value) -> Result<Value> {
+        let net_stats = WSS.get_net_statistics();
+        Ok(serde_json::to_value(net_stats)?)
     }
 
     fn on_get_witnesses(&self, _: Value) -> Result<Value> {
@@ -1011,6 +1021,28 @@ impl HubConn {
         }
         Ok(witnesses)
     }
+}
+
+//---------------------------------------------------------------------------------------
+// ConnectionStats
+//---------------------------------------------------------------------------------------
+
+// The interface data
+#[derive(Default, Debug, Serialize, Deserialize)]
+pub struct ConnStats {
+    pub peer_id: String,
+    pub peer_addr: String,
+    pub stats_per_sec: ConnStatsPerPeroid,
+    pub stats_per_min: ConnStatsPerPeroid,
+    pub stats_per_hour: ConnStatsPerPeroid,
+    pub stats_per_day: ConnStatsPerPeroid,
+}
+
+#[derive(Default, Debug, Serialize, Deserialize)]
+pub struct ConnStatsPerPeroid {
+    pub received_good: usize,
+    pub received_bad: usize,
+    pub send_total: usize,
 }
 
 //---------------------------------------------------------------------------------------

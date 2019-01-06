@@ -91,6 +91,10 @@ subcommands:
                 help: brief net connections numbers
                 short: i
                 long: info
+            - stats:
+                help: joints statistics of connections
+                short: s
+                long: stats
 
     - balance:
         about: Show the wallet balance
