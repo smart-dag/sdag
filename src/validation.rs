@@ -7,6 +7,7 @@ use error::Result;
 use failure::ResultExt;
 use joint::{Joint, JointSequence, Level};
 use main_chain;
+use network::statistics;
 use object_hash;
 use rcu_cell::RcuReader;
 use serde::Deserialize;
@@ -55,6 +56,7 @@ pub fn validate_ready_joint(joint: CachedJoint) -> Result<()> {
         Ok(_) => {
             // save the unhandled joint to normal
             SDAG_CACHE.normalize_joint(&joint.key);
+            statistics::update_statistics(joint_data.get_peer_id(), true, true);
         }
         Err(e) => {
             // validation failed, purge the bad joint
@@ -64,6 +66,7 @@ pub fn validate_ready_joint(joint: CachedJoint) -> Result<()> {
                 e.to_string()
             );
             SDAG_CACHE.purge_bad_joint(&joint.key, e.to_string());
+            statistics::update_statistics(joint_data.get_peer_id(), true, false);
             return Err(e);
         }
     }

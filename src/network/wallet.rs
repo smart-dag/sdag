@@ -130,7 +130,7 @@ impl WalletConn {
     }
 
     // get the network statistics
-    pub fn get_net_statistics(&self) -> Result<Vec<super::hub::ConnStats>> {
+    pub fn get_net_statistics(&self) -> Result<Vec<super::statistics::ConnStats>> {
         let response = self.send_request("net_statistics", &Value::Null)?;
         Ok(serde_json::from_value(response)?)
     }

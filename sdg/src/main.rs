@@ -183,32 +183,24 @@ fn net_statistics(ws: &Arc<WalletConn>) -> Result<()> {
     let net_stats = ws.get_net_statistics()?;
 
     for conn in net_stats {
-        println!("PEER_ID : {}", conn.peer_id);
+        println!("PEER_ID   : {}", conn.peer_id);
         println!("PEER_ADDR : {}", conn.peer_addr);
-        println!("|           | RCV_GOOD |  RCV_BAD |   SEND   |");
+        println!("|           |  RX_GOOD |  RX_BAD  |    TX    |");
         println!(
             "| LAST_SEC  | {:>8} | {:>8} | {:>8} |",
-            conn.stats_per_sec.received_good,
-            conn.stats_per_sec.received_bad,
-            conn.stats_per_sec.send_total
+            conn.last_sec.rx_good, conn.last_sec.rx_bad, conn.last_sec.tx_total
         );
         println!(
             "| LAST_MIN  | {:>8} | {:>8} | {:>8} |",
-            conn.stats_per_min.received_good,
-            conn.stats_per_min.received_bad,
-            conn.stats_per_min.send_total
+            conn.last_min.rx_good, conn.last_min.rx_bad, conn.last_min.tx_total
         );
         println!(
             "| LAST_HOUR | {:>8} | {:>8} | {:>8} |",
-            conn.stats_per_hour.received_good,
-            conn.stats_per_hour.received_bad,
-            conn.stats_per_hour.send_total
+            conn.last_hour.rx_good, conn.last_hour.rx_bad, conn.last_hour.tx_total
         );
         println!(
             "| LAST_DAY  | {:>8} | {:>8} | {:>8} |\n",
-            conn.stats_per_day.received_good,
-            conn.stats_per_day.received_bad,
-            conn.stats_per_day.send_total
+            conn.last_day.rx_good, conn.last_day.rx_bad, conn.last_day.tx_total
         );
     }
 

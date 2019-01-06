@@ -5,6 +5,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use super::network_base::{Sender, Server, WsConnection};
+use super::statistics::{self, ConnStats, ConnectionStats};
 use business::BUSINESS_CACHE;
 use cache::{JointData, SDAG_CACHE};
 use catchup;
@@ -213,7 +214,19 @@ impl WsConnections {
     }
 
     fn get_net_statistics(&self) -> Vec<ConnStats> {
-        vec![ConnStats::default(), ConnStats::default()]
+        self.conns
+            .read()
+            .unwrap()
+            .values()
+            .map(|c| ConnStats {
+                peer_id: c.get_peer_id().to_string(),
+                peer_addr: c.get_peer_addr().to_string(),
+                last_sec: c.get_stats().get_sec(),
+                last_min: c.get_stats().get_min(),
+                last_hour: c.get_stats().get_hour(),
+                last_day: c.get_stats().get_day(),
+            })
+            .collect()
     }
 
     fn get_needed_outbound_peers(&self) -> usize {
@@ -237,6 +250,42 @@ impl WsConnections {
             .values()
             .any(|v| v.get_peer_addr() == addr)
     }
+
+    pub fn reset_stats_last_sec(&self) {
+        let g = self.conns.read().unwrap();
+        let conns = g.values().cloned();
+
+        for conn in conns {
+            conn.get_stats().reset_sec();
+        }
+    }
+
+    pub fn reset_stats_last_min(&self) {
+        let g = self.conns.read().unwrap();
+        let conns = g.values().cloned();
+
+        for conn in conns {
+            conn.get_stats().reset_min();
+        }
+    }
+
+    pub fn reset_stats_last_hour(&self) {
+        let g = self.conns.read().unwrap();
+        let conns = g.values().cloned();
+
+        for conn in conns {
+            conn.get_stats().reset_hour();
+        }
+    }
+
+    pub fn reset_stats_last_day(&self) {
+        let g = self.conns.read().unwrap();
+        let conns = g.values().cloned();
+
+        for conn in conns {
+            conn.get_stats().reset_day();
+        }
+    }
 }
 
 //---------------------------------------------------------------------------------------
@@ -249,6 +298,7 @@ pub struct HubData {
     is_source: AtomicBool,
     is_inbound: AtomicBool,
     peer_id: ArcCell<String>,
+    stats: ConnectionStats,
 }
 
 pub type HubConn = WsConnection<HubData>;
@@ -260,6 +310,7 @@ impl Default for HubData {
             is_source: AtomicBool::new(false),
             is_inbound: AtomicBool::new(false),
             peer_id: ArcCell::new(Arc::new("unknown".to_owned())),
+            stats: ConnectionStats::default(),
         }
     }
 }
@@ -359,6 +410,11 @@ impl HubConn {
     pub fn set_peer_id(&self, peer_id: &str) {
         let data = self.get_data();
         data.peer_id.set(Arc::new(peer_id.to_owned()));
+    }
+
+    pub fn get_stats(&self) -> &ConnectionStats {
+        let data = self.get_data();
+        &data.stats
     }
 }
 
@@ -474,7 +530,10 @@ impl HubConn {
         let unit: String = serde_json::from_value(param)?;
 
         match SDAG_CACHE.get_joint(&unit).and_then(|j| j.read()) {
-            Ok(joint) => Ok(json!({ "joint": clear_ball_after_min_retrievable_mci(&joint)?})),
+            Ok(joint) => {
+                statistics::update_statistics(Some(self.get_peer_id().as_str()), false, true);
+                Ok(json!({ "joint": clear_ball_after_min_retrievable_mci(&joint)?}))
+            }
 
             Err(e) => {
                 error!(
@@ -853,6 +912,7 @@ impl HubConn {
 
     #[inline]
     fn send_joint(&self, joint: &Joint) -> Result<()> {
+        statistics::update_statistics(Some(self.get_peer_id().as_str()), false, true);
         self.send_just_saying("joint", serde_json::to_value(joint)?)
     }
 
@@ -1021,28 +1081,6 @@ impl HubConn {
         }
         Ok(witnesses)
     }
-}
-
-//---------------------------------------------------------------------------------------
-// ConnectionStats
-//---------------------------------------------------------------------------------------
-
-// The interface data
-#[derive(Default, Debug, Serialize, Deserialize)]
-pub struct ConnStats {
-    pub peer_id: String,
-    pub peer_addr: String,
-    pub stats_per_sec: ConnStatsPerPeroid,
-    pub stats_per_min: ConnStatsPerPeroid,
-    pub stats_per_hour: ConnStatsPerPeroid,
-    pub stats_per_day: ConnStatsPerPeroid,
-}
-
-#[derive(Default, Debug, Serialize, Deserialize)]
-pub struct ConnStatsPerPeroid {
-    pub received_good: usize,
-    pub received_bad: usize,
-    pub send_total: usize,
 }
 
 //---------------------------------------------------------------------------------------
