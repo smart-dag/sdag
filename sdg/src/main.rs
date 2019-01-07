@@ -185,7 +185,7 @@ fn net_statistics(ws: &Arc<WalletConn>) -> Result<()> {
     for conn in net_stats {
         println!("---\n");
         println!("- PEER_ID   : {}", conn.peer_id);
-        println!("- PEER_ADDR : {}", conn.peer_addr);
+        println!("- PEER_ADDR : {}\n", conn.peer_addr);
         println!("|           |  RX_GOOD |  RX_BAD  |    TX    |");
         println!("|-----------|----------|----------|----------|");
         println!(
