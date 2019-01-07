@@ -155,7 +155,7 @@ impl WsConnections {
         };
 
         for conn in self.conns.read().unwrap().values().cloned() {
-            // only send to who subsribed and not the source
+            // only send to who subscribed and not the source
             if conn.is_subscribed() && joint.get_peer_id() != Some(conn.get_peer_id().as_str()) {
                 let joint = joint.clone();
                 try_go!(move || conn.send_joint(&joint));

@@ -183,9 +183,11 @@ fn net_statistics(ws: &Arc<WalletConn>) -> Result<()> {
     let net_stats = ws.get_net_statistics()?;
 
     for conn in net_stats {
-        println!("PEER_ID   : {}", conn.peer_id);
-        println!("PEER_ADDR : {}", conn.peer_addr);
+        println!("---\n");
+        println!("- PEER_ID   : {}", conn.peer_id);
+        println!("- PEER_ADDR : {}", conn.peer_addr);
         println!("|           |  RX_GOOD |  RX_BAD  |    TX    |");
+        println!("|-----------|----------|----------|----------|");
         println!(
             "| LAST_SEC  | {:>8} | {:>8} | {:>8} |",
             conn.last_sec.rx_good, conn.last_sec.rx_bad, conn.last_sec.tx_total
