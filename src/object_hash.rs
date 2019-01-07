@@ -7,7 +7,6 @@ use rand::{self, Rng};
 use ripemd160::Ripemd160;
 use serde::ser::Serialize;
 use sha2::{Digest, Sha256};
-use std::collections::HashSet;
 
 pub fn get_base64_hash<T>(object: &T) -> Result<String>
 where
@@ -34,7 +33,7 @@ where
     let mut chash_index = 0;
 
     while chash_index < chash.len() {
-        if CHECKSUM_OFFSETS.contains(&chash_index) {
+        if let Some(true) = CHECKSUM_OFFSETS.get(chash_index) {
             chash.set(chash_index, checksum[checksum_index]);
             checksum_index += 1;
         } else {
@@ -55,18 +54,21 @@ where
 //The original array pi is the fractional part from PI as a array.
 //See the original chash.js for more details.
 lazy_static! {
-    static ref CHECKSUM_OFFSETS: HashSet<usize> = {
+    static ref CHECKSUM_OFFSETS: Vec<bool> = {
         let pi = [
             1, 4, 1, 5, 9, 2, 6, 5, 3, 5, 8, 9, 7, 9, 3, 2, 3, 8, 4, 6, 2, 6, 4, 3, 3, 8, 3, 2, 7,
             9, 5, 0, 2, 8, 8, 4, 1, 9, 7, 1, 6, 9, 3, 9, 9, 3, 7, 5, 1, 0,
         ];
 
+        let mut set = vec![];
         let mut offset = 0;
-        let mut set = HashSet::new();
+
+        set.resize(pi.iter().fold(0, |acc, x| acc + x) + 1, false);
+
         for i in pi.iter() {
             if *i > 0 {
                 offset += i;
-                set.insert(offset);
+                set[offset] = true;
             }
         }
 
@@ -88,9 +90,8 @@ pub fn is_chash_valid(encoded: &str) -> bool {
     let mut checksum = BitVec::new();
     let mut clean_data = BitVec::new();
 
-    //let mut chash_index = 0;
     for (chash_index, bit) in chash.iter().enumerate() {
-        if CHECKSUM_OFFSETS.contains(&chash_index) {
+        if let Some(true) = CHECKSUM_OFFSETS.get(chash_index) {
             checksum.push(bit);
         } else {
             clean_data.push(bit);
