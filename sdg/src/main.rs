@@ -179,31 +179,40 @@ fn net_state(ws: &Arc<WalletConn>) -> Result<()> {
     Ok(())
 }
 
+fn print_stats_matrix(conn: sdag::network::statistics::ConnStats) {
+    println!("|           |  RX_GOOD |  RX_BAD  |    TX    |");
+    println!("|-----------|----------|----------|----------|");
+    println!(
+        "| LAST_SEC  | {:>8} | {:>8} | {:>8} |",
+        conn.last_sec.rx_good, conn.last_sec.rx_bad, conn.last_sec.tx_total
+    );
+    println!(
+        "| LAST_MIN  | {:>8} | {:>8} | {:>8} |",
+        conn.last_min.rx_good, conn.last_min.rx_bad, conn.last_min.tx_total
+    );
+    println!(
+        "| LAST_HOUR | {:>8} | {:>8} | {:>8} |",
+        conn.last_hour.rx_good, conn.last_hour.rx_bad, conn.last_hour.tx_total
+    );
+    println!(
+        "| LAST_DAY  | {:>8} | {:>8} | {:>8} |\n",
+        conn.last_day.rx_good, conn.last_day.rx_bad, conn.last_day.tx_total
+    );
+}
+
 fn net_statistics(ws: &Arc<WalletConn>) -> Result<()> {
     let net_stats = ws.get_net_statistics()?;
 
-    for conn in net_stats {
+    // Overall Stats
+    println!("---\n");
+    println!("- OVERALL\n");
+    print_stats_matrix(net_stats.overall);
+
+    for conn in net_stats.connections {
         println!("---\n");
         println!("- PEER_ID   : {}", conn.peer_id);
         println!("- PEER_ADDR : {}\n", conn.peer_addr);
-        println!("|           |  RX_GOOD |  RX_BAD  |    TX    |");
-        println!("|-----------|----------|----------|----------|");
-        println!(
-            "| LAST_SEC  | {:>8} | {:>8} | {:>8} |",
-            conn.last_sec.rx_good, conn.last_sec.rx_bad, conn.last_sec.tx_total
-        );
-        println!(
-            "| LAST_MIN  | {:>8} | {:>8} | {:>8} |",
-            conn.last_min.rx_good, conn.last_min.rx_bad, conn.last_min.tx_total
-        );
-        println!(
-            "| LAST_HOUR | {:>8} | {:>8} | {:>8} |",
-            conn.last_hour.rx_good, conn.last_hour.rx_bad, conn.last_hour.tx_total
-        );
-        println!(
-            "| LAST_DAY  | {:>8} | {:>8} | {:>8} |\n",
-            conn.last_day.rx_good, conn.last_day.rx_bad, conn.last_day.tx_total
-        );
+        print_stats_matrix(conn);
     }
 
     Ok(())

@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use may::coroutine;
 use sdag::network::hub;
+use sdag::network::statistics;
 
 pub fn start_global_timers() {
     // request needed joints that were not received during the previous session
@@ -39,19 +40,19 @@ pub fn start_global_timers() {
     go!(move || loop {
         coroutine::sleep(Duration::from_secs(1));
         info!("Resetting peer statistics per second");
-        hub::WSS.reset_stats_last_sec();
+        statistics::reset_stats_last_sec();
         count += 1;
         if count % 60 == 0 {
             info!("Resetting peer statistics per minute");
-            hub::WSS.reset_stats_last_min();
+            statistics::reset_stats_last_min();
         }
         if count % (60 * 60) == 0 {
             info!("Resetting peer statistics per hour");
-            hub::WSS.reset_stats_last_hour();
+            statistics::reset_stats_last_hour();
         }
         if count % (60 * 60 * 24) == 0 {
             info!("Resetting peer statistics per day");
-            hub::WSS.reset_stats_last_day();
+            statistics::reset_stats_last_day();
             count = 0;
         }
     });

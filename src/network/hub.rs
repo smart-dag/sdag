@@ -64,6 +64,16 @@ pub struct HubNetState {
 }
 
 //---------------------------------------------------------------------------------------
+// HubStatistics
+//---------------------------------------------------------------------------------------
+
+#[derive(Serialize, Deserialize)]
+pub struct HubStatistics {
+    pub overall: ConnStats,
+    pub connections: Vec<ConnStats>,
+}
+
+//---------------------------------------------------------------------------------------
 // WsConnections
 //---------------------------------------------------------------------------------------
 // global request has no specific ws connections, just find a proper one should be fine
@@ -213,20 +223,24 @@ impl WsConnections {
         }
     }
 
-    fn get_net_statistics(&self) -> Vec<ConnStats> {
-        self.conns
-            .read()
-            .unwrap()
-            .values()
-            .map(|c| ConnStats {
-                peer_id: c.get_peer_id().to_string(),
-                peer_addr: c.get_peer_addr().to_string(),
-                last_sec: c.get_stats().get_sec(),
-                last_min: c.get_stats().get_min(),
-                last_hour: c.get_stats().get_hour(),
-                last_day: c.get_stats().get_day(),
-            })
-            .collect()
+    fn get_net_statistics(&self) -> HubStatistics {
+        HubStatistics {
+            overall: statistics::get_overall(),
+            connections: self
+                .conns
+                .read()
+                .unwrap()
+                .values()
+                .map(|c| ConnStats {
+                    peer_id: c.get_peer_id().to_string(),
+                    peer_addr: c.get_peer_addr().to_string(),
+                    last_sec: c.get_stats().get_sec(),
+                    last_min: c.get_stats().get_min(),
+                    last_hour: c.get_stats().get_hour(),
+                    last_day: c.get_stats().get_day(),
+                })
+                .collect(),
+        }
     }
 
     fn get_needed_outbound_peers(&self) -> usize {

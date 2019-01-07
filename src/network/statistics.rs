@@ -2,6 +2,11 @@ use super::hub;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
+lazy_static! {
+// Overall stats
+    pub static ref STATS: ConnectionStats = ConnectionStats::default();
+}
+
 // internal data
 #[derive(Debug)]
 pub struct ConnectionStats {
@@ -108,7 +113,7 @@ impl ConnectionStats {
     }
 
     pub fn reset_day(&self) {
-        self.sec.reset();
+        self.day.reset();
     }
 
     pub fn get_sec(&self) -> ConnStatsPerPeriod {
@@ -135,12 +140,46 @@ pub fn update_statistics(peer_id: Option<&str>, is_rx: bool, is_good: bool) {
             if is_rx {
                 if is_good {
                     stats.increase_rx_good();
+                    STATS.increase_rx_good();
                 } else {
                     stats.increase_rx_bad();
+                    STATS.increase_rx_bad();
                 }
             } else {
                 stats.increase_tx_total();
+                STATS.increase_tx_total();
             }
         }
     }
+}
+
+pub fn get_overall() -> ConnStats {
+    ConnStats {
+        peer_id: String::new(),
+        peer_addr: String::new(),
+        last_sec: STATS.get_sec(),
+        last_min: STATS.get_min(),
+        last_hour: STATS.get_hour(),
+        last_day: STATS.get_day(),
+    }
+}
+
+pub fn reset_stats_last_sec() {
+    hub::WSS.reset_stats_last_sec();
+    STATS.sec.reset();
+}
+
+pub fn reset_stats_last_min() {
+    hub::WSS.reset_stats_last_min();
+    STATS.min.reset();
+}
+
+pub fn reset_stats_last_hour() {
+    hub::WSS.reset_stats_last_hour();
+    STATS.hour.reset();
+}
+
+pub fn reset_stats_last_day() {
+    hub::WSS.reset_stats_last_day();
+    STATS.sec.reset();
 }
