@@ -389,7 +389,7 @@ fn validate_parents(joint: &JointData) -> Result<()> {
         bail!("missing parents");
     }
 
-    let joint_ball = &joint.ball;
+    // let joint_ball = &joint.ball;
 
     let mut parent_authors = Vec::new();
     let mut parents = Vec::new();
@@ -398,9 +398,9 @@ fn validate_parents(joint: &JointData) -> Result<()> {
         let parent_joint = parent.read()?;
 
         // the ball value is from network data, we are not stable yet!
-        if joint_ball.is_some() && parent_joint.ball.is_none() {
-            bail!("joint has ball, and parent [{}] has not ball", parent.key);
-        }
+        // if joint_ball.is_some() && parent_joint.ball.is_none() {
+        //     bail!("joint has ball, and parent [{}] has not ball", parent.key);
+        // }
 
         // check no same author/address for more than one parents
         for author in &parent_joint.unit.authors {
