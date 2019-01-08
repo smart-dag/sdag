@@ -63,13 +63,18 @@ fn start_main_chain_worker(rx: mpsc::Receiver<CachedJoint>) -> JoinHandle<()> {
             last_stable_level
         );
 
+        let mut last_min_wl = Level::MINIMUM;
+
         while let Ok(joint) = rx.recv() {
             let joint_data = t_c!(joint.read());
             let min_wl = joint_data.get_min_wl();
 
             info!("main chain worker get a new joint, min_wl = {:?}", min_wl);
-            if min_wl > last_stable_level {
-                last_stable_level = t_c!(update_main_chain(joint));
+            if min_wl > last_min_wl {
+                last_min_wl = min_wl;
+                if min_wl > last_stable_level {
+                    last_stable_level = t_c!(update_main_chain(joint));
+                }
             }
         }
         error!("main chain worker stopped!");

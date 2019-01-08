@@ -63,7 +63,7 @@ lazy_static! {
         let mut set = vec![];
         let mut offset = 0;
 
-        set.resize(pi.iter().fold(0, |acc, x| acc + x) + 1, false);
+        set.resize(pi.iter().sum::<usize>() + 1, false);
 
         for i in pi.iter() {
             if *i > 0 {
