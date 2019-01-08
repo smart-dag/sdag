@@ -228,6 +228,11 @@ impl JointData {
 
     pub fn wait_stable(&self) {
         use std::time::Duration;
+        // fast stable detection
+        if self.is_stable() {
+            return;
+        }
+
         while !self.stable_sem.wait_timeout(Duration::from_secs(1)) {
             error!("wait stable timeout! unit={}", self.unit.unit);
         }
