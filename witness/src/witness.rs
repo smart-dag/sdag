@@ -148,9 +148,9 @@ fn is_need_witnessing() -> Result<(bool)> {
         return Ok(true);
     }
 
-    if is_successive_witnesses(&best_joint)? {
-        return Ok(false);
-    }
+    // if is_successive_witnesses(&best_joint)? {
+    //     return Ok(false);
+    // }
 
     is_normal_joint_behind_min_retrievable(&free_joints)
 }
@@ -186,6 +186,7 @@ fn is_relative_stable(best_joint: &CachedJoint) -> Result<(bool, bool)> {
 }
 
 /// return true if successive witnessing (contains no normal joint)
+#[allow(dead_code)]
 fn is_successive_witnesses(best_joint: &CachedJoint) -> Result<bool> {
     let mut best_free_parent = best_joint.read()?;
     let mut diff_witnesses = HashSet::new();
