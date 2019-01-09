@@ -222,7 +222,7 @@ fn send_payment(
     );
     println!("Total :{}", TRANSANTION_NUM.fetch_add(1, Ordering::SeqCst));
 
-    println!("\n the original joint: \n [{:#?}] \n", joint);
+    //println!("\n the original joint: \n [{:#?}] \n", joint);
 
     match flag {
         "good" => return Ok(()),
@@ -271,9 +271,10 @@ fn send_payment(
 
 fn continue_sending(ws: Arc<WalletConn>, wallets_info: &[wallet::WalletInfo]) -> Result<()> {
     let mut rng = thread_rng();
+    let len = wallets_info.len();
 
-    let n1: usize = rng.gen_range(0, 100);
-    let n2: usize = rng.gen_range(0, 100);
+    let n1: usize = rng.gen_range(0, len);
+    let n2: usize = rng.gen_range(0, len);
 
     let wallets = vec![(wallets_info[n1]._00_address.clone(), 0.001)];
 
@@ -456,18 +457,15 @@ fn main() -> Result<()> {
                     .collect::<Vec<(String, f64)>>(),
             );
 
-            if let Some(index) = cycle_index {
-                for _ in 0..index {
-                    while let Err(e) =
-                        send_payment(&ws, address_amount.clone(), &wallet_info, "good")
-                    {
+            for _ in 0..cycle_index.unwrap_or(1) {
+                for chunk in address_amount.chunks(sdag::config::MAX_OUTPUTS_PER_PAYMENT_MESSAGE) {
+                    while let Err(e) = send_payment(&ws, chunk.to_vec(), &wallet_info, "good") {
                         coroutine::sleep(Duration::from_secs(10));
                         eprintln!("{}", e);
                     }
                 }
-            } else {
-                send_payment(&ws, address_amount, &wallet_info, "good")?;
             }
+
             return Ok(());
         }
     }
@@ -576,7 +574,6 @@ fn main() -> Result<()> {
                 kind: clap::ErrorKind::ArgumentNotFound,
                 ..
             }) => {
-                println!("3");
                 return show_history(&ws, &wallet._00_address, index, 5);
             }
             Err(e) => e.exit(),
