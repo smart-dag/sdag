@@ -452,6 +452,8 @@ fn validate_parents(joint: &JointData) -> Result<()> {
     // Last ball may not stable in our view, need to wait until it got stable
     last_ball_joint.read()?.wait_stable();
 
+    // TODO: move the ball to property
+    // re-read to get the ball
     let last_ball_joint_data = last_ball_joint.read()?;
     // last_ball_unit is on main chain
     if !last_ball_joint_data.is_on_main_chain() {
