@@ -135,7 +135,7 @@ fn build_unstable_main_chain_from_joint(
 //     Ok(max_alt_level)
 // }
 
-fn calc_max_alt_level(last_ball: &JointData, _best_parent: &JointData) -> Result<Level> {
+fn calc_max_alt_level(last_ball: &JointData, best_parent: &JointData) -> Result<Level> {
     let stable_point = last_ball.get_best_parent().read()?;
     let mut max_alt_level = stable_point.get_level();
 
@@ -161,10 +161,10 @@ fn calc_max_alt_level(last_ball: &JointData, _best_parent: &JointData) -> Result
     //Go down to collect best children
     //Best children should never intersect, no need to check revisit
     while let Some(joint_data) = joints.pop() {
-        // let is_include = best_parent > &*joint_data;
-        // if !is_include {
-        //     continue;
-        // }
+        let is_include = best_parent > &*joint_data;
+        if !is_include {
+            continue;
+        }
 
         if joint_data.is_wl_increased() {
             let level = joint_data.get_level();
@@ -272,8 +272,6 @@ fn update_stable_main_chain(
     while let Some(unstable_mc_joint) = unstable_mc_joints.pop() {
         //Alternative roots are last stable mc joint's best children but not on current main chain
         let max_alt_level = calc_max_alt_level(&unstable_mc_joint, &best_parent)?;
-
-        error!("min_wl={:?}, max_alt_level={:?}", min_wl, max_alt_level);
 
         if min_wl > max_alt_level {
             mark_main_chain_joint_stable(&unstable_mc_joint, stable_joint.get_mci() + 1)?;
