@@ -125,8 +125,33 @@ impl SDagCache {
         self.joints.read().unwrap().get_free_joints()
     }
 
+    pub fn get_bad_joints(&self) -> Vec<String> {
+        self.joints.read().unwrap().get_known_bad_joints()
+    }
+
     pub fn get_num_of_bad_joints(&self) -> usize {
         self.joints.read().unwrap().get_num_of_known_bad_joints()
+    }
+
+    pub fn get_temp_bad_joints(&self) -> Vec<String> {
+        self.get_unstable_joints()
+            .map(|v| {
+                v.into_iter()
+                    .filter_map(|j| {
+                        if let Ok(joint) = j.read() {
+                            if joint.get_sequence() == ::joint::JointSequence::TempBad {
+                                return Some(joint.unit.unit.clone());
+                            }
+                        }
+                        None
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or(Vec::new())
+    }
+
+    pub fn get_num_of_temp_bad_joints(&self) -> usize {
+        self.get_temp_bad_joints().len()
     }
 
     pub fn get_num_of_unhandled_joints(&self) -> usize {

@@ -168,6 +168,10 @@ impl SDagCacheInner {
         self.known_bad_joints.len()
     }
 
+    pub fn get_known_bad_joints(&self) -> Vec<String> {
+        self.known_bad_joints.keys().cloned().collect()
+    }
+
     /// remove the missing parent entry if the parent is validate good
     /// and trigger dependent children that are satisfied
     /// append the joint as child for all it's parents

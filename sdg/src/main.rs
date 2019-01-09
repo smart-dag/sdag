@@ -599,8 +599,13 @@ fn handle_subcommand_unit(unit_args: &clap::ArgMatches, ws: &Arc<WalletConn>) ->
         print_unit_hash_list(ws.get_missing_joints()?, "missing");
     }
 
-    // show the temp-bad joints
+    // show the bad joints
     if unit_args.values_of("bad").is_some() {
+        print_unit_hash_list(ws.get_bad_joints()?, "bad");
+    }
+
+    // show the temp-bad joints
+    if unit_args.values_of("temp-bad").is_some() {
         print_unit_hash_list(ws.get_temp_bad_joints()?, "temp-bad");
     }
 
@@ -620,6 +625,7 @@ fn handle_subcommand_unit(unit_args: &clap::ArgMatches, ws: &Arc<WalletConn>) ->
         let sdag::light::NumOfUnit {
             valid_unit,
             known_bad,
+            temp_bad,
             unhandled,
             last_stable_mci,
         } = ws.get_joints_info()?;
@@ -627,6 +633,7 @@ fn handle_subcommand_unit(unit_args: &clap::ArgMatches, ws: &Arc<WalletConn>) ->
         println!("the number of various joint\n");
         println!("normal joint      : {}", valid_unit);
         println!("known bad joints  : {}", known_bad);
+        println!("temp bad joints   : {}", temp_bad);
         println!("unhandled joints  : {}", unhandled);
         println!("last stable mci   : {:?}", last_stable_mci);
     }

@@ -365,11 +365,12 @@ impl Server<HubData> for HubData {
             "get_balance" => ws.on_get_balance(params)?,
             "get_hash_tree" => ws.on_get_hash_tree(params)?,
             "get_witnesses" => ws.on_get_witnesses(params)?,
-            "get_free_joints" => ws.get_free_joints(params)?,
+            "get_free_joints" => ws.on_get_free_joints(params)?,
             "get_joints_info" => ws.on_get_joints_info(params)?,
             "get_network_info" => ws.on_get_network_info(params)?,
             "get_joints_by_mci" => ws.on_get_joints_by_mci(params)?,
             "get_missing_joints" => ws.on_get_missing_joints(params)?,
+            "get_bad_joints" => ws.on_get_bad_joints(params)?,
             "get_temp_bad_joints" => ws.on_get_temp_bad_joints(params)?,
             "get_joint_by_unit_hash" => ws.on_get_joint_by_unit_hash(params)?,
             "get_children" => ws.on_get_children(params)?,
@@ -470,6 +471,7 @@ impl HubConn {
         Ok(json!(light::NumOfUnit {
             valid_unit: SDAG_CACHE.get_num_of_normal_joints(),
             known_bad: SDAG_CACHE.get_num_of_bad_joints(),
+            temp_bad: SDAG_CACHE.get_num_of_temp_bad_joints(),
             unhandled: SDAG_CACHE.get_num_of_unhandled_joints(),
             last_stable_mci: main_chain::get_last_stable_mci(),
         }))
@@ -562,7 +564,7 @@ impl HubConn {
         }
     }
 
-    fn get_free_joints(&self, _param: Value) -> Result<Value> {
+    fn on_get_free_joints(&self, _param: Value) -> Result<Value> {
         match SDAG_CACHE.get_free_joints() {
             Ok(joints) => Ok(json!(joints
                 .iter()
@@ -737,27 +739,12 @@ impl HubConn {
             .and_then(|j| Ok(json!({ "joint": (**j).clone(), "property": j.get_props()})))
     }
 
+    fn on_get_bad_joints(&self, _param: Value) -> Result<Value> {
+        Ok(serde_json::to_value(SDAG_CACHE.get_bad_joints())?)
+    }
+
     fn on_get_temp_bad_joints(&self, _param: Value) -> Result<Value> {
-        let temp_bad_joints = SDAG_CACHE
-            .get_unstable_joints()?
-            .into_iter()
-            .filter_map(|j| {
-                if let Ok(joint) = j.read() {
-                    info!(
-                        "unstable joint {} sequence {:?}",
-                        joint.unit.unit,
-                        joint.get_sequence()
-                    );
-                    if joint.get_sequence() == JointSequence::TempBad {
-                        return Some(joint.unit.unit.clone());
-                    }
-                }
-
-                None
-            })
-            .collect::<Vec<_>>();
-
-        Ok(serde_json::to_value(temp_bad_joints)?)
+        Ok(serde_json::to_value(SDAG_CACHE.get_temp_bad_joints())?)
     }
 
     fn on_get_children(&self, param: Value) -> Result<Value> {

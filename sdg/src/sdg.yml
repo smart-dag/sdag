@@ -126,9 +126,13 @@ subcommands:
                 long: lost
                 short: l
             - bad:
-                help: list the temp-bad joints
+                help: list the bad joints
                 long: bad
                 short: b
+            - temp-bad:
+                help: list the temp-bad joints
+                long: temp-bad
+                short: t
             - mci:
                 help: list all the units of the specified mci
                 long: mci
