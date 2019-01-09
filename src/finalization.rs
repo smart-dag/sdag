@@ -47,6 +47,7 @@ fn start_finalization_worker(rx: mpsc::Receiver<CachedJoint>) -> JoinHandle<()> 
 }
 
 fn finalize_joint(cached_joint: CachedJoint) -> Result<()> {
+    info!("finalize_joint, unit={}", cached_joint.key);
     let joint_data = cached_joint.read()?;
 
     let mut joint = (**joint_data).clone();
@@ -75,7 +76,7 @@ fn finalize_joint(cached_joint: CachedJoint) -> Result<()> {
     let joint_data = cached_joint.read()?;
     joint_data.set_stable();
     if joint_data.is_on_main_chain() {
-        ::main_chain::set_last_stable_joint(&cached_joint);
+        ::main_chain::set_last_stable_joint(joint_data.clone());
     }
     KV_STORE.save_joint(&joint_data)?;
 

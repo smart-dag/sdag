@@ -58,8 +58,7 @@ impl<K, V> Clone for CachedData<K, V> {
 
 impl<K: PartialEq, V> PartialEq for CachedData<K, V> {
     fn eq(&self, other: &Self) -> bool {
-        // self.key == other.key
-        Arc::ptr_eq(&self.key, &other.key)
+        self.key == other.key
     }
 }
 

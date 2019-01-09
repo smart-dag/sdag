@@ -31,7 +31,7 @@ pub fn prepare_witness_proof(
     let mut found_witnesses = Vec::new();
     let mut last_ball_units = Vec::new();
     for joint in unstable_mc_cached_joints {
-        let mut joint = (**joint.read()?).clone();
+        let mut joint = (*joint).clone();
 
         // the unit might get stabilized while we were reading other units
         joint.ball = None;

@@ -1,18 +1,24 @@
 use std::collections::VecDeque;
 
-use cache::{CachedJoint, JointData, SDagCache, SDAG_CACHE};
+use cache::{CachedJoint, JointData, SDAG_CACHE};
 use error::Result;
 use failure::ResultExt;
 use joint::Level;
 use may::coroutine::JoinHandle;
 use may::sync::mpsc;
-use rcu_cell::RcuCell;
+use rcu_cell::{RcuCell, RcuReader};
 
 lazy_static! {
     pub static ref MAIN_CHAIN_WORKER: MainChainWorker = MainChainWorker::default();
-    static ref LAST_STABLE_JOINT: RcuCell<CachedJoint> = RcuCell::new(Some(
-        calc_last_stable_joint(&SDAG_CACHE).expect("failed to read last stable joint")
-    ));
+    static ref LAST_STABLE_JOINT: RcuCell<RcuReader<JointData>> = {
+        match calc_last_stable_joint() {
+            Ok(joint) => RcuCell::new(Some(joint)),
+            Err(e) => {
+                error!("init LAST_STABLE_JOINT, err={}", e);
+                RcuCell::new(None)
+            }
+        }
+    };
 }
 
 //---------------------------------------------------------------------------------------
@@ -27,7 +33,7 @@ impl_event!(MciStableEvent);
 // MainChainWorker
 //---------------------------------------------------------------------------------------
 pub struct MainChainWorker {
-    tx: mpsc::Sender<CachedJoint>,
+    tx: mpsc::Sender<RcuReader<JointData>>,
     _handler: JoinHandle<()>,
 }
 
@@ -42,21 +48,19 @@ impl Default for MainChainWorker {
 
 impl MainChainWorker {
     // the validation would call this API to push ready joint
-    pub fn push_ready_joint(&self, joint: CachedJoint) -> Result<()> {
+    pub fn push_ready_joint(&self, joint: RcuReader<JointData>) -> Result<()> {
         self.tx.send(joint)?;
         Ok(())
     }
 }
 
-fn start_main_chain_worker(rx: mpsc::Receiver<CachedJoint>) -> JoinHandle<()> {
+fn start_main_chain_worker(rx: mpsc::Receiver<RcuReader<JointData>>) -> JoinHandle<()> {
     go!(move || {
         // init it as -1 then the genesis min_wl = 0 can go forward
-        let mut last_stable_level = LAST_STABLE_JOINT
-            .read()
-            .unwrap()
-            .read()
-            .map(|j| j.get_level())
-            .unwrap_or(Level::MINIMUM);
+        let mut last_stable_level = match LAST_STABLE_JOINT.read() {
+            Some(j) => j.get_mci(),
+            None => Level::MINIMUM,
+        };
 
         info!(
             "main chain worker started, last_stable_level = {:?}",
@@ -66,15 +70,14 @@ fn start_main_chain_worker(rx: mpsc::Receiver<CachedJoint>) -> JoinHandle<()> {
         let mut last_min_wl = Level::MINIMUM;
 
         while let Ok(joint) = rx.recv() {
-            let joint_data = t_c!(joint.read());
-            let min_wl = joint_data.get_min_wl();
+            let min_wl = joint.get_min_wl();
 
             if min_wl > last_min_wl {
                 last_min_wl = min_wl;
                 if min_wl > last_stable_level {
                     info!(
                         "main chain worker get a valid joint, min_wl = {:?}, unit={}",
-                        min_wl, joint.key
+                        min_wl, joint.unit.unit
                     );
                     last_stable_level = t_c!(update_main_chain(joint));
                 }
@@ -85,48 +88,72 @@ fn start_main_chain_worker(rx: mpsc::Receiver<CachedJoint>) -> JoinHandle<()> {
     })
 }
 
-fn update_main_chain(joint: CachedJoint) -> Result<Level> {
-    let joint_data = joint.read()?;
+fn update_main_chain(joint: RcuReader<JointData>) -> Result<Level> {
     let stable_level;
 
-    if joint_data.unit.is_genesis_unit() {
+    if joint.unit.is_genesis_unit() {
         stable_level = Level::ZERO;
-        mark_main_chain_joint_stable(joint, stable_level)?;
+        mark_main_chain_joint_stable(&joint, stable_level)?;
     } else {
-        let (last_stable_mc_joint, unstable_mc) = build_unstable_main_chain_from_joint(joint)?;
-        stable_level = update_stable_main_chain(last_stable_mc_joint, unstable_mc)?;
+        let (stable_joint, unstable_mc_joints) = build_unstable_main_chain_from_joint(joint)?;
+        stable_level = update_stable_main_chain(stable_joint, unstable_mc_joints)?;
     }
 
     Ok(stable_level)
 }
 
 fn build_unstable_main_chain_from_joint(
-    joint: CachedJoint,
-) -> Result<(CachedJoint, Vec<CachedJoint>)> {
-    let mut unstable_main_chain = Vec::new();
-    let last_stable_joint;
+    mut joint: RcuReader<JointData>,
+) -> Result<(RcuReader<JointData>, Vec<RcuReader<JointData>>)> {
+    let mut unstable_mc_joints = Vec::new();
 
-    let mut joint = joint;
-    loop {
-        let joint_data = joint.read()?;
-
-        if joint_data.is_on_main_chain() {
-            last_stable_joint = joint.clone();
-            break;
-        }
-
-        unstable_main_chain.push(joint.clone());
-
-        joint = joint_data.get_best_parent();
+    while !joint.is_on_main_chain() {
+        unstable_mc_joints.push(joint.clone());
+        joint = joint.get_best_parent().read()?;
     }
 
-    Ok((last_stable_joint, unstable_main_chain))
+    Ok((joint, unstable_mc_joints))
 }
 
-fn calc_max_alt_level(alternative_roots: Vec<CachedJoint>) -> Result<Option<Level>> {
-    let mut max_alt_level = None;
-    let mut joints = Vec::new();
+// fn get_max_alt_level(last_ball: &JointData, _best_parent: &JointData) -> Result<Level> {
+//     let stable_point = last_ball.get_best_parent().read()?;
+//     let max_alt_level = stable_point.get_level();
+//     //Alternative roots are last stable mc joint's best children
+//     //but not on current main chain
+//     let mut alternative_roots = Vec::new();
+//     for child in stable_point.children.iter() {
+//         let child = &*child;
+//         let child_data = child.read()?;
 
+//         if child_data.get_best_parent().key.as_str() == stable_point.unit.unit
+//             && child_data.unit.unit != last_ball.unit.unit
+//         {
+//             alternative_roots.push(child.clone());
+//         }
+//     }
+
+//     Ok(max_alt_level)
+// }
+
+fn calc_max_alt_level(last_ball: &JointData, _best_parent: &JointData) -> Result<Level> {
+    let stable_point = last_ball.get_best_parent().read()?;
+    let mut max_alt_level = stable_point.get_level();
+
+    //Alternative roots are last stable mc joint's best children
+    //but not on current main chain
+    let mut alternative_roots = Vec::new();
+    for child in stable_point.children.iter() {
+        let child = &*child;
+        let child_data = child.read()?;
+
+        if child_data.get_best_parent().key.as_str() == stable_point.unit.unit
+            && child_data.unit.unit != last_ball.unit.unit
+        {
+            alternative_roots.push(child.clone());
+        }
+    }
+
+    let mut joints = Vec::new();
     for j in alternative_roots {
         joints.push(j.read()?);
     }
@@ -136,8 +163,8 @@ fn calc_max_alt_level(alternative_roots: Vec<CachedJoint>) -> Result<Option<Leve
     while let Some(joint_data) = joints.pop() {
         if joint_data.is_wl_increased() {
             let level = joint_data.get_level();
-            if level > max_alt_level.unwrap_or(Level::MINIMUM) {
-                max_alt_level = Some(level);
+            if level > max_alt_level {
+                max_alt_level = level;
             }
         }
 
@@ -154,65 +181,47 @@ fn calc_max_alt_level(alternative_roots: Vec<CachedJoint>) -> Result<Option<Leve
     Ok(max_alt_level)
 }
 
-fn mark_main_chain_joint_stable(main_chain_joint: CachedJoint, mci: Level) -> Result<()> {
-    use rcu_cell::RcuReader;
-
-    let main_chain_joint_data = main_chain_joint.read()?;
-    main_chain_joint_data.set_limci(mci);
-
-    struct VisitedJoint {
-        joint: CachedJoint,
-        joint_data: RcuReader<JointData>,
-    }
-
-    impl PartialEq for VisitedJoint {
-        fn eq(&self, other: &Self) -> bool {
-            self.joint == other.joint
-        }
-    }
+fn mark_main_chain_joint_stable(main_chain_joint: &RcuReader<JointData>, mci: Level) -> Result<()> {
+    main_chain_joint.set_limci(mci);
 
     let mut joints = VecDeque::new();
     let mut sorted = Vec::new();
     joints.push_back(main_chain_joint.clone());
 
     while let Some(joint) = joints.pop_front() {
-        let joint_data = joint.read()?;
-
-        let visit_joint = VisitedJoint { joint_data, joint };
-
-        //Mci has been already set but not stable yet, still waiting for balls
-        if sorted.contains(&visit_joint) || visit_joint.joint_data.get_mci().is_valid() {
+        //Mci has already set but not stable yet, still waiting for balls
+        if sorted.contains(&joint) || joint.get_mci().is_valid() {
             continue;
         }
 
         // parent_units is ordered, joint.parents is not ordered
-        for parent in visit_joint.joint_data.parents.iter() {
-            joints.push_back(parent.clone());
+        for parent in joint.parents.iter() {
+            joints.push_back(parent.read()?);
         }
 
-        sorted.push(visit_joint);
+        sorted.push(joint);
     }
 
     // first sort by level, then unit hash
     sorted.sort_by(|a, b| {
         use std::cmp::Ordering;
-        match PartialOrd::partial_cmp(&a.joint_data.get_level(), &b.joint_data.get_level()) {
-            Some(Ordering::Equal) => Ord::cmp(&a.joint.key, &b.joint.key),
+        match PartialOrd::partial_cmp(&a.get_level(), &b.get_level()) {
+            Some(Ordering::Equal) => Ord::cmp(&a.unit.unit, &b.unit.unit),
             Some(r) => r,
             None => unreachable!("invalid level cmp"),
         }
     });
 
     let mut sub_mci = Level::ZERO;
-    for VisitedJoint { joint_data, joint } in sorted {
+    for joint in sorted {
         // set sub_mci
-        joint_data.set_sub_mci(sub_mci);
+        joint.set_sub_mci(sub_mci);
         sub_mci += 1;
 
         //limci on main chain joint is already set, do not overwrite it
-        if !joint_data.get_limci().is_valid() {
+        if !joint.get_limci().is_valid() {
             let mut limci = Level::ZERO;
-            for parent in joint_data.parents.iter() {
+            for parent in joint.parents.iter() {
                 let parent_data = parent.read()?;
 
                 //limci
@@ -221,22 +230,23 @@ fn mark_main_chain_joint_stable(main_chain_joint: CachedJoint, mci: Level) -> Re
                     limci = parent_limci;
                 }
             }
-            joint_data.set_limci(limci);
+            joint.set_limci(limci);
         }
 
         // set mci
-        joint_data.set_mci(mci);
+        joint.set_mci(mci);
 
         // push it to the business logic
+        error!("push business, unit={}, mci={:?}", joint.unit.unit, mci);
         ::business::BUSINESS_WORKER.push_stable_joint(joint)?;
     }
 
     // update the global property
-    SDAG_CACHE.set_mc_unit_hash(mci, main_chain_joint.key.to_string())?;
+    SDAG_CACHE.set_mc_unit_hash(mci, main_chain_joint.unit.unit.clone())?;
 
     info!(
         "main chain update: last_stable_joint = {:?}",
-        main_chain_joint_data.get_props()
+        main_chain_joint.get_props()
     );
 
     ::utils::event::emit_event(MciStableEvent { mci });
@@ -245,45 +255,24 @@ fn mark_main_chain_joint_stable(main_chain_joint: CachedJoint, mci: Level) -> Re
 }
 
 fn update_stable_main_chain(
-    last_stable_main_chain_joint: CachedJoint,
-    mut unstable_main_chain: Vec<CachedJoint>,
+    mut stable_joint: RcuReader<JointData>,
+    mut unstable_mc_joints: Vec<RcuReader<JointData>>,
 ) -> Result<Level> {
-    ensure!(!unstable_main_chain.is_empty(), "Empty unstable main chain");
+    ensure!(!unstable_mc_joints.is_empty(), "Empty unstable main chain");
 
-    let mut last_stable_mc_joint = last_stable_main_chain_joint;
-    let mut last_stable_level = last_stable_mc_joint.read()?.get_level();
+    let mut last_stable_level = stable_joint.get_level();
 
-    let min_wl = unstable_main_chain.first().unwrap().read()?.get_min_wl();
+    let best_parent = unstable_mc_joints[0].clone();
+    let min_wl = best_parent.get_min_wl();
 
-    while let Some(first_unstable_mc_joint) = unstable_main_chain.pop() {
-        let last_stable_mc_joint_data = last_stable_mc_joint.read()?;
-        let first_unstable_mc_joint_data = first_unstable_mc_joint.read()?;
-        let first_unstable_mc_level = first_unstable_mc_joint_data.get_level();
+    while let Some(unstable_mc_joint) = unstable_mc_joints.pop() {
+        //Alternative roots are last stable mc joint's best children but not on current main chain
+        let max_alt_level = calc_max_alt_level(&stable_joint, &best_parent)?;
 
-        //Alternative roots are last stable mc joint's best children
-        //but not on current main chain
-        let mut alternative_roots = Vec::new();
-        for child in last_stable_mc_joint_data.children.iter() {
-            let child = &*child;
-            let child_data = child.read()?;
-
-            if child_data.get_best_parent() == last_stable_mc_joint
-                && child != &first_unstable_mc_joint
-            {
-                alternative_roots.push(child.clone());
-            }
-        }
-        let max_alt_level = calc_max_alt_level(alternative_roots)?;
-
-        let stable = min_wl > max_alt_level.unwrap_or(last_stable_level);
-
-        if stable {
-            last_stable_level = first_unstable_mc_level;
-            last_stable_mc_joint = first_unstable_mc_joint.clone();
-            mark_main_chain_joint_stable(
-                first_unstable_mc_joint,
-                last_stable_mc_joint_data.get_mci() + 1,
-            )?;
+        if min_wl > max_alt_level {
+            last_stable_level = unstable_mc_joint.get_level();;
+            stable_joint = unstable_mc_joint;
+            mark_main_chain_joint_stable(&stable_joint, stable_joint.get_mci() + 1)?;
         } else {
             break;
         }
@@ -292,51 +281,37 @@ fn update_stable_main_chain(
     Ok(last_stable_level)
 }
 
-fn calc_last_stable_joint(cache: &SDagCache) -> Result<CachedJoint> {
-    let free_joints = cache.get_free_joints()?;
+fn calc_last_stable_joint() -> Result<RcuReader<JointData>> {
+    let free_joints = SDAG_CACHE.get_free_joints()?;
 
     if free_joints.is_empty() {
-        // here we create a fake joint
-        let joint = CachedJoint {
-            key: Default::default(),
-            data: Default::default(),
-        };
-        return Ok(joint);
+        bail!("calc_last_stable_joint free_joints empty");
     }
 
     //Any free joint should connect to stable main chain
-    let mut joint = free_joints.into_iter().nth(0).unwrap();
+    let mut joint_data = free_joints.into_iter().nth(0).unwrap().read()?;
 
     //Go up with best parent to reach the stable main chain
-    loop {
-        let joint_data = joint.read()?;
-
-        if joint_data.is_on_main_chain() {
-            break;
-        }
-
-        joint = joint_data.get_best_parent();
+    while !joint_data.is_on_main_chain() {
+        joint_data = joint_data.get_best_parent().read()?;
     }
 
     //Go down to find the last one
     loop {
-        let joint_data = joint.read()?;
-
         let mut child_on_mc = None;
         for child in joint_data.children.iter() {
-            let child = &*child;
             let child_data = child.read()?;
 
             if child_data.is_on_main_chain() {
-                child_on_mc = Some(child.clone());
+                child_on_mc = Some(child_data);
                 break;
             }
         }
 
-        if let Some(child) = child_on_mc {
-            joint = child;
+        if let Some(child_data) = child_on_mc {
+            joint_data = child_data;
         } else {
-            return Ok(joint);
+            return Ok(joint_data);
         }
     }
 }
@@ -349,24 +324,22 @@ fn calc_last_stable_joint(cache: &SDagCache) -> Result<CachedJoint> {
 /// Sort by max(wl), min(level), min(unit_hash)
 pub fn find_best_joint<'a, I: IntoIterator<Item = &'a CachedJoint>>(
     iter: I,
-) -> Result<Option<CachedJoint>> {
+) -> Result<Option<RcuReader<JointData>>> {
     let mut p_it = iter.into_iter();
     // at least one parent
-    let mut best_joint = match p_it.next() {
+    let mut best_joint_data = match p_it.next() {
         None => return Ok(None),
-        Some(p) => p,
+        Some(p) => p.read().context("find best joint")?,
     };
 
     for joint in p_it {
-        let best_j = best_joint.read().context("find best joint")?;
-        let j = joint.read().context("find_best_joint")?;
-
-        if j.is_precedence_than(&*best_j) {
-            best_joint = joint;
+        let cur_joint_data = joint.read().context("find_best_joint")?;
+        if cur_joint_data.is_precedence_than(&*best_joint_data) {
+            best_joint_data = cur_joint_data;
         }
     }
 
-    Ok(Some(best_joint.clone()))
+    Ok(Some(best_joint_data))
 }
 
 /// judge if earlier_joint is relative stable to later_joint
@@ -399,37 +372,39 @@ pub fn is_stable_to_joint(earlier_joint: &CachedJoint, joint: &JointData) -> Res
 }
 
 /// Returns current unstable main chain from the best free joint
-pub fn build_unstable_main_chain() -> Result<Vec<CachedJoint>> {
+pub fn build_unstable_main_chain() -> Result<Vec<RcuReader<JointData>>> {
     let free_joints = SDAG_CACHE.get_free_joints()?;
-    if let Some(main_chain_free_joint) = find_best_joint(free_joints.iter())? {
-        let (_, unstable_main_chain) = build_unstable_main_chain_from_joint(main_chain_free_joint)?;
-        Ok(unstable_main_chain)
-    } else {
-        Ok(Vec::new())
+    match find_best_joint(free_joints.iter())? {
+        Some(main_chain_free_joint) => {
+            let (_, unsatable_mc_joints) =
+                build_unstable_main_chain_from_joint(main_chain_free_joint)?;
+            Ok(unsatable_mc_joints)
+        }
+        None => Ok(Vec::new()),
     }
 }
 
 /// get stable point mci
 pub fn get_last_stable_mci() -> Level {
-    get_last_stable_joint()
-        .read()
-        .map(|j| j.get_mci())
-        .unwrap_or(Level::ZERO)
+    match LAST_STABLE_JOINT.read() {
+        Some(j) => j.get_mci(),
+        None => Level::ZERO,
+    }
 }
 
 /// get the stable point joint
-pub fn get_last_stable_joint() -> CachedJoint {
+pub fn get_last_stable_joint() -> RcuReader<JointData> {
     let joint = LAST_STABLE_JOINT.read().expect("no last stable joint");
     joint.as_ref().clone()
 }
 
 /// set the last stable joint
-pub fn set_last_stable_joint(joint: &CachedJoint) {
+pub fn set_last_stable_joint(joint: RcuReader<JointData>) {
     let mut g = loop {
         match LAST_STABLE_JOINT.try_lock() {
             None => error!("failed to lock last stable ball"),
             Some(g) => break g,
         }
     };
-    g.update(Some(joint.clone()));
+    g.update(Some(joint));
 }

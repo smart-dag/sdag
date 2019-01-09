@@ -13,6 +13,7 @@ extern crate lazy_static;
 
 extern crate chrono;
 extern crate fern;
+extern crate rcu_cell;
 extern crate may_signal;
 extern crate rand;
 extern crate sdag_wallet_base;

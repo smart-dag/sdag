@@ -78,7 +78,7 @@ pub fn validate_ready_joint(joint: CachedJoint) -> Result<()> {
     }
 
     if joint_data.is_min_wl_increased() {
-        main_chain::MAIN_CHAIN_WORKER.push_ready_joint(joint)?;
+        main_chain::MAIN_CHAIN_WORKER.push_ready_joint(joint_data.clone())?;
     }
 
     // only broadcast good joints

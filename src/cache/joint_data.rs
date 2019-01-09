@@ -380,6 +380,7 @@ impl JointData {
     fn calc_best_parent(&self) -> Result<()> {
         use main_chain::find_best_joint;
         if let Some(best_parent) = find_best_joint(self.parents.iter())? {
+            let best_parent = SDAG_CACHE.get_joint(&best_parent.unit.unit)?;
             self.set_best_parent(best_parent);
         }
         Ok(())

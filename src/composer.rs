@@ -33,7 +33,7 @@ pub struct ComposeInfo {
 /// if we pick parents firstly, last ball we picked may not be last ball in the view of parents
 /// the last ball belong to the newer unit coming on main chain after parents
 pub fn pick_parents_and_last_ball(_address: &str) -> Result<ParentsAndLastBall> {
-    let lsj_data = ::main_chain::get_last_stable_joint().read()?;
+    let lsj_data = ::main_chain::get_last_stable_joint();
 
     let free_joints = SDAG_CACHE.get_free_joints()?;
     // must include best joint, last stable point is sure stable to it
@@ -42,10 +42,10 @@ pub fn pick_parents_and_last_ball(_address: &str) -> Result<ParentsAndLastBall> 
     // TODO: must include last unstable self joint
 
     // pick other joints freely
-    let mut parents = vec![best_joint.key.to_string()];
+    let mut parents = vec![best_joint.unit.unit.clone()];
     for joint in free_joints {
         // skip the best joint
-        if joint == best_joint {
+        if joint.key.as_str() == best_joint.unit.unit {
             continue;
         }
 

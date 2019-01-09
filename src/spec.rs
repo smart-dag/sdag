@@ -188,15 +188,6 @@ pub fn is_genesis_unit(unit: &str) -> bool {
     unit == *GENESIS_UNIT
 }
 
-pub fn is_genesis_ball(ball: &str) -> bool {
-    lazy_static! {
-        //GENESIS_UNIT's parent and skiplist is null
-        static ref GENESIS_BALL: String =
-            ::object_hash::calc_ball_hash(&GENESIS_UNIT, &Vec::new(), &Vec::new(), false);
-    }
-    ball == *GENESIS_BALL
-}
-
 impl Unit {
     pub fn is_genesis_unit(&self) -> bool {
         // is_genesis_unit(&self.unit)

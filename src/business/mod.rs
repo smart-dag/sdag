@@ -5,13 +5,14 @@ mod utxo;
 use std::collections::{BTreeMap, HashMap};
 
 use self::utxo::{UtxoData, UtxoKey};
-use cache::{CachedJoint, JointData, SDAG_CACHE};
+use cache::{JointData, SDAG_CACHE};
 use config;
 use error::Result;
 use joint::{JointSequence, Level};
 use may::coroutine::JoinHandle;
 use may::sync::{mpsc, RwLock};
 use object_hash;
+use rcu_cell::RcuReader;
 use spec::*;
 
 lazy_static! {
@@ -44,7 +45,7 @@ pub trait SubBusiness {
 // BusinessWorker
 //---------------------------------------------------------------------------------------
 pub struct BusinessWorker {
-    tx: mpsc::Sender<CachedJoint>,
+    tx: mpsc::Sender<RcuReader<JointData>>,
     _handler: JoinHandle<()>,
 }
 
@@ -60,33 +61,31 @@ impl Default for BusinessWorker {
 
 impl BusinessWorker {
     // the main chain logic would call this API to push stable joint in order
-    pub fn push_stable_joint(&self, joint: CachedJoint) -> Result<()> {
+    pub fn push_stable_joint(&self, joint: RcuReader<JointData>) -> Result<()> {
         self.tx.send(joint)?;
         Ok(())
     }
 }
 
 // this would start the global thread to process the stable joints
-fn start_business_worker(rx: mpsc::Receiver<CachedJoint>) -> JoinHandle<()> {
+fn start_business_worker(rx: mpsc::Receiver<RcuReader<JointData>>) -> JoinHandle<()> {
     go!(move || {
         while let Ok(joint) = rx.recv() {
-            let joint_data = t_c!(joint.read());
-
             // TODO: spend the commissions first
             // if not enough we should set a special state and skip business validate and apply
             // and the final_stage would clear the content
 
             // TODO: add state transfer table
 
-            match BUSINESS_CACHE.validate_stable_joint(&joint_data) {
+            match BUSINESS_CACHE.validate_stable_joint(&joint) {
                 Ok(_) => {
-                    match joint_data.get_sequence() {
+                    match joint.get_sequence() {
                         JointSequence::NonserialBad | JointSequence::TempBad => {
                             // apply the message to temp business state
                             let mut temp_business_state =
                                 BUSINESS_CACHE.temp_business_state.write().unwrap();
-                            for i in 0..joint_data.unit.messages.len() {
-                                if let Err(e) = temp_business_state.apply_message(&joint_data, i) {
+                            for i in 0..joint.unit.messages.len() {
+                                if let Err(e) = temp_business_state.apply_message(&joint, i) {
                                     error!("apply temp state failed, err = {:?}", e);
                                 }
                             }
@@ -94,37 +93,39 @@ fn start_business_worker(rx: mpsc::Receiver<CachedJoint>) -> JoinHandle<()> {
                         _ => {}
                     }
 
-                    if let Err(e) = BUSINESS_CACHE.apply_stable_joint(&joint_data) {
+                    if let Err(e) = BUSINESS_CACHE.apply_stable_joint(&joint) {
                         // apply joint failed which should never happen
                         // but we have to save it as a bad joint
                         // we hope that the global state is still correct
                         // like transactions
                         error!("apply_joint failed, err = {:?}", e);
 
-                        joint_data.set_sequence(JointSequence::FinalBad);
+                        joint.set_sequence(JointSequence::FinalBad);
                     }
 
-                    if joint_data.get_sequence() != JointSequence::Good {
-                        joint_data.set_sequence(JointSequence::Good);
+                    if joint.get_sequence() != JointSequence::Good {
+                        joint.set_sequence(JointSequence::Good);
                     }
                 }
                 Err(e) => {
                     error!("validate_joint failed, err = {:?}", e);
-                    if let JointSequence::Good = joint_data.get_sequence() {
+                    if let JointSequence::Good = joint.get_sequence() {
                         let mut temp_business_state =
                             BUSINESS_CACHE.temp_business_state.write().unwrap();
-                        for i in 0..joint_data.unit.messages.len() {
-                            if let Err(e) = temp_business_state.revert_message(&joint_data, i) {
+                        for i in 0..joint.unit.messages.len() {
+                            if let Err(e) = temp_business_state.revert_message(&joint, i) {
                                 error!("revert temp state failed, err = {:?}", e);
                             }
                         }
                     }
 
-                    joint_data.set_sequence(JointSequence::FinalBad);
+                    joint.set_sequence(JointSequence::FinalBad);
                 }
             }
-            // need to generate ball
 
+            // TODO: set ball in property
+            // need to generate ball
+            let joint = t_c!(SDAG_CACHE.get_joint(&joint.unit.unit));
             t_c!(::finalization::FINALIZATION_WORKER.push_final_joint(joint));
         }
         error!("business worker stopped!");
@@ -479,6 +480,7 @@ impl BusinessCache {
 
     /// validate stable joint with global order
     fn validate_stable_joint(&self, joint: &JointData) -> Result<()> {
+        info!("validate_stable_joint, unit={}", joint.unit.unit);
         // TODO: check if enough commission here
         // for each message do business related validation
         if joint.get_sequence() == JointSequence::FinalBad {

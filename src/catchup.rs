@@ -170,7 +170,6 @@ pub fn process_catchup_chain(catchup_chain: CatchupChain) -> Result<Vec<String>>
 
         // replace to avoid receiving duplicates, no need to catchup already knowns
         chain_balls[len - 1] = main_chain::get_last_stable_joint()
-            .read()?
             .ball
             .clone()
             .ok_or_else(|| format_err!("no ball found for last_stable_joint"))?;

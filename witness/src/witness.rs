@@ -6,8 +6,9 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use may::sync::RwLock;
+use rcu_cell::RcuReader;
 use sdag::business::BUSINESS_CACHE;
-use sdag::cache::{CachedJoint, SDAG_CACHE};
+use sdag::cache::{CachedJoint, JointData, SDAG_CACHE};
 use sdag::error::Result;
 use sdag::joint::JointSequence;
 use sdag::joint::Level;
@@ -96,7 +97,6 @@ fn adjust_witnessing_speed() -> Result<()> {
         let free_joints = SDAG_CACHE.get_free_joints()?;
         let free_joint_level = sdag::main_chain::find_best_joint(free_joints.iter())?
             .ok_or_else(|| format_err!("empty best joint among free joints"))?
-            .read()?
             .get_level()
             .value() as isize;
 
@@ -145,7 +145,7 @@ fn is_need_witnessing() -> Result<(bool)> {
     let best_joint = sdag::main_chain::find_best_joint(free_joints.iter())?
         .ok_or_else(|| format_err!("empty best joint among free joints"))?;
 
-    let (need_witness, has_normal_joint) = is_relative_stable(&best_joint)?;
+    let (need_witness, has_normal_joint) = is_relative_stable(best_joint)?;
 
     if !need_witness {
         return Ok(false);
@@ -164,9 +164,7 @@ fn is_need_witnessing() -> Result<(bool)> {
 
 /// return true if more than 6 different other witnesses from best free joints until stable
 /// return true if has unstable normal joints
-fn is_relative_stable(best_joint: &CachedJoint) -> Result<(bool, bool)> {
-    let mut best_free_parent = best_joint.read()?;
-
+fn is_relative_stable(mut best_free_parent: RcuReader<JointData>) -> Result<(bool, bool)> {
     let mut has_normal_joints = false;
 
     let mut diff_witnesses = HashSet::new();
@@ -220,7 +218,7 @@ fn is_successive_witnesses(best_joint: &CachedJoint) -> Result<bool> {
 
 /// return true if non witness joint behind min retrievable mci, it is very heavy!!!
 fn is_normal_joint_behind_min_retrievable(free_joints: &[CachedJoint]) -> Result<bool> {
-    let min_retrievable_mci = get_min_retrievable_unit()?.read()?.get_mci();
+    let min_retrievable_mci = get_min_retrievable_unit()?.get_mci();
     let mut queue = VecDeque::new();
     let mut visited = HashSet::new();
     for joint in free_joints {
@@ -253,13 +251,14 @@ fn is_normal_joint_behind_min_retrievable(free_joints: &[CachedJoint]) -> Result
 }
 
 /// get min retrievable unit: last stable unit's last stable unit
-fn get_min_retrievable_unit() -> Result<CachedJoint> {
+fn get_min_retrievable_unit() -> Result<RcuReader<JointData>> {
     // we can unwrap here because free joints is not empty
     let last_stable_joint = sdag::main_chain::get_last_stable_joint();
-    match last_stable_joint.read()?.unit.last_ball_unit {
-        Some(ref unit) => SDAG_CACHE.get_joint(unit),
-        None => Ok(last_stable_joint), // only genesis has no last ball unit
+    if let Some(ref unit) = last_stable_joint.unit.last_ball_unit {
+        return SDAG_CACHE.get_joint(unit)?.read();
     }
+    // only genesis has no last ball unit
+    Ok(last_stable_joint)
 }
 
 #[derive(Serialize)]
