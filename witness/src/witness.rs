@@ -89,6 +89,7 @@ fn adjust_witnessing_speed() -> Result<()> {
     let mut rng = thread_rng();
     let time;
     let self_level = SELF_LEVEL.load(Ordering::Relaxed);
+    let mut distance: isize = -1;
     if self_level < 0 {
         time = (rng.gen_range(0.0, 1.0) * 2_000.0) as u64;
     } else {
@@ -100,16 +101,22 @@ fn adjust_witnessing_speed() -> Result<()> {
             .value() as isize;
 
         // free_joint_level may less than self_level, so distance and SELF_LEVEL can not be usize
-        let distance = free_joint_level - self_level;
+        distance = free_joint_level - self_level;
         if distance < THRESHOLD_DISTANCE {
             time = ((THRESHOLD_DISTANCE - distance) * 200) as u64;
-        } else {
+        } else if distance < 50 {
             time = ((THRESHOLD_DISTANCE as f64 / distance as f64) * 200.0) as u64;
+        } else if distance < 100 {
+            time = (rng.gen_range(0.0, 1.0) * 200.0) as u64;
+        } else if distance < 1000 {
+            time = (rng.gen_range(0.0, 1.0) * 50.0) as u64;
+        } else {
+            time = (rng.gen_range(0.0, 1.0) * 10.0) as u64;
         }
     }
     info!(
-        "scheduling unconditional witnessing in {} ms unless a new unit arrives.",
-        time
+        "will post a witness joint after {} ms unless a new joint arrives, the distance from max_mc_level to max_my_level is {}.",
+        time, distance
     );
     set_timeout(time);
 
