@@ -5,7 +5,7 @@ use cache::{CachedJoint, JointData, SDAG_CACHE};
 use config;
 use error::Result;
 use failure::ResultExt;
-use joint::{Joint, JointSequence, Level};
+use joint::{Joint, JointSequence};
 use main_chain;
 use network::statistics;
 use object_hash;
@@ -439,6 +439,48 @@ fn validate_parents(joint: &JointData) -> Result<()> {
         ),
     };
 
+    let last_ball_joint_data = last_ball_joint.read()?;
+    // check last ball should not retreat
+
+    let last_ball_level = last_ball_joint_data.get_level();
+    let mut min_parent_last_ball_level = last_ball_level;
+    let mut old_last_ball = last_ball_joint_data.clone();
+    for parent in new_parents {
+        let parent_joint = parent.read()?;
+        let parent_last_ball = parent_joint.get_last_ball_joint()?;
+        let parent_last_ball_level = parent_last_ball.get_level();
+
+        if parent_last_ball_level > last_ball_level {
+            bail!(
+                "last ball level must not retreat, parent_last_ball_level:{:?}, last_ball_level:{:?}",
+                parent_last_ball_level,
+                last_ball_level
+            );
+        }
+
+        if min_parent_last_ball_level > parent_last_ball_level {
+            min_parent_last_ball_level = parent_last_ball_level;
+            old_last_ball = parent_last_ball;
+        }
+    }
+
+    // earlier unit must be ancestor of joint on main chain
+    let mut best_parent = last_ball_joint_data.clone();
+    while best_parent.get_level() > min_parent_last_ball_level {
+        if old_last_ball == best_parent {
+            break;
+        }
+        best_parent = best_parent.get_best_parent().read()?;
+    }
+
+    if old_last_ball != best_parent {
+        bail!(
+            "last ball not on main chain, last_ball={}, old_last_ball={}",
+            last_ball_joint.key,
+            old_last_ball.unit.unit
+        );
+    }
+
     // Check if it is stable in view of the parents
     if !main_chain::is_stable_to_joint(&last_ball_joint, &joint)? {
         bail!(
@@ -450,7 +492,7 @@ fn validate_parents(joint: &JointData) -> Result<()> {
     }
 
     // Last ball may not stable in our view, need to wait until it got stable
-    last_ball_joint.read()?.wait_stable();
+    last_ball_joint_data.wait_stable();
 
     // TODO: move the ball to property
     // re-read to get the ball
@@ -472,30 +514,12 @@ fn validate_parents(joint: &JointData) -> Result<()> {
         );
     }
 
+    // TODO: disconnect the network, we are branching!
     if last_ball_joint_data.ball != joint.unit.last_ball {
         bail!(
             "finalize_joint.ball {:?} and joint.unit.last_ball {:?} do not match",
             last_ball_joint_data.ball,
             joint.unit.last_ball
-        );
-    }
-
-    // check last ball should not retreat
-    let mut max_parent_last_ball_mci = Level::MINIMUM;
-    for parent in new_parents {
-        let parent_joint = parent.read()?;
-        let parent_last_ball_mci = parent_joint.get_last_ball_mci()?;
-        if parent_last_ball_mci > max_parent_last_ball_mci {
-            max_parent_last_ball_mci = parent_last_ball_mci;
-        }
-    }
-
-    let last_ball_mci = last_ball_joint_data.get_mci();
-    if max_parent_last_ball_mci > last_ball_mci {
-        bail!(
-            "last ball mci must not retreat, max_parent_last_ball_mci:{:?}, last_ball_mci:{:?}",
-            max_parent_last_ball_mci,
-            last_ball_mci
         );
     }
 
@@ -551,7 +575,7 @@ fn validate_witnesses(joint: &JointData) -> Result<()> {
             bail!("witness list unit is not stable");
         }
         // Note: the witness unit should be ahead of last ball unit
-        if witness_joint_props.mci > joint.get_last_ball_mci()? {
+        if witness_joint_props.mci > joint.get_last_ball_joint()?.get_mci() {
             bail!("witness list unit must come before last ball");
         }
 

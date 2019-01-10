@@ -147,7 +147,7 @@ impl SDagCache {
                     })
                     .collect::<Vec<_>>()
             })
-            .unwrap_or(Vec::new())
+            .unwrap_or_else(|_| Vec::new())
     }
 
     pub fn get_num_of_temp_bad_joints(&self) -> usize {

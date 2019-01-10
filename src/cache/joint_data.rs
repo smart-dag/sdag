@@ -9,6 +9,7 @@ use failure::ResultExt;
 use joint::{Joint, JointProperty, JointSequence, Level};
 use kv_store::{LoadFromKv, KV_STORE};
 use may::sync::{RwLock, Semphore};
+use rcu_cell::RcuReader;
 use utils::{AppendList, AppendListExt};
 
 //---------------------------------------------------------------------------------------
@@ -443,16 +444,14 @@ impl JointData {
         }
     }
 
-    pub fn get_last_ball_mci(&self) -> Result<Level> {
+    pub fn get_last_ball_joint(&self) -> Result<RcuReader<JointData>> {
         // only genesis has no last ball unit
-        let last_ball_unit = match self.unit.last_ball_unit.as_ref() {
-            Some(unit) => unit,
-            None => return Ok(Level::ZERO),
-        };
-
-        let last_ball_joint = SDAG_CACHE.get_joint(last_ball_unit)?.read()?;
-        Ok(last_ball_joint.get_mci())
+        match self.unit.last_ball_unit {
+            Some(ref unit) => SDAG_CACHE.get_joint(unit)?.read(),
+            None => SDAG_CACHE.get_joint(&::spec::GENESIS_UNIT)?.read(),
+        }
     }
+
 
     #[inline]
     pub fn update_joint(&mut self, joint: Joint) {
