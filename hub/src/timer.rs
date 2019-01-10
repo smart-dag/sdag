@@ -24,7 +24,7 @@ pub fn start_global_timers() {
     go!(move || loop {
         const TIMEOUT: u64 = 4 * 60 * 1000; // 4min
         coroutine::sleep(Duration::from_secs(TIMEOUT / 2));
-        info!("purge_junk_unhandled_joints");
+        info!("purge_tempbad_joints");
         t!(hub::purge_temp_bad_free_joints(TIMEOUT));
     });
 
@@ -39,7 +39,7 @@ pub fn start_global_timers() {
     // reset peer statistics
     go!(move || loop {
         coroutine::sleep(Duration::from_secs(1));
-        info!("Resetting peer statistics per second");
+        // info!("Resetting peer statistics per second");
         statistics::reset_stats_last_sec();
         count += 1;
         if count % 60 == 0 {
