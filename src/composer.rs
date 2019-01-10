@@ -35,7 +35,8 @@ pub struct ComposeInfo {
 pub fn pick_parents_and_last_ball(_address: &str) -> Result<ParentsAndLastBall> {
     let lsj_data = ::main_chain::get_last_stable_joint();
 
-    let free_joints = SDAG_CACHE.get_free_joints()?;
+    let mut free_joints = SDAG_CACHE.get_free_joints()?;
+    free_joints.sort_by_key(|a| a.read().unwrap().get_level().value());
     // must include best joint, last stable point is sure stable to it
     let best_joint = ::main_chain::find_best_joint(free_joints.iter())?
         .ok_or_else(|| format_err!("free joints is empty now"))?;
