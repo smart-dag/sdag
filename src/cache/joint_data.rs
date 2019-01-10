@@ -1,5 +1,5 @@
 use std::cmp;
-use std::collections::{HashSet, VecDeque};
+use std::collections::HashSet;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
@@ -55,16 +55,16 @@ impl UnitProps {
         &self,
         later_joints: I,
     ) -> Result<bool> {
-        let mut joints = VecDeque::new();
+        let mut joints = Vec::new();
         let mut visited = HashSet::new();
 
         for joint in later_joints {
             if visited.insert(joint.key.clone()) {
-                joints.push_back(joint.read()?);
+                joints.push(joint.read()?);
             }
         }
 
-        while let Some(joint) = joints.pop_front() {
+        while let Some(joint) = joints.pop() {
             let props = joint.get_props();
 
             // fast include detection
@@ -86,7 +86,7 @@ impl UnitProps {
             // still need to compare parents
             for parent in joint.parents.iter() {
                 if visited.insert(parent.key.clone()) {
-                    joints.push_back(parent.read()?);
+                    joints.push(parent.read()?);
                 }
             }
         }
@@ -451,7 +451,6 @@ impl JointData {
             None => SDAG_CACHE.get_joint(&::spec::GENESIS_UNIT)?.read(),
         }
     }
-
 
     #[inline]
     pub fn update_joint(&mut self, joint: Joint) {
