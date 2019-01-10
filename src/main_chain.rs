@@ -115,26 +115,6 @@ fn build_unstable_main_chain_from_joint(
     Ok((joint, unstable_mc_joints))
 }
 
-// fn get_max_alt_level(last_ball: &JointData, _best_parent: &JointData) -> Result<Level> {
-//     let stable_point = last_ball.get_best_parent().read()?;
-//     let max_alt_level = stable_point.get_level();
-//     //Alternative roots are last stable mc joint's best children
-//     //but not on current main chain
-//     let mut alternative_roots = Vec::new();
-//     for child in stable_point.children.iter() {
-//         let child = &*child;
-//         let child_data = child.read()?;
-
-//         if child_data.get_best_parent().key.as_str() == stable_point.unit.unit
-//             && child_data.unit.unit != last_ball.unit.unit
-//         {
-//             alternative_roots.push(child.clone());
-//         }
-//     }
-
-//     Ok(max_alt_level)
-// }
-
 fn calc_max_alt_level(last_ball: &JointData, best_parent: &JointData) -> Result<Level> {
     let stable_point = last_ball.get_best_parent().read()?;
     let mut max_alt_level = stable_point.get_level();
@@ -349,6 +329,10 @@ pub fn find_best_joint<'a, I: IntoIterator<Item = &'a CachedJoint>>(
 /// judge if earlier_joint is relative stable to later_joint
 pub fn is_stable_to_joint(earlier_joint: &CachedJoint, joint: &JointData) -> Result<bool> {
     let earlier_joint_data = earlier_joint.read()?;
+    if earlier_joint_data.is_stable() {
+        return Ok(true);
+    }
+
     let mut is_ancestor = false;
     let mut best_parent = joint.get_best_parent().read()?;
 
