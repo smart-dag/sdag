@@ -122,7 +122,7 @@ impl SDagCacheInner {
     }
 
     /// get all the good free joints
-    pub fn get_free_joints(&self) -> Result<Vec<CachedJoint>> {
+    pub fn get_good_free_joints(&self) -> Result<Vec<CachedJoint>> {
         if self.free_joints.is_empty() {
             return Ok(Vec::new());
         }
@@ -141,6 +141,11 @@ impl SDagCacheInner {
 
         warn!("get free joints still empty after try 10 times");
         Ok(Vec::new())
+    }
+
+    /// get all the good free joints include those bad ones
+    pub fn get_all_free_joints(&self) -> Result<Vec<CachedJoint>> {
+        Ok(self.free_joints.values().cloned().collect())
     }
 
     /// query if joint is in unhandled joints

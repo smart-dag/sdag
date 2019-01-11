@@ -309,7 +309,7 @@ fn update_stable_main_chain(
 }
 
 fn calc_last_stable_joint() -> Result<RcuReader<JointData>> {
-    let free_joints = SDAG_CACHE.get_free_joints()?;
+    let free_joints = SDAG_CACHE.get_all_free_joints()?;
 
     if free_joints.is_empty() {
         bail!("calc_last_stable_joint free_joints empty");
@@ -420,7 +420,7 @@ pub fn is_stable_to_joint(earlier_joint: &CachedJoint, joint: &JointData) -> Res
 
 /// Returns current unstable main chain from the best free joint
 pub fn build_unstable_main_chain() -> Result<Vec<RcuReader<JointData>>> {
-    let free_joints = SDAG_CACHE.get_free_joints()?;
+    let free_joints = SDAG_CACHE.get_good_free_joints()?;
     match find_best_joint(free_joints.iter())? {
         Some(main_chain_free_joint) => {
             let (_, unsatable_mc_joints) =

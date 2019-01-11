@@ -34,7 +34,7 @@ pub struct ComposeInfo {
 /// the last ball belong to the newer unit coming on main chain after parents
 pub fn pick_parents_and_last_ball(_address: &str) -> Result<ParentsAndLastBall> {
     let lsj_data = ::main_chain::get_last_stable_joint();
-    let mut free_joints = SDAG_CACHE.get_free_joints()?;
+    let mut free_joints = SDAG_CACHE.get_good_free_joints()?;
 
     // detect same author joints
     let mut authors = HashMap::new();

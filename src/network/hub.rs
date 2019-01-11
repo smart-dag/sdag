@@ -565,7 +565,7 @@ impl HubConn {
     }
 
     fn on_get_free_joints(&self, _param: Value) -> Result<Value> {
-        match SDAG_CACHE.get_free_joints() {
+        match SDAG_CACHE.get_good_free_joints() {
             Ok(joints) => Ok(json!(joints
                 .iter()
                 .map(|v| v.key.to_string())
@@ -940,7 +940,7 @@ impl HubConn {
     }
 
     fn send_free_joints(&self) -> Result<()> {
-        let joints = SDAG_CACHE.get_free_joints()?;
+        let joints = SDAG_CACHE.get_good_free_joints()?;
         for joint in joints {
             let joint = joint.read()?;
             self.send_joint(&**joint)?;

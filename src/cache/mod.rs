@@ -120,9 +120,14 @@ impl SDagCache {
         }
     }
 
+    /// get all good free joints
+    pub fn get_good_free_joints(&self) -> Result<Vec<CachedJoint>> {
+        self.joints.read().unwrap().get_good_free_joints()
+    }
+
     /// get all the free joints
-    pub fn get_free_joints(&self) -> Result<Vec<CachedJoint>> {
-        self.joints.read().unwrap().get_free_joints()
+    pub fn get_all_free_joints(&self) -> Result<Vec<CachedJoint>> {
+        self.joints.read().unwrap().get_all_free_joints()
     }
 
     pub fn get_bad_joints(&self) -> Vec<String> {
@@ -167,7 +172,7 @@ impl SDagCache {
         let mut visited = HashSet::new();
         let mut joints = Vec::new();
 
-        for joint in self.get_free_joints()? {
+        for joint in self.get_all_free_joints()? {
             if visited.insert(joint.key.clone()) {
                 queue.push_back(joint);
             }
