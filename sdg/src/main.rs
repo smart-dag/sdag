@@ -540,37 +540,38 @@ fn main() -> Result<()> {
     if let Some(dump_args) = m.subcommand_matches("dump") {
         let is_verbose = dump_args.values_of("verbose").is_some();
 
+        let mut joints = Vec::new();
+        let mut last_mci = 0;
+        println!("===================");
+        println!("get all data from hub");
+        for i in 0.. {
+            let mut stable_joints = ws.get_joints_by_mci(i)?;
+            if stable_joints.is_empty() {
+                last_mci = i as usize - 1;
+                println!("last mci = {}", last_mci);
+                break;
+            }
+            if is_verbose {
+                println!("mci={}, joints_num={}", i, stable_joints.len());
+            }
+            joints.append(&mut stable_joints);
+        }
+        let mut unstable_joints = ws.get_joints_by_mci(-1)?;
+        joints.append(&mut unstable_joints);
+        println!("total unit num = {}", joints.len());
+
         if let Some(file) = dump_args.value_of("FILE") {
             use std::fs::File;
-            let mut joints = Vec::new();
-            let mut last_mci = 0;
-            println!("===================");
-            println!("get all data from hub");
-            for i in 0.. {
-                let mut stable_joints = ws.get_joints_by_mci(i)?;
-                if stable_joints.is_empty() {
-                    last_mci = i as usize - 1;
-                    println!("last mci = {}", last_mci);
-                    break;
-                }
-                if is_verbose {
-                    println!("mci={}, joints_num={}", i, stable_joints.len());
-                }
-                joints.append(&mut stable_joints);
-            }
-            let mut unstable_joints = ws.get_joints_by_mci(-1)?;
-            joints.append(&mut unstable_joints);
-            println!("total unit num = {}", joints.len());
-
             // save all the joints
             println!("\n===================");
             println!("write data to file: {}", file);
             let file = File::create(file)?;
             serde_json::to_writer_pretty(&file, &joints)?;
-
-            // verify the joints
-            verify_joints(joints, last_mci)?;
         }
+
+        // verify the joints
+        verify_joints(joints, last_mci)?;
+
         return Ok(());
     }
 

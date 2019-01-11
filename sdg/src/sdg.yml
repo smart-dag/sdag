@@ -108,8 +108,7 @@ subcommands:
             - FILE:
                 help: file to save the joints
                 takes_value: true
-                required: true
-           
+                required: false
     - unit:
         about: Show information about unit
         args:
