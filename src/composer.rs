@@ -1,11 +1,12 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
-use cache::SDAG_CACHE;
+use cache::{CachedJoint, JointData, SDAG_CACHE};
 use config;
 use error::Result;
 use joint::Joint;
 use light::*;
 use object_hash;
+use rcu_cell::RcuReader;
 use serde_json::Value;
 use signature::Signer;
 use spec::*;
@@ -56,13 +57,18 @@ pub fn pick_parents_and_last_ball(_address: &str) -> Result<ParentsAndLastBall> 
     // must include best joint, last stable point is sure stable to it
     let best_joint = ::main_chain::find_best_joint(free_joints.iter())?
         .ok_or_else(|| format_err!("free joints is empty now"))?;
-    // TODO: must include last unstable self joint
 
     // pick other joints freely
     let mut parents = vec![best_joint.unit.unit.clone()];
+    if free_joints.len() > config::MAX_PARENT_PER_UNIT {
+        // get the free joint which include last my unstable joint first
+        if let Some(unit) = get_include_self_free_joint(&free_joints, _address)? {
+            parents.push(unit);
+        }
+    }
+
     for joint in free_joints {
-        // skip the best joint
-        if joint.key.as_str() == best_joint.unit.unit {
+        if parents.contains(&*joint.key) {
             continue;
         }
 
@@ -79,6 +85,58 @@ pub fn pick_parents_and_last_ball(_address: &str) -> Result<ParentsAndLastBall> 
         last_ball: lsj_data.ball.clone().expect("ball in joint is none"),
         last_ball_unit: lsj_data.unit.unit.clone(),
     })
+}
+
+/// if my joint is unstable, get the free joint which is the descendant of my unstable joint
+fn get_include_self_free_joint(
+    free_joints: &[CachedJoint],
+    address: &str,
+) -> Result<Option<String>> {
+    if let Some(joint) = get_last_my_unstable_joint(free_joints, address)? {
+        let mut first_child = joint;
+        while !first_child.is_free() {
+            if let Some(child) = first_child.children.iter().nth(0) {
+                first_child = child.read()?;
+            }
+        }
+        return Ok(Some(first_child.unit.unit.clone()));
+    }
+
+    Ok(None)
+}
+
+/// get last my joint from unstable joints
+fn get_last_my_unstable_joint(
+    free_joints: &[CachedJoint],
+    address: &str,
+) -> Result<Option<RcuReader<JointData>>> {
+    let mut joints = Vec::new();
+    let mut visited = HashSet::new();
+    for joint in free_joints {
+        if visited.insert(joint.key.clone()) {
+            joints.push(joint.read()?);
+        }
+    }
+
+    while let Some(joint) = joints.pop() {
+        if joint.is_stable() {
+            continue;
+        }
+
+        for author in &joint.unit.authors {
+            if author.address == address {
+                return Ok(Some(joint.clone()));
+            }
+        }
+
+        for p in joint.parents.iter() {
+            if visited.insert(p.key.clone()) {
+                joints.push(p.read()?);
+            }
+        }
+    }
+
+    Ok(None)
 }
 
 /// create a pure text message
