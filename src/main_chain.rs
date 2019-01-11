@@ -178,6 +178,8 @@ fn calc_max_alt_level(last_ball: &JointData, end: &RcuReader<JointData>) -> Resu
     // Limit the max_alt_level to the history in end joint's perspective
     let mut joints = VecDeque::new();
     let mut visited = HashSet::new();
+    let mut max_alt_level = stable_point_level;
+
     joints.push_back(end.clone());
     while let Some(joint) = joints.pop_front() {
         let joint_level = joint.get_level();
@@ -185,27 +187,21 @@ fn calc_max_alt_level(last_ball: &JointData, end: &RcuReader<JointData>) -> Resu
             continue;
         }
 
-        // Found the real max_alt_level
-        if alt_candidates.contains(&joint) {
-            return Ok(joint_level);
+        // update the max_alt_level
+        if alt_candidates.contains(&joint) && joint_level > max_alt_level {
+            max_alt_level = joint_level;
         }
 
-        let mut sorted_parents = Vec::new();
         for parent in joint.parents.iter() {
-            sorted_parents.push((parent.key.clone(), parent.read()?));
-        }
-
-        sorted_parents.sort_by_key(|p| p.1.get_level().value());
-        sorted_parents.reverse();
-        for parent in sorted_parents {
-            if visited.insert(parent.0) {
-                joints.push_back(parent.1);
+            let parent_data = parent.read()?;
+            if visited.insert(parent.key.clone()) {
+                joints.push_back(parent_data);
             }
         }
     }
 
     // we didn't find any valid alt level, return the default one
-    Ok(stable_point_level)
+    Ok(max_alt_level)
 }
 
 fn mark_main_chain_joint_stable(main_chain_joint: &RcuReader<JointData>, mci: Level) -> Result<()> {
