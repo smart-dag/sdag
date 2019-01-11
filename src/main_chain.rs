@@ -117,7 +117,7 @@ fn build_unstable_main_chain_from_joint(
 
 fn calc_max_alt_level(last_ball: &JointData, end: &RcuReader<JointData>) -> Result<Level> {
     let stable_point = last_ball.get_best_parent().read()?;
-    let mut max_alt_level = stable_point.get_level();
+    let stable_point_level = stable_point.get_level();
 
     //Alternative roots are last stable mc joint's best children
     //but not on current main chain
@@ -140,7 +140,7 @@ fn calc_max_alt_level(last_ball: &JointData, end: &RcuReader<JointData>) -> Resu
 
     let end_level = end.get_level();
     let mut alt_candidates = Vec::new();
-    let mut max_alt_level_possible = max_alt_level;
+    let mut max_alt_level_possible = stable_point_level;
 
     //Go down to collect best children
     //Best children should never intersect, no need to check revisit
@@ -168,30 +168,26 @@ fn calc_max_alt_level(last_ball: &JointData, end: &RcuReader<JointData>) -> Resu
     }
 
     // Fast return if min_wl is already greater than max_alt_level_possible
+    // this max_alt_level_possible is not the real max_alt_level
+    // but it's fine to return since it can't affect the stable result
     let min_wl = end.get_min_wl();
     if min_wl > max_alt_level_possible {
         return Ok(max_alt_level_possible);
     }
 
-    // set max_alt_level to a bigger one and try to reduce it
-    max_alt_level = max_alt_level_possible;
-
     // Limit the max_alt_level to the history in end joint's perspective
     let mut joints = VecDeque::new();
     let mut visited = HashSet::new();
-    let stable_level = stable_point.get_level();
     joints.push_back(end.clone());
     while let Some(joint) = joints.pop_front() {
         let joint_level = joint.get_level();
-        // We have reached the stable point or min_wl is already big enough
-        if min_wl > joint_level || joint_level <= stable_level {
-            break;
+        if joint_level <= stable_point_level {
+            continue;
         }
 
-        // Found the first max_alt_level
+        // Found the real max_alt_level
         if alt_candidates.contains(&joint) {
-            max_alt_level = joint_level;
-            break;
+            return Ok(joint_level);
         }
 
         let mut sorted_parents = Vec::new();
@@ -208,7 +204,8 @@ fn calc_max_alt_level(last_ball: &JointData, end: &RcuReader<JointData>) -> Resu
         }
     }
 
-    Ok(max_alt_level)
+    // we didn't find any valid alt level, return the default one
+    Ok(stable_point_level)
 }
 
 fn mark_main_chain_joint_stable(main_chain_joint: &RcuReader<JointData>, mci: Level) -> Result<()> {
