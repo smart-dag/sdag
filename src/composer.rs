@@ -34,8 +34,24 @@ pub struct ComposeInfo {
 /// the last ball belong to the newer unit coming on main chain after parents
 pub fn pick_parents_and_last_ball(_address: &str) -> Result<ParentsAndLastBall> {
     let lsj_data = ::main_chain::get_last_stable_joint();
-
     let mut free_joints = SDAG_CACHE.get_free_joints()?;
+
+    // detect same author joints
+    let mut authors = HashMap::new();
+    for joint in free_joints.iter() {
+        let joint = joint.read()?;
+        let address = joint.unit.authors[0].address.clone();
+
+        if let Some(old_unit) = authors.insert(address, joint.unit.unit.clone()) {
+            bail!(
+                "there are same author joints: [{}],[{}]",
+                joint.unit.unit,
+                old_unit
+            )
+        }
+    }
+
+    //cached joint must include a value, this read.unwrap can't panic
     free_joints.sort_by_key(|a| a.read().unwrap().get_level().value());
     // must include best joint, last stable point is sure stable to it
     let best_joint = ::main_chain::find_best_joint(free_joints.iter())?
