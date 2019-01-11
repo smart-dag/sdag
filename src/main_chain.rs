@@ -1,4 +1,4 @@
-use std::collections::VecDeque;
+use std::collections::{HashSet, VecDeque};
 
 use cache::{CachedJoint, JointData, SDAG_CACHE};
 use error::Result;
@@ -173,30 +173,39 @@ fn calc_max_alt_level(last_ball: &JointData, end: &RcuReader<JointData>) -> Resu
         return Ok(max_alt_level_possible);
     }
 
+    // set max_alt_level to a bigger one and try to reduce it
+    max_alt_level = max_alt_level_possible;
+
     // Limit the max_alt_level to the history in end joint's perspective
-    let mut sorted_joints = vec![end.clone()];
-    while let Some(joint) = sorted_joints.pop() {
+    let mut joints = VecDeque::new();
+    let mut visited = HashSet::new();
+    let stable_level = stable_point.get_level();
+    joints.push_back(end.clone());
+    while let Some(joint) = joints.pop_front() {
+        let joint_level = joint.get_level();
         // We have reached the stable point or min_wl is already big enough
-        if joint.get_level() <= stable_point.get_level() || min_wl > joint.get_level() {
+        if min_wl > joint_level || joint_level <= stable_level {
             break;
         }
 
-        // Found the max_alt_level
+        // Found the first max_alt_level
         if alt_candidates.contains(&joint) {
-            max_alt_level = joint.get_level();
+            max_alt_level = joint_level;
             break;
         }
 
+        let mut sorted_parents = Vec::new();
         for parent in joint.parents.iter() {
-            sorted_joints.push(parent.read()?);
+            sorted_parents.push((parent.key.clone(), parent.read()?));
         }
 
-        sorted_joints.sort_by(|a, b| {
-            PartialOrd::partial_cmp(&a.get_level(), &b.get_level()).expect("invalid level cmp")
-        });
-
-        // Dedup to avoid revisit
-        sorted_joints.dedup();
+        sorted_parents.sort_by_key(|p| p.1.get_level().value());
+        sorted_parents.reverse();
+        for parent in sorted_parents {
+            if visited.insert(parent.0) {
+                joints.push_back(parent.1);
+            }
+        }
     }
 
     Ok(max_alt_level)
@@ -285,12 +294,12 @@ fn update_stable_main_chain(
     let mc_free_joint = unstable_mc_joints[0].clone();
     let min_wl = mc_free_joint.get_min_wl();
 
-    while let Some(unstable_mc_joint) = unstable_mc_joints.pop() {
-        // No need to calc max_alt_level if there is no chance
-        if min_wl <= last_stable_level {
-            break;
-        }
+    // No need to calc max_alt_level if there is no chance
+    if min_wl <= last_stable_level {
+        return Ok(last_stable_level);
+    }
 
+    while let Some(unstable_mc_joint) = unstable_mc_joints.pop() {
         //Alternative roots are last stable mc joint's best children but not on current main chain
         let max_alt_level = calc_max_alt_level(&unstable_mc_joint, &mc_free_joint)?;
 
@@ -371,23 +380,13 @@ pub fn find_best_joint<'a, I: IntoIterator<Item = &'a CachedJoint>>(
 pub fn is_stable_to_joint(earlier_joint: &CachedJoint, joint: &JointData) -> Result<bool> {
     let earlier_joint_data = earlier_joint.read()?;
 
-    if earlier_joint_data.unit.is_genesis_unit() {
+    if earlier_joint_data.is_stable() {
         return Ok(true);
     }
 
     let mut best_parent = joint.get_best_parent().read()?;
 
-    // Fast check, min_wl must >= the earlier joint's level
-    let min_wl = best_parent.get_min_wl();
     let earlier_joint_level = earlier_joint_data.get_level();
-
-    if min_wl < earlier_joint_level {
-        error!(
-            "is_stable_to_joint return false, min_wl={:?}, early_unit_level={:?}",
-            min_wl, earlier_joint_level
-        );
-        return Ok(false);
-    }
 
     // earlier unit must be ancestor of joint on main chain
     let mut is_ancestor = false;
@@ -410,13 +409,8 @@ pub fn is_stable_to_joint(earlier_joint: &CachedJoint, joint: &JointData) -> Res
 
     // Go up along best parent to find the joint enabled earlier_joint stable, which means its min_wl > max_alt_level
     let mut joint_data = joint.get_best_parent().read()?;
-    loop {
-        // min_wl is too small, done
-        let min_wl = joint_data.get_min_wl();
-        if joint_data.get_min_wl() < earlier_joint_level {
-            break;
-        }
-
+    let mut min_wl = joint_data.get_min_wl();
+    while min_wl >= earlier_joint_level {
         if joint_data.is_min_wl_increased() {
             let max_alt_level = calc_max_alt_level(&earlier_joint_data, &joint_data)?;
             if min_wl > max_alt_level {
@@ -425,6 +419,7 @@ pub fn is_stable_to_joint(earlier_joint: &CachedJoint, joint: &JointData) -> Res
         }
 
         joint_data = joint_data.get_best_parent().read()?;
+        min_wl = joint_data.get_min_wl();
     }
 
     Ok(false)
