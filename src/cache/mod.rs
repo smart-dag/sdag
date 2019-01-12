@@ -333,6 +333,9 @@ impl SDagCache {
     /// clear all the  hash tree balls
     pub fn clear_hash_tree_ball(&self) {
         let mut g = self.hash_tree_balls.write().unwrap();
+        for (ball, unit) in &*g {
+            error!("clear hash tree: ball={}, unit={}", ball, unit);
+        }
         g.clear()
     }
 
@@ -413,6 +416,7 @@ impl SDagCache {
 
     /// set unit hash by ball
     pub fn set_ball_unit_hash(&self, ball: String, unit: String) -> Result<()> {
+        info!("set ball, unit = {}, ball = {}", unit, ball);
         self.ball_units.write().unwrap().insert(ball, unit);
         Ok(())
     }

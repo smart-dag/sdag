@@ -369,11 +369,43 @@ pub fn find_best_joint<'a, I: IntoIterator<Item = &'a CachedJoint>>(
 pub fn is_stable_to_joint(earlier_joint: &CachedJoint, joint: &JointData) -> Result<bool> {
     let earlier_joint_data = earlier_joint.read()?;
 
-    if earlier_joint_data.is_stable() {
-        return Ok(true);
+    let stable_point = get_last_stable_joint();
+    let stable_point_level = stable_point.get_level();
+    let earlier_joint_level = earlier_joint_data.get_level();
+
+    // earlier joint is on main chain and before the stable point
+    if earlier_joint_level <= stable_point_level {
+        if earlier_joint_data.is_on_main_chain() {
+            // earlier joint must be stable if it on main chain
+            return Ok(true);
+        } else {
+            // earlier joint must not no main chain
+            error!(
+                "is_stable_to_joint return false, earlier_joint {} is not on main chain",
+                earlier_joint.key
+            );
+            return Ok(false);
+        }
     }
 
-    let earlier_joint_level = earlier_joint_data.get_level();
+    // earlier joint is after stable point
+    let mut is_ancestor = false;
+    let mut best_parent = earlier_joint_data.get_best_parent().read()?;
+    while best_parent.get_level() >= stable_point_level {
+        if stable_point == best_parent {
+            is_ancestor = true;
+            break;
+        }
+        best_parent = best_parent.get_best_parent().read()?;
+    }
+
+    if !is_ancestor {
+        error!(
+            "is_stable_to_joint return false, earlier_joint {} is not on main chain",
+            earlier_joint.key
+        );
+        return Ok(false);
+    }
 
     // earlier unit must be ancestor of joint on main chain
     let mut is_ancestor = false;

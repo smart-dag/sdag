@@ -414,7 +414,10 @@ impl JointData {
         self.calc_best_parent()?;
         self.calc_witnessed_level()?;
 
-        info!("After Calc static props: {:?}", self.props);
+        info!(
+            "After Calc unit = {} static props: {:?}",
+            self.unit.unit, self.props
+        );
         Ok(())
     }
 
