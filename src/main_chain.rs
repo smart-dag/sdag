@@ -89,17 +89,8 @@ fn start_main_chain_worker(rx: mpsc::Receiver<RcuReader<JointData>>) -> JoinHand
 }
 
 fn update_main_chain(joint: RcuReader<JointData>) -> Result<Level> {
-    let stable_level;
-
-    if joint.unit.is_genesis_unit() {
-        stable_level = Level::ZERO;
-        mark_main_chain_joint_stable(&joint, stable_level)?;
-    } else {
-        let (stable_joint, unstable_mc_joints) = build_unstable_main_chain_from_joint(joint)?;
-        stable_level = update_stable_main_chain(stable_joint, unstable_mc_joints)?;
-    }
-
-    Ok(stable_level)
+    let (stable_joint, unstable_mc_joints) = build_unstable_main_chain_from_joint(joint)?;
+    update_stable_main_chain(stable_joint, unstable_mc_joints)
 }
 
 fn build_unstable_main_chain_from_joint(
@@ -284,24 +275,30 @@ fn update_stable_main_chain(
 
     let mut last_stable_level = stable_joint.get_level();
 
-    let mc_free_joint = unstable_mc_joints[0].clone();
-    let min_wl = mc_free_joint.get_min_wl();
-
-    // No need to calc max_alt_level if there is no chance
-    if min_wl <= last_stable_level {
-        return Ok(last_stable_level);
+    // find valid end points in order
+    let mut end_joints = Vec::new();
+    for joint in &unstable_mc_joints {
+        if joint.is_min_wl_increased() && joint.get_min_wl() > last_stable_level {
+            end_joints.push(joint.clone());
+        }
     }
 
-    while let Some(unstable_mc_joint) = unstable_mc_joints.pop() {
-        //Alternative roots are last stable mc joint's best children but not on current main chain
-        let max_alt_level = calc_max_alt_level(&unstable_mc_joint, &mc_free_joint)?;
+    // forward main chain in order
+    while let Some(mc_free_joint) = end_joints.pop() {
+        let min_wl = mc_free_joint.get_min_wl();
 
-        if min_wl > max_alt_level {
-            mark_main_chain_joint_stable(&unstable_mc_joint, stable_joint.get_mci() + 1)?;
-            stable_joint = unstable_mc_joint;
-            last_stable_level = stable_joint.get_level();
-        } else {
-            break;
+        while let Some(unstable_mc_joint) = unstable_mc_joints.pop() {
+            //Alternative roots are last stable mc joint's best children but not on current main chain
+            let max_alt_level = calc_max_alt_level(&unstable_mc_joint, &mc_free_joint)?;
+
+            if min_wl > max_alt_level {
+                mark_main_chain_joint_stable(&unstable_mc_joint, stable_joint.get_mci() + 1)?;
+                stable_joint = unstable_mc_joint;
+                last_stable_level = stable_joint.get_level();
+            } else {
+                unstable_mc_joints.push(unstable_mc_joint);
+                break;
+            }
         }
     }
 
@@ -377,14 +374,23 @@ pub fn is_stable_to_joint(earlier_joint: &CachedJoint, joint: &JointData) -> Res
         return Ok(true);
     }
 
-    let mut best_parent = joint.get_best_parent().read()?;
-
     let earlier_joint_level = earlier_joint_data.get_level();
 
     // earlier unit must be ancestor of joint on main chain
     let mut is_ancestor = false;
 
+    // find valid end points in order
+    let mut end_joints = Vec::new();
+
+    let mut best_parent = joint.get_best_parent().read()?;
     while best_parent.get_level() >= earlier_joint_level {
+        if best_parent.is_min_wl_increased() {
+            let min_wl = best_parent.get_min_wl();
+            if min_wl >= earlier_joint_level {
+                end_joints.push((min_wl, best_parent.clone()));
+            }
+        }
+
         if earlier_joint.key.as_str() == best_parent.unit.unit {
             is_ancestor = true;
             break;
@@ -400,19 +406,11 @@ pub fn is_stable_to_joint(earlier_joint: &CachedJoint, joint: &JointData) -> Res
         return Ok(false);
     }
 
-    // Go up along best parent to find the joint enabled earlier_joint stable, which means its min_wl > max_alt_level
-    let mut joint_data = joint.get_best_parent().read()?;
-    let mut min_wl = joint_data.get_min_wl();
-    while min_wl >= earlier_joint_level {
-        if joint_data.is_min_wl_increased() {
-            let max_alt_level = calc_max_alt_level(&earlier_joint_data, &joint_data)?;
-            if min_wl > max_alt_level {
-                return Ok(true);
-            }
+    // Go up along best parent to find the joint to which earlier_joint is relative stable
+    while let Some((min_wl, end_joint)) = end_joints.pop() {
+        if min_wl > calc_max_alt_level(&earlier_joint_data, &end_joint)? {
+            return Ok(true);
         }
-
-        joint_data = joint_data.get_best_parent().read()?;
-        min_wl = joint_data.get_min_wl();
     }
 
     Ok(false)
