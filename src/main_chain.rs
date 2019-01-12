@@ -67,20 +67,19 @@ fn start_main_chain_worker(rx: mpsc::Receiver<RcuReader<JointData>>) -> JoinHand
             last_stable_level
         );
 
-        let mut last_min_wl = Level::MINIMUM;
+        // let mut last_min_wl = Level::MINIMUM;
 
         while let Ok(joint) = rx.recv() {
             let min_wl = joint.get_min_wl();
 
-            if min_wl > last_min_wl {
-                last_min_wl = min_wl;
-                if min_wl > last_stable_level {
-                    info!(
-                        "main chain worker get a valid joint, min_wl = {:?}, unit={}",
-                        min_wl, joint.unit.unit
-                    );
-                    last_stable_level = t_c!(update_main_chain(joint));
-                }
+            // && min_wl > last_min_wl
+            if min_wl > last_stable_level {
+                info!(
+                    "main chain worker get a valid joint, min_wl = {:?}, unit={}",
+                    min_wl, joint.unit.unit
+                );
+                // last_min_wl = min_wl;
+                last_stable_level = t_c!(update_main_chain(joint));
             }
         }
         error!("main chain worker stopped!");
@@ -313,7 +312,7 @@ fn calc_last_stable_joint() -> Result<RcuReader<JointData>> {
     }
 
     //Any free joint should connect to stable main chain
-    let mut joint_data = free_joints.into_iter().nth(0).unwrap().read()?;
+    let mut joint_data = free_joints[0].read()?;
 
     //Go up with best parent to reach the stable main chain
     while !joint_data.is_on_main_chain() {
@@ -451,5 +450,18 @@ pub fn set_last_stable_joint(joint: RcuReader<JointData>) {
             Some(g) => break g,
         }
     };
+
+    // check main chain growth
+    if let Some(old_stable_point) = g.as_ref() {
+        if joint.get_best_parent().key.as_ref() != &old_stable_point.unit.unit {
+            error!("main chain is not successive!!!!");
+            error!(
+                "old_stable_point = {}, new_stable_point= {}",
+                old_stable_point.unit.unit, joint.unit.unit
+            );
+            ::std::process::abort();
+        }
+    }
+
     g.update(Some(joint));
 }
