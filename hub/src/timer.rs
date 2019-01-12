@@ -14,7 +14,7 @@ pub fn start_global_timers() {
 
     // remove those junk joints
     go!(move || loop {
-        const TIMEOUT: u64 = 10 * 60 * 1000; // 10min
+        const TIMEOUT: u64 = 2 * 60 * 1000; // 2min
         coroutine::sleep(Duration::from_secs(TIMEOUT / 2));
         info!("purge_junk_unhandled_joints");
         hub::purge_junk_unhandled_joints(TIMEOUT);
@@ -22,7 +22,7 @@ pub fn start_global_timers() {
 
     // remove those temp-bad free joints
     go!(move || loop {
-        const TIMEOUT: u64 = 4 * 60 * 1000; // 4min
+        const TIMEOUT: u64 = 60 * 1000; // 1min
         coroutine::sleep(Duration::from_secs(TIMEOUT / 2));
         info!("purge_tempbad_joints");
         t!(hub::purge_temp_bad_free_joints(TIMEOUT));

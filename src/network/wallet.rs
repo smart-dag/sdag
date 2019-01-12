@@ -161,12 +161,15 @@ impl WalletConn {
         Ok(serde_json::from_value(response)?)
     }
 
+    /// get those knows bad joints which are not in normal joints
     pub fn get_bad_joints(&self) -> Result<Vec<String>> {
         let response = self.send_request("get_bad_joints", &Value::Null)?;
 
         Ok(serde_json::from_value(response)?)
     }
 
+    /// get those bad joints which are in normal joints
+    /// including temp-bad | nonserial-bad
     pub fn get_temp_bad_joints(&self) -> Result<Vec<String>> {
         let response = self.send_request("get_temp_bad_joints", &Value::Null)?;
 

@@ -218,6 +218,7 @@ impl SDagCacheInner {
         // we use deep search without a revisited hashmap
         while let Some(key) = stack.pop() {
             // remove from unhandled
+            warn!("purge bad unit = {}", key);
             self.unhandled_joints.remove(&key);
             // remove all it's desendants
             if let Some(v) = self.missing_parents.remove(&key) {
@@ -260,6 +261,7 @@ impl SDagCacheInner {
         // we use deep search without a revisited hashmap
         while let Some(key) = stack.pop() {
             // remove from unhandled
+            warn!("purge unhandled unit = {}", key);
             self.unhandled_joints.remove(&*key);
             // remove all it's descendants
             if let Some(v) = self.missing_parents.remove(&*key) {
@@ -299,6 +301,7 @@ impl SDagCacheInner {
         let mut stack = vec![joint.to_owned()];
 
         while let Some(ref joint) = stack.pop() {
+            warn!("purge temb-bad free unit = {}", joint);
             self.free_joints.remove(joint);
             let joint = self
                 .normal_joints
@@ -338,7 +341,7 @@ impl SDagCacheInner {
             .filter_map(|(k, j)| {
                 // free joints must be in cache so that we can safely unwrap it
                 let joint = j.raw_read();
-                if joint.get_sequence() != JointSequence::TempBad {
+                if joint.get_sequence() == JointSequence::Good {
                     return None;
                 }
 

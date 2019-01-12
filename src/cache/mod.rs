@@ -144,7 +144,7 @@ impl SDagCache {
                 v.into_iter()
                     .filter_map(|j| {
                         if let Ok(joint) = j.read() {
-                            if joint.get_sequence() == ::joint::JointSequence::TempBad {
+                            if joint.get_sequence() != ::joint::JointSequence::Good {
                                 return Some(joint.unit.unit.clone());
                             }
                         }
