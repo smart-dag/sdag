@@ -1304,7 +1304,7 @@ fn start_catchup(ws: Arc<HubConn>) -> Result<()> {
 
         // wait the batch number below a value and then start another batch
         ::utils::wait_cond(Some(Duration::from_secs(10)), || {
-            SDAG_CACHE.get_hash_tree_ball_len() < 300
+            SDAG_CACHE.get_hash_tree_ball_len() < 1000
         })
         .context("catchup wait hash tree batch timeout")?;
     }

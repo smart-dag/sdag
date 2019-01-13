@@ -227,7 +227,7 @@ impl JointData {
         self.props.read().unwrap().is_stable
     }
 
-    pub fn wait_stable(&self) {
+    pub fn wait_stable(&self, waiter: &str) {
         use std::time::Duration;
         // fast stable detection
         if self.is_stable() {
@@ -235,7 +235,10 @@ impl JointData {
         }
 
         while !self.stable_sem.wait_timeout(Duration::from_secs(1)) {
-            error!("wait stable timeout! unit={}", self.unit.unit);
+            error!(
+                "wait stable timeout! unit={}, waiter={}",
+                self.unit.unit, waiter
+            );
         }
         // release the semphore to unblock others
         self.stable_sem.post();

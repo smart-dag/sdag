@@ -495,7 +495,7 @@ fn validate_parents(joint: &JointData) -> Result<()> {
     }
 
     // Last ball may not stable in our view, need to wait until it got stable
-    last_ball_joint_data.wait_stable();
+    last_ball_joint_data.wait_stable(&joint.unit.unit);
 
     // TODO: move the ball to property
     // re-read to get the ball
