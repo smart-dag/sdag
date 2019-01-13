@@ -400,7 +400,7 @@ pub fn is_stable_to_joint(
     let stable_point_level = stable_point.get_level();
 
     // earlier joint is on main chain and before the stable point
-    if earlier_joint_level <= stable_point_level {
+    if earlier_joint_level < stable_point_level {
         // earlier joint must be stable if it on main chain
         if !earlier_joint_data.is_on_main_chain() {
             // earlier joint must not no main chain
@@ -413,17 +413,12 @@ pub fn is_stable_to_joint(
     }
 
     // earlier joint is after stable point
-    let mut is_ancestor = false;
-    let mut best_parent = earlier_joint_data.get_best_parent().read()?;
-    while best_parent.get_level() >= stable_point_level {
-        if stable_point == best_parent {
-            is_ancestor = true;
-            break;
-        }
+    let mut best_parent = earlier_joint_data.clone();
+    while best_parent.get_level() > stable_point_level {
         best_parent = best_parent.get_best_parent().read()?;
     }
 
-    if !is_ancestor {
+    if stable_point != best_parent {
         error!(
             "is_stable_to_joint return false, earlier_joint {} is not on main chain, can't pass to stable point",
             earlier_joint.key
