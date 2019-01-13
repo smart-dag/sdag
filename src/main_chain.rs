@@ -366,7 +366,10 @@ pub fn find_best_joint<'a, I: IntoIterator<Item = &'a CachedJoint>>(
 }
 
 /// judge if earlier_joint is relative stable to later_joint
-pub fn is_stable_to_joint(earlier_joint: &CachedJoint, joint: &JointData) -> Result<bool> {
+pub fn is_stable_to_joint(
+    earlier_joint: &CachedJoint,
+    joint: &RcuReader<JointData>,
+) -> Result<bool> {
     let earlier_joint_data = earlier_joint.read()?;
 
     let stable_point = get_last_stable_joint();
@@ -413,7 +416,7 @@ pub fn is_stable_to_joint(earlier_joint: &CachedJoint, joint: &JointData) -> Res
     // find valid end points in order
     let mut end_joints = Vec::new();
 
-    let mut best_parent = joint.get_best_parent().read()?;
+    let mut best_parent = joint.clone();
     while best_parent.get_level() >= earlier_joint_level {
         if best_parent.is_min_wl_increased() {
             let min_wl = best_parent.get_min_wl();
