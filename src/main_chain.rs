@@ -75,22 +75,7 @@ fn start_main_chain_worker(rx: mpsc::Receiver<RcuReader<JointData>>) -> JoinHand
                     "main chain worker get a valid joint, min_wl = {:?}, unit={}",
                     min_wl, joint.unit.unit
                 );
-                let mut my_last_stable_level = Level::MINIMUM;
-                if let Some(ref last_ball_unit) = joint.unit.last_ball_unit {
-                    let last_ball_unit = SDAG_CACHE
-                        .get_joint(last_ball_unit)
-                        .expect("failed to get last ball unit")
-                        .read()
-                        .expect("failed to read last ball unit");
-                    my_last_stable_level = last_ball_unit.get_level();
-                }
-
                 last_stable_level = t_c!(update_main_chain(joint));
-
-                if last_stable_level < my_last_stable_level {
-                    error!("we can't proceed!!!!");
-                    ::std::process::abort();
-                }
             }
         }
         error!("main chain worker stopped!");
@@ -544,18 +529,6 @@ pub fn set_last_stable_joint(joint: RcuReader<JointData>) {
             Some(g) => break g,
         }
     };
-
-    // check main chain growth
-    // if let Some(old_stable_point) = g.as_ref() {
-    //     if joint.get_best_parent().key.as_ref() != &old_stable_point.unit.unit {
-    //         error!("main chain is not successive!!!!");
-    //         error!(
-    //             "old_stable_point = {}, new_stable_point= {}",
-    //             old_stable_point.unit.unit, joint.unit.unit
-    //         );
-    //         ::std::process::abort();
-    //     }
-    // }
 
     g.update(Some(joint));
 }
