@@ -382,20 +382,30 @@ pub fn is_stable_to_joint(
     joint: &RcuReader<JointData>,
 ) -> Result<bool> {
     let earlier_joint_data = earlier_joint.read()?;
+    if earlier_joint_data.unit.is_genesis_unit() {
+        return Ok(true);
+    }
+
+    let min_wl = joint.get_min_wl();
+    let earlier_joint_level = earlier_joint_data.get_level();
+    if min_wl < earlier_joint_level {
+        error!(
+            "is_stable_to_joint return false, min_wl={:?}, earlier_joint_level={:?}",
+            min_wl, earlier_joint.key
+        );
+        return Ok(false);
+    }
 
     let stable_point = get_last_stable_joint();
     let stable_point_level = stable_point.get_level();
-    let earlier_joint_level = earlier_joint_data.get_level();
 
     // earlier joint is on main chain and before the stable point
     if earlier_joint_level <= stable_point_level {
-        if earlier_joint_data.is_on_main_chain() {
-            // earlier joint must be stable if it on main chain
-            return Ok(true);
-        } else {
+        // earlier joint must be stable if it on main chain
+        if !earlier_joint_data.is_on_main_chain() {
             // earlier joint must not no main chain
             error!(
-                "is_stable_to_joint return false, earlier_joint {} is not on main chain",
+                "is_stable_to_joint return false, earlier_joint {} is not on main chain and before stable point",
                 earlier_joint.key
             );
             return Ok(false);
@@ -415,7 +425,7 @@ pub fn is_stable_to_joint(
 
     if !is_ancestor {
         error!(
-            "is_stable_to_joint return false, earlier_joint {} is not on main chain",
+            "is_stable_to_joint return false, earlier_joint {} is not on main chain, can't pass to stable point",
             earlier_joint.key
         );
         return Ok(false);
@@ -445,7 +455,7 @@ pub fn is_stable_to_joint(
 
     if !is_ancestor {
         error!(
-            "is_stable_to_joint return false, unit={}, last_ball_unit={} is not on main chain",
+            "is_stable_to_joint return false, unit={}, last_ball_unit={} can't lead to last ball unit",
             joint.unit.unit, earlier_joint.key
         );
         return Ok(false);
@@ -458,6 +468,10 @@ pub fn is_stable_to_joint(
         }
     }
 
+    error!(
+        "is_stable_to_joint return false, unit={}, last_ball_unit={}",
+        joint.unit.unit, earlier_joint.key
+    );
     Ok(false)
 }
 
