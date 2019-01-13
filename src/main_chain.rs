@@ -79,9 +79,9 @@ fn start_main_chain_worker(rx: mpsc::Receiver<RcuReader<JointData>>) -> JoinHand
                 if let Some(ref last_ball_unit) = joint.unit.last_ball_unit {
                     let last_ball_unit = SDAG_CACHE
                         .get_joint(last_ball_unit)
-                        .unwrap()
+                        .expect("failed to get last ball unit")
                         .read()
-                        .unwrap();
+                        .expect("failed to read last ball unit");
                     my_last_stable_level = last_ball_unit.get_level();
                 }
 
@@ -277,15 +277,53 @@ fn mark_main_chain_joint_stable(main_chain_joint: &RcuReader<JointData>, mci: Le
     Ok(())
 }
 
+fn update_stable_main_chain_to_joint(
+    mut stable_joint: RcuReader<JointData>,
+    mut to_joint: RcuReader<JointData>,
+) -> Result<RcuReader<JointData>> {
+    let mut stable_level = stable_joint.get_level();
+    let to_joint_level = to_joint.get_level();
+    if to_joint_level <= stable_level {
+        return Ok(stable_joint);
+    }
+
+    let mut stable_joints = Vec::new();
+    while to_joint.get_level() > stable_level {
+        stable_joints.push(to_joint.clone());
+        to_joint = to_joint.get_best_parent().read()?;
+    }
+
+    if to_joint != stable_joint {
+        bail!(
+            "update_stable_main_chain_to_joint not lead to main chain, joint={}, stale_joint={}",
+            stable_joints[0].unit.unit,
+            stable_joint.unit.unit
+        );
+    }
+
+    while let Some(joint) = stable_joints.pop() {
+        stable_level += 1;
+        mark_main_chain_joint_stable(&joint, stable_level)?;
+        stable_joint = joint;
+    }
+
+    Ok(stable_joint)
+}
+
 fn update_stable_main_chain(
     mut stable_joint: RcuReader<JointData>,
     mut unstable_mc_joints: Vec<RcuReader<JointData>>,
 ) -> Result<Level> {
     ensure!(!unstable_mc_joints.is_empty(), "Empty unstable main chain");
 
-    let mut last_stable_level = stable_joint.get_level();
+    // directly update to longest last ball unit
+    if let Some(ref my_last_ball_unit) = unstable_mc_joints[0].unit.last_ball_unit {
+        let my_last_ball_joint = SDAG_CACHE.get_joint(my_last_ball_unit)?.read()?;
+        stable_joint = update_stable_main_chain_to_joint(stable_joint, my_last_ball_joint)?;
+    }
 
     // find valid end points in order
+    let mut last_stable_level = stable_joint.get_level();
     let mut end_joints = Vec::new();
     for joint in &unstable_mc_joints {
         if joint.is_min_wl_increased() && joint.get_min_wl() > last_stable_level {

@@ -26,8 +26,8 @@ impl KvStore {
         Ok(false)
     }
 
-    pub fn read_joint(&self, _key: &str) -> Result<Joint> {
-        bail!("read_joint from kv not supported")
+    pub fn read_joint(&self, key: &str) -> Result<Joint> {
+        bail!("read_joint from kv not supported, key={}", key)
     }
 
     pub fn read_joint_children(&self, _key: &str) -> Result<Vec<String>> {
