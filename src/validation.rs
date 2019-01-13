@@ -791,7 +791,10 @@ fn validate_messages(joint: &JointData) {
     match business::BUSINESS_CACHE.validate_unstable_joint(joint) {
         Ok(s) => joint.set_sequence(s),
         Err(e) => {
-            error!("validate_unstable_joint failed, err={}", e);
+            error!(
+                "validate_unstable_joint failed, unit = {}, err={}",
+                joint.unit.unit, e
+            );
             joint.set_sequence(JointSequence::FinalBad);
         }
     }

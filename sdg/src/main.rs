@@ -375,7 +375,8 @@ fn verify_joints(joints: Vec<Joint>, last_mci: usize) -> Result<()> {
                 }
             };
             let joint_data = cached_joint.read().unwrap();
-            if joint_data.unit.content_hash.is_some() {
+            if let Some(ref hash) = joint_data.unit.content_hash {
+                error!("unit {} content hash = {}", cached_joint.key, hash);
                 joint_data.set_sequence(JointSequence::FinalBad);
             }
 

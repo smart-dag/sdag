@@ -98,8 +98,10 @@ fn start_business_worker(rx: mpsc::Receiver<RcuReader<JointData>>) -> JoinHandle
                         // but we have to save it as a bad joint
                         // we hope that the global state is still correct
                         // like transactions
-                        error!("apply_joint failed, err = {:?}", e);
-
+                        error!(
+                            "apply_joint failed, unit = {}, err = {:?}",
+                            joint.unit.unit, e
+                        );
                         joint.set_sequence(JointSequence::FinalBad);
                     }
 
@@ -108,7 +110,10 @@ fn start_business_worker(rx: mpsc::Receiver<RcuReader<JointData>>) -> JoinHandle
                     }
                 }
                 Err(e) => {
-                    error!("validate_joint failed, err = {:?}", e);
+                    error!(
+                        "validate_joint failed, unit = {}, err = {:?}",
+                        joint.unit.unit, e
+                    );
                     if let JointSequence::Good = joint.get_sequence() {
                         let mut temp_business_state =
                             BUSINESS_CACHE.temp_business_state.write().unwrap();
