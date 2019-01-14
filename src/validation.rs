@@ -95,7 +95,7 @@ pub fn validate_ready_joint(joint: CachedJoint) -> Result<()> {
 fn normal_validate(joint: &JointData) -> Result<()> {
     let unit = &joint.unit;
 
-    if !unit.parent_units.is_empty() {
+    if !unit.is_genesis_unit() {
         validate_parents(joint)?;
         // validate_ball(joint)?;
     }
@@ -441,9 +441,8 @@ fn validate_parents(joint: &JointData) -> Result<()> {
         ),
     };
 
-    let last_ball_joint_data = last_ball_joint.read()?;
     // check last ball should not retreat
-
+    let last_ball_joint_data = last_ball_joint.read()?;
     let last_ball_level = last_ball_joint_data.get_level();
     let mut max_parent_last_ball_level = Level::MINIMUM;
     let mut old_last_ball = last_ball_joint_data.clone();

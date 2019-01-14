@@ -70,14 +70,9 @@ fn finalize_joint(cached_joint: CachedJoint) -> Result<()> {
 
     cached_joint.update_joint(joint)?;
 
-    //No need to calc paid_witnessing and header commissions for now
-
     //Reread the joint data after updating joint
     let joint_data = cached_joint.read()?;
     joint_data.set_stable();
-    if joint_data.is_on_main_chain() {
-        ::main_chain::set_last_stable_joint(joint_data.clone());
-    }
     KV_STORE.save_joint(&joint_data)?;
 
     Ok(())
