@@ -1,4 +1,4 @@
-use std::collections::{HashSet, VecDeque};
+use std::collections::{BinaryHeap, HashSet, VecDeque};
 
 use cache::{CachedJoint, JointData, SDAG_CACHE};
 use error::Result;
@@ -136,7 +136,7 @@ fn calc_max_alt_level(last_ball: &JointData, end: &RcuReader<JointData>) -> Resu
     //Go down to collect best children
     //Best children should never intersect, no need to check revisit
     while let Some(joint_data) = joints.pop() {
-        // End joint would never include this joint, done
+        // End joint would never include this joint
         if joint_data.get_level() >= end_level {
             continue;
         }
@@ -166,33 +166,57 @@ fn calc_max_alt_level(last_ball: &JointData, end: &RcuReader<JointData>) -> Resu
         return Ok(max_alt_level_possible);
     }
 
-    // Limit the max_alt_level to the history in end joint's perspective
-    let mut joints = VecDeque::new();
-    let mut visited = HashSet::new();
-    let mut max_alt_level = stable_point_level;
+    use std::cmp::Ordering;
+    #[derive(PartialOrd, PartialEq)]
+    struct _FastJoint {
+        level: Level,
+        joint: RcuReader<JointData>,
+    }
 
-    joints.push_back(end.clone());
-    while let Some(joint) = joints.pop_front() {
-        let joint_level = joint.get_level();
-        if joint_level <= stable_point_level {
+    impl Eq for _FastJoint {}
+    impl Ord for _FastJoint {
+        fn cmp(&self, other: &Self) -> Ordering {
+            match self.level.partial_cmp(&other.level) {
+                None => unreachable!("_FstJoint compare"),
+                Some(ord) => ord,
+            }
+        }
+    }
+
+    impl From<RcuReader<JointData>> for _FastJoint {
+        fn from(joint: RcuReader<JointData>) -> Self {
+            _FastJoint {
+                level: joint.get_level(),
+                joint,
+            }
+        }
+    }
+
+    // Limit the max_alt_level to the history in end joint's perspective
+    let mut joints = BinaryHeap::new();
+    let mut visited = HashSet::new();
+
+    joints.push(end.clone().into());
+    while let Some(_FastJoint { level, joint }) = joints.pop() {
+        if level <= stable_point_level {
             continue;
         }
 
-        // update the max_alt_level
-        if alt_candidates.contains(&joint) && joint_level > max_alt_level {
-            max_alt_level = joint_level;
+        // find the first max alt level
+        if alt_candidates.contains(&joint) {
+            return Ok(level);
         }
 
         for parent in joint.parents.iter() {
             let parent_data = parent.read()?;
             if visited.insert(parent.key.clone()) {
-                joints.push_back(parent_data);
+                joints.push(parent_data.into());
             }
         }
     }
 
     // we didn't find any valid alt level, return the default one
-    Ok(max_alt_level)
+    Ok(stable_point_level)
 }
 
 fn mark_main_chain_joint_stable(main_chain_joint: &RcuReader<JointData>, mci: Level) -> Result<()> {
@@ -433,7 +457,7 @@ pub fn is_stable_to_joint(
     let stable_point_level = stable_point.get_level();
 
     // earlier joint is on main chain and before the stable point
-    if earlier_joint_level < stable_point_level {
+    if earlier_joint_level <= stable_point_level {
         // earlier joint must be stable if it on main chain
         if !earlier_joint_data.is_on_main_chain() {
             // earlier joint must not no main chain
@@ -442,6 +466,8 @@ pub fn is_stable_to_joint(
                 earlier_joint.key
             );
             return Ok(false);
+        } else {
+            return Ok(true);
         }
     } else {
         // earlier joint is after stable point
