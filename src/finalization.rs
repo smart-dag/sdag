@@ -1,7 +1,6 @@
 use cache::{CachedJoint, JointData, SDAG_CACHE};
 use error::Result;
 use joint::JointSequence;
-use kv_store::KV_STORE;
 use may::coroutine::JoinHandle;
 use may::sync::mpsc;
 
@@ -76,7 +75,8 @@ fn finalize_joint(cached_joint: CachedJoint) -> Result<()> {
     if joint_data.is_on_main_chain() {
         ::main_chain::set_last_stable_joint(joint_data.clone());
     }
-    KV_STORE.save_joint(&joint_data)?;
+
+    cached_joint.save_to_db()?;
 
     Ok(())
 }

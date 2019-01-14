@@ -28,6 +28,8 @@ extern crate secp256k1;
 extern crate sha1;
 extern crate sha2;
 
+extern crate sled;
+
 #[macro_export]
 macro_rules! t {
     ($e:expr) => {
