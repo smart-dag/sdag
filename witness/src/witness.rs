@@ -104,7 +104,7 @@ fn adjust_witnessing_speed() -> Result<()> {
         distance = free_joint_level - self_level;
         if distance < THRESHOLD_DISTANCE {
             time = ((THRESHOLD_DISTANCE - distance) * 200) as u64;
-        } else if distance < 50 {
+        } else if distance < 25 {
             time = ((THRESHOLD_DISTANCE as f64 / distance as f64) * 200.0) as u64;
         } else if distance < 100 {
             time = (rng.gen_range(0.0, 1.0) * 200.0) as u64;
@@ -235,7 +235,7 @@ fn is_normal_joint_behind_min_retrievable(free_joints: &[CachedJoint]) -> Result
         }
         for author in &joint_data.unit.authors {
             if !MY_WITNESSES.contains(&author.address)
-                && joint_data.get_sequence() == JointSequence::Good
+                && joint_data.get_sequence() != JointSequence::FinalBad
             {
                 return Ok(true);
             }
@@ -268,34 +268,49 @@ struct TimeStamp {
 
 /// compose witness joint and validate, save, post
 fn witness() -> Result<()> {
-    let free_joints = SDAG_CACHE.get_all_free_joints()?;
-    for joint in &free_joints {
-        let joint_data = joint.read()?;
-        for author in &joint_data.unit.authors {
-            if author.address == WALLET_INFO._00_address {
-                warn!(
-                    "my witness unit [{:?}] is free joint, post the block joint again, and cancel post a new joint",
-                    joint_data.unit.unit
-                );
+    // as we can not completely avoid the case that witness joints concurrency
+    // so we will cancel the limit that witness cancel post a new joint when it's joint is free joint.
+    // let free_joints = SDAG_CACHE.get_all_free_joints()?;
+    // for joint in &free_joints {
+    //     let joint_data = joint.read()?;
+    //     for author in &joint_data.unit.authors {
+    //         if author.address == WALLET_INFO._00_address {
+    //             warn!(
+    //                 "my witness unit [{:?}] is free joint, post the block joint again, and cancel post a new joint",
+    //                 joint_data.unit.unit
+    //             );
 
-                if let Some(ws) = sdag::network::hub::WSS.get_next_peer() {
-                    return ws.post_joint(&joint_data);
-                }
-            }
-        }
-    }
+    //             if let Some(ws) = sdag::network::hub::WSS.get_next_peer() {
+    //                 return ws.post_joint(&joint_data);
+    //             }
+    //         }
+    //     }
+    // }
 
     // divide one output into two outputs, to increase witnessing concurrent performance
     // let amount = divide_money(&WALLET_INFO._00_address)?;
+
+    for i in 0..10 {
+        match compose_and_normalize() {
+            Ok(_) => break,
+            Err(e) => error!("compose witness joint failed, times {}, err = [{:?}]", i, e),
+        }
+    }
+
+    Ok(())
+}
+
+fn compose_and_normalize() -> Result<()> {
+    // get inputs first, get last ball second, for meeting the limit that input units must before last ball
+    // at most we need another 1000 sdg (usually 431 + 197)
+    let (inputs, amount) =
+        BUSINESS_CACHE.get_inputs_for_amount(&WALLET_INFO._00_address, 1_000 as u64, false)?;
+
     let sdag::composer::ParentsAndLastBall {
         parents,
         last_ball,
         last_ball_unit,
     } = sdag::composer::pick_parents_and_last_ball(&WALLET_INFO._00_address)?;
-
-    // at most we need another 1000 sdg (usually 431 + 197)
-    let (inputs, amount) =
-        BUSINESS_CACHE.get_inputs_for_amount(&WALLET_INFO._00_address, 1_000 as u64, false)?;
 
     let light_props = sdag::light::LightProps {
         last_ball,
