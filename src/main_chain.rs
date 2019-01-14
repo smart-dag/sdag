@@ -256,7 +256,6 @@ fn mark_main_chain_joint_stable(main_chain_joint: &RcuReader<JointData>, mci: Le
 
     // update the global property
     SDAG_CACHE.set_mc_unit_hash(mci, main_chain_joint.unit.unit.clone())?;
-    set_last_stable_joint(main_chain_joint.clone());
 
     info!(
         "main chain update: last_stable_joint = {:?}",
@@ -426,11 +425,7 @@ pub fn is_stable_to_joint(
         return Ok(false);
     }
 
-    let stable_point = LAST_STABLE_JOINT
-        .read()
-        .expect("LAST_STABLE_JOINT not set")
-        .as_ref()
-        .clone();
+    let stable_point = get_last_stable_joint();
     let stable_point_level = stable_point.get_level();
 
     // earlier joint is on main chain and before the stable point
@@ -537,18 +532,14 @@ pub fn get_last_stable_joint() -> RcuReader<JointData> {
     use std::time::Duration;
     loop {
         match LAST_STABLE_JOINT.read() {
-            Some(j) => {
-                let last_stable_joint = j.as_ref().clone();
-                last_stable_joint.wait_stable("get_last_stable_joint");
-                return last_stable_joint;
-            }
+            Some(j) => return j.as_ref().clone(),
             None => ::may::coroutine::sleep(Duration::from_millis(1)),
         }
     }
 }
 
 /// set the last stable joint
-fn set_last_stable_joint(joint: RcuReader<JointData>) {
+pub fn set_last_stable_joint(joint: RcuReader<JointData>) {
     let mut g = loop {
         match LAST_STABLE_JOINT.try_lock() {
             None => error!("failed to lock last stable ball"),
