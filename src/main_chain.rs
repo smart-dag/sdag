@@ -268,6 +268,7 @@ fn mark_main_chain_joint_stable(main_chain_joint: &RcuReader<JointData>, mci: Le
     Ok(())
 }
 
+#[allow(dead_code)]
 fn update_stable_main_chain_to_joint(
     mut stable_joint: RcuReader<JointData>,
     mut to_joint: RcuReader<JointData>,
@@ -308,10 +309,10 @@ fn update_stable_main_chain(
     ensure!(!unstable_mc_joints.is_empty(), "Empty unstable main chain");
 
     // directly update to longest last ball unit
-    if let Some(ref my_last_ball_unit) = unstable_mc_joints[0].unit.last_ball_unit {
-        let my_last_ball_joint = SDAG_CACHE.get_joint(my_last_ball_unit)?.read()?;
-        stable_joint = update_stable_main_chain_to_joint(stable_joint, my_last_ball_joint)?;
-    }
+    // if let Some(ref my_last_ball_unit) = unstable_mc_joints[0].unit.last_ball_unit {
+    //     let my_last_ball_joint = SDAG_CACHE.get_joint(my_last_ball_unit)?.read()?;
+    //     stable_joint = update_stable_main_chain_to_joint(stable_joint, my_last_ball_joint)?;
+    // }
 
     // find valid end points in order
     let mut last_stable_level = stable_joint.get_level();
