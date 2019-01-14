@@ -253,6 +253,7 @@ impl SDagCache {
         for parent in &joint_data.unit.parent_units {
             // check if it's a known bad joint
             if g.is_known_bad_joint(parent) {
+                self.purge_bad_joint(&key, String::from("bad parent"));
                 bail!("joint parents contains known bad joint");
             }
             // check if it's already ok
