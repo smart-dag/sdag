@@ -1060,7 +1060,10 @@ impl HubConn {
             ws.handle_online_joint(joint)
         }
 
-        let ws = WSS.get_connection(self.get_peer_id()).unwrap();
+        let ws = WSS.get_connection(self.get_peer_id()).ok_or_else(|| {
+            format_err!("failed to find connection, peer_id={}", self.get_peer_id())
+        })?;
+
         for unit in units {
             let ws = ws.clone();
             try_go!(move || request_joint(ws, &unit));

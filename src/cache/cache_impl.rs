@@ -314,9 +314,7 @@ impl SDagCacheInner {
                 // remove the child for the parent
                 // if the parent becomes free just add back to free list
                 let parent_joint = parent.read()?;
-                parent_joint
-                    .children
-                    .remove_with(|j| j.key.as_str() == unit);
+                parent_joint.children.remove_with(|j| &*j.key == unit);
                 if parent_joint.is_free() {
                     if parent_joint.get_sequence() != JointSequence::Good {
                         // remove this "bad" "free" parent
