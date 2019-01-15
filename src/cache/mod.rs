@@ -249,13 +249,19 @@ impl SDagCache {
         let mut valid_parents = SmallVec::<[CachedJoint; config::MAX_PARENT_PER_UNIT]>::new();
         let mut missing_parents = SmallVec::<[String; config::MAX_PARENT_PER_UNIT]>::new();
 
-        let mut g = self.joints.write().unwrap();
+        let reader = self.joints.read().unwrap();
         for parent in &joint_data.unit.parent_units {
             // check if it's a known bad joint
-            if g.is_known_bad_joint(parent) {
+            if reader.is_known_bad_joint(parent) {
                 self.purge_bad_joint(&key, String::from("bad parent"));
                 bail!("joint parents contains known bad joint");
             }
+        }
+        // release the read lock
+        drop(reader);
+
+        let mut g = self.joints.write().unwrap();
+        for parent in &joint_data.unit.parent_units {
             // check if it's already ok
             match g.get_joint(parent) {
                 None => {
