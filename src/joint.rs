@@ -140,7 +140,7 @@ pub enum JointSequence {
 //---------------------------------------------------------------------------------------
 // JointProperty
 //---------------------------------------------------------------------------------------
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct JointProperty {
     pub level: Level,
     pub best_parent_unit: String,

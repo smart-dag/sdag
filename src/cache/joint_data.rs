@@ -18,14 +18,12 @@ use utils::{AppendList, AppendListExt};
 #[derive(Debug, Serialize, Deserialize)]
 pub struct UnitProps {
     pub key: String,
-    props: JointProperty,
-}
-
-impl ::std::ops::Deref for UnitProps {
-    type Target = JointProperty;
-    fn deref(&self) -> &JointProperty {
-        &self.props
-    }
+    pub level: Level,
+    pub mci: Level,
+    pub limci: Level,
+    pub wl: Level,
+    pub is_stable: bool,
+    pub sequence: JointSequence,
 }
 
 impl UnitProps {
@@ -147,9 +145,15 @@ pub struct JointData {
 impl JointData {
     /// get all properties
     pub fn get_props(&self) -> UnitProps {
+        let props = self.props.read().unwrap();
         UnitProps {
             key: self.unit.unit.clone(),
-            props: self.props.read().unwrap().clone(),
+            level: props.level,
+            mci: props.mci,
+            limci: props.limci,
+            wl: props.wl,
+            is_stable: props.is_stable,
+            sequence: props.sequence,
         }
     }
 
@@ -559,7 +563,13 @@ impl LoadFromKv<String> for JointData {
         // self is the data, need to save to kv
         let key = key.borrow();
         KV_STORE.save_joint(key, &self.joint)?;
-        KV_STORE.save_joint_children(key, self.children.iter().map(|c| c.key.as_ref().to_owned()).collect::<Vec<_>>())?;
+        KV_STORE.save_joint_children(
+            key,
+            self.children
+                .iter()
+                .map(|c| c.key.as_ref().to_owned())
+                .collect::<Vec<_>>(),
+        )?;
         KV_STORE.save_joint_property(key, &self.props.read().unwrap())
     }
 }
