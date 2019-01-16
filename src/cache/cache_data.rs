@@ -132,20 +132,20 @@ impl<K, V: LoadFromKv<K>> CachedData<K, V> {
 
     // save the value to database and clear the data memory
     pub fn save_to_db(&self) -> Result<()> {
-        Ok(())
-        // loop {
-        //     if let Some(mut g) = self.data.try_lock() {
-        //         match g.as_ref() {
-        //             Some(v) => {
-        //                 v.save_to_kv(&self.key)?;
-        //             }
-        //             None => bail!("no data found to save to db"),
-        //         }
-        //         // FIXME: we should not do GC here!
-        //         g.update(None);
-        //         return Ok(());
-        //     }
-        //     coroutine::yield_now();
-        // }
+        //Ok(())
+        loop {
+            if let Some(mut g) = self.data.try_lock() {
+                match g.as_ref() {
+                    Some(v) => {
+                        v.save_to_kv(&self.key)?;
+                    }
+                    None => bail!("no data found to save to db"),
+                }
+                // FIXME: we should not do GC here!
+                // g.update(None);
+                return Ok(());
+            }
+            coroutine::yield_now();
+        }
     }
 }
