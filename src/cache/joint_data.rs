@@ -157,6 +157,10 @@ impl JointData {
         }
     }
 
+    pub fn get_all_props(&self) -> &RwLock<JointProperty> {
+        &*self.props
+    }
+
     pub fn get_level(&self) -> Level {
         self.props.read().unwrap().level
     }

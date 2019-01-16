@@ -3,10 +3,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use super::network_base::{Sender, Server, WsConnection};
-use cache::UnitProps;
 use config;
 use error::Result;
 use joint::Joint;
+use joint::JointProperty;
 use light;
 use may::coroutine;
 use may::net::TcpStream;
@@ -136,13 +136,13 @@ impl WalletConn {
     }
 
     //returned joint and joint property
-    pub fn get_joint_by_unit_hash(&self, unit: &str) -> Result<(Joint, UnitProps)> {
+    pub fn get_joint_by_unit_hash(&self, unit: &str) -> Result<(Joint, JointProperty)> {
         let mut response =
             self.send_request("get_joint_by_unit_hash", &serde_json::to_value(unit)?)?;
 
         let joint: Joint = serde_json::from_value(response["joint"].take())?;
 
-        let property: UnitProps = serde_json::from_value(response["property"].take())?;
+        let property: JointProperty = serde_json::from_value(response["property"].take())?;
 
         Ok((joint, property))
     }

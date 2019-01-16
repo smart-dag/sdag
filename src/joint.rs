@@ -158,10 +158,14 @@ pub struct JointProperty {
     pub is_stable: bool,
     pub sequence: JointSequence,
     pub create_time: u64,
+    #[serde(skip)]
     pub prev_stable_self_unit: Option<String>,
+    #[serde(skip)]
     pub related_units: Vec<String>,
+    #[serde(skip)]
     pub balance: u64,
     // 0x00(init), 0x11(validate ok), 0x10(re check)
+    #[serde(skip)]
     pub validate_authors_state: u8,
 }
 

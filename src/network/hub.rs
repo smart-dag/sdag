@@ -736,7 +736,12 @@ impl HubConn {
         SDAG_CACHE
             .get_joint(&unit)
             .and_then(|j| j.read())
-            .and_then(|j| Ok(json!({ "joint": (**j).clone(), "property": j.get_props()})))
+            .and_then(|j| {
+                Ok(json!({
+                    "joint": (**j).clone(),
+                    "property": &*j.get_all_props().read().unwrap()
+                }))
+            })
     }
 
     fn on_get_bad_joints(&self, _param: Value) -> Result<Value> {
