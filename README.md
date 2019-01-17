@@ -125,7 +125,21 @@ sdg$ cargo run info -j
 
 * 转账
 
-> 因为目前我这里没有余额，暂时先不演示了，后面补上。
+> 7E5V7WKXWC4ZELYSRYSA3UO6K53SELYC 是对方地址 ； 
+10 是转账金额，单位是dag ；
+hello 是上链信息。
+
+```
+sdg$ cargo run send --pay 7E5V7WKXWC4ZELYSRYSA3UO6K53SELYC 10 --text hello
+Finished dev [unoptimized + debuginfo] target(s) in 0.67s                                                             
+Running `/home/cr4fun/sdag/sdag/target/debug/sdg send --pay 7E5V7WKXWC4ZELYSRYSA3UO6K53SELYC 10 --text hello`
+FROM  : 5YJKYU5NFWEUJAO4M2WNR4O3W5Z62ZYO
+TO    : 
+      address : 7E5V7WKXWC4ZELYSRYSA3UO6K53SELYC, amount : 10
+UNIT  : YiNYIEe11O/3FegyzP4Aixl+6HxsjscgDKVKnc8q7Ro=
+TEXT  : hello
+DATE  : 2019-01-17 18:10:12.277
+```
 
 * 查看网络信息
 
@@ -230,4 +244,3 @@ sdg$ cargo run info -j
   ]
 }
 ```
-(未完待续)
