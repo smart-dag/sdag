@@ -1,4 +1,5 @@
 use error::Result;
+use failure::ResultExt;
 use joint::{Joint, JointProperty};
 use serde_json;
 use sled::{Db, Tree};
@@ -27,21 +28,20 @@ pub struct KvStore {
 
 impl Default for KvStore {
     fn default() -> Self {
-        KvStore::new("./sdag_kv")
+        KvStore::load("./sdag_kv").expect("init KvStore failed")
     }
 }
 
 impl KvStore {
-    pub fn new(path: &str) -> Self {
-        let db =
-            Db::start_default(path).expect(&format!("Failed to read path {} for  KvStore", path));
+    pub fn load(path: &str) -> Result<Self> {
+        let db = Db::start_default(path).context("Failed to read file for KvStore")?;
         let joints = db
             .open_tree(b"joints".to_vec())
-            .expect("Failed to init joints KvStore");
+            .context("Failed to init joints KvStore")?;
         let properties = db
             .open_tree(b"properties".to_vec())
-            .expect("Failed to init properties KvStore");
-        KvStore { joints, properties }
+            .context("Failed to init properties KvStore")?;
+        Ok(KvStore { joints, properties })
     }
 
     pub fn is_joint_exist(&self, _key: &str) -> Result<bool> {
