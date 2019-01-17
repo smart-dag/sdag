@@ -432,9 +432,14 @@ fn validate_parents(joint: &JointData) -> Result<()> {
         Some(ref unit) => unit,
     };
 
-    let last_ball_joint = SDAG_CACHE
-        .get_joint(last_ball_unit_hash)
-        .context("last ball unit not found")?;
+    let last_ball_joint = match SDAG_CACHE.get_joint(last_ball_unit_hash) {
+        Ok(j) => j,
+        Err(e) => bail!(
+            "last ball unit {} not found, err={}",
+            last_ball_unit_hash,
+            e
+        ),
+    };
 
     // check last ball should not retreat
     let last_ball_joint_data = last_ball_joint.read()?;
@@ -472,14 +477,14 @@ fn validate_parents(joint: &JointData) -> Result<()> {
     if old_last_ball != best_parent {
         bail!(
             "last ball not on main chain, last_ball={}, old_last_ball={}",
-            last_ball_joint_data.unit.unit,
+            last_ball_joint.key,
             old_last_ball.unit.unit
         );
     }
 
     // Check if it is stable in view of the parents
     let best_parent = joint.get_best_parent().read()?;
-    if !main_chain::is_stable_to_joint(&last_ball_joint_data, &best_parent)? {
+    if !main_chain::is_stable_to_joint(&last_ball_joint, &best_parent)? {
         bail!(
             "{}: last ball unit {} is not stable in view of your parents {:?}",
             joint.unit.unit,
