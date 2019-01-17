@@ -5,7 +5,7 @@ use cache::{CachedJoint, JointData, SDAG_CACHE};
 use config;
 use error::Result;
 use failure::ResultExt;
-use joint::{Joint, JointSequence, Level};
+use joint::{Joint, JointSequence};
 use main_chain;
 use network::statistics;
 use object_hash;
@@ -439,8 +439,6 @@ fn validate_parents(joint: &JointData) -> Result<()> {
     // check last ball should not retreat
     let last_ball_joint_data = last_ball_joint.read()?;
     let last_ball_level = last_ball_joint_data.get_level();
-    let mut max_parent_last_ball_level = Level::MINIMUM;
-    let mut old_last_ball = last_ball_joint_data.clone();
     for parent in new_parents {
         let parent_joint = parent.read()?;
         let parent_last_ball = parent_joint.get_last_ball_joint()?;
@@ -453,28 +451,6 @@ fn validate_parents(joint: &JointData) -> Result<()> {
                 last_ball_level
             );
         }
-
-        if max_parent_last_ball_level < parent_last_ball_level {
-            max_parent_last_ball_level = parent_last_ball_level;
-            old_last_ball = parent_last_ball;
-        }
-    }
-
-    // earlier unit must be ancestor of joint on main chain
-    let mut best_parent = last_ball_joint_data.clone();
-    while best_parent.get_level() > max_parent_last_ball_level {
-        if old_last_ball == best_parent {
-            break;
-        }
-        best_parent = best_parent.get_best_parent().read()?;
-    }
-
-    if old_last_ball != best_parent {
-        bail!(
-            "last ball not on main chain, last_ball={}, old_last_ball={}",
-            last_ball_joint_data.unit.unit,
-            old_last_ball.unit.unit
-        );
     }
 
     // Check if it is stable in view of the parents

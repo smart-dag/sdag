@@ -79,11 +79,8 @@ fn start_main_chain_worker(rx: mpsc::Receiver<RcuReader<JointData>>) -> JoinHand
                 // always update from the global main chain
                 let free_joints = t_c!(SDAG_CACHE.get_all_free_joints());
                 if let Some(best_joint) = t_c!(find_best_joint(free_joints.iter())) {
-                    let cur_min_wl = best_joint.get_min_wl();
-                    if cur_min_wl > last_stable_level {
-                        last_stable_level =
-                            t_c!(update_main_chain(best_joint, joint, last_stable_level));
-                    }
+                    last_stable_level =
+                        t_c!(update_main_chain(best_joint, joint, last_stable_level));
                 }
             }
         }
