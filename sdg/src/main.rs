@@ -19,7 +19,7 @@ extern crate serde_json;
 mod config;
 
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use chrono::{Local, TimeZone};
 use clap::App;
@@ -388,8 +388,12 @@ fn verify_joints(joints: Vec<Joint>, last_mci: usize) -> Result<()> {
         });
     }
 
-    sem.wait();
+    while !sem.wait_timeout(Duration::from_secs(1)) {
+        println!("current mci={:?}", sdag::main_chain::get_last_stable_mci());
+    }
+
     let dur = now.elapsed();
+    println!("\ntotal mci={:?}", sdag::main_chain::get_last_stable_mci());
     println!("time_used={:?}", dur);
     let sec = dur.as_secs() as f64 + f64::from(dur.subsec_nanos()) / 1_000_000_000.0;
     let tps = total_joints as f64 / sec;
