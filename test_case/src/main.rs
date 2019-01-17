@@ -171,8 +171,6 @@ fn send_payment(
     wallet_info: &WalletInfo,
     flag: &str,
 ) -> Result<()> {
-    let light_props = ws.get_light_props(&wallet_info._00_address)?;
-
     let outputs = address_amount
         .iter()
         .map(|(address, amount)| sdag::spec::Output {
@@ -188,6 +186,8 @@ fn send_payment(
         total_amount + 1000, // we need another 1000 sdg (usually 431 + 197)
         false,               // is_spend_all
     )?;
+
+    let light_props = ws.get_light_props(&wallet_info._00_address)?;
 
     let mut compose_info = sdag::composer::ComposeInfo {
         paid_address: wallet_info._00_address.clone(),

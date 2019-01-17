@@ -18,7 +18,13 @@ fn is_authored_by_any_addr(joint: &Joint, addresses: &[&String]) -> bool {
 /// check if non_serial with unstable units
 /// return true when non_serial, return false when serial
 pub fn is_unstable_joint_non_serial(joint: CachedJoint) -> Result<bool> {
-    let joint_data = joint.read()?;
+    let joint_data = match joint.read() {
+        Ok(val) => val,
+        Err(e) => {
+            error!("is_unstable_joint_non_serial : {}", e);
+            return Ok(false);
+        }
+    };
 
     let unstable_ancestors = get_unstable_ancestor_units(vec![joint.clone()], HashSet::new())?; // A2 (contain self)
 
@@ -44,7 +50,7 @@ pub fn is_unstable_joint_non_serial(joint: CachedJoint) -> Result<bool> {
         .collect::<Vec<_>>();
 
     for u in no_include_relationship_units {
-        let j_data = SDAG_CACHE.get_joint(&u)?.read()?;
+        let j_data = t_c!(t_c!(SDAG_CACHE.get_joint(&u)).read());
         if is_authored_by_any_addr(&j_data, &addresses)
             && j_data.get_sequence() != JointSequence::FinalBad
         {
@@ -74,7 +80,7 @@ fn get_unstable_ancestor_units(
     }
 
     while let Some(joint) = queue.pop_front() {
-        let joint_data = joint.read()?;
+        let joint_data = t_c!(joint.read());
 
         if joint_data.is_stable() {
             continue;
@@ -101,7 +107,8 @@ fn get_descendant_units(joint: CachedJoint) -> Result<HashSet<Arc<String>>> {
 
     // the set include starting joint
     while let Some(joint) = queue.pop_front() {
-        for child in joint.read()?.children.iter() {
+        let joint_data = t_c!(joint.read());
+        for child in joint_data.children.iter() {
             let child = &*child;
             if visited.insert(child.key.clone()) {
                 queue.push_back(child.clone());
