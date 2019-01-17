@@ -79,9 +79,10 @@ fn start_main_chain_worker(rx: mpsc::Receiver<RcuReader<JointData>>) -> JoinHand
                 // always update from the global main chain
                 let free_joints = t_c!(SDAG_CACHE.get_all_free_joints());
                 if let Some(best_joint) = t_c!(find_best_joint(free_joints.iter())) {
-                    let min_wl = best_joint.get_min_wl();
-                    if min_wl > last_stable_level {
-                        last_stable_level = t_c!(update_main_chain(best_joint));
+                    let cur_min_wl = best_joint.get_min_wl();
+                    if cur_min_wl > last_stable_level {
+                        last_stable_level =
+                            t_c!(update_main_chain(best_joint, joint, last_stable_level));
                     }
                 }
             }
@@ -91,8 +92,12 @@ fn start_main_chain_worker(rx: mpsc::Receiver<RcuReader<JointData>>) -> JoinHand
     })
 }
 
-fn update_main_chain(joint: RcuReader<JointData>) -> Result<Level> {
-    let mc_joints = build_unstable_main_chain_from_joint(joint)?;
+fn update_main_chain(
+    best_joint: RcuReader<JointData>,
+    joint: RcuReader<JointData>,
+    last_stable_level: Level,
+) -> Result<Level> {
+    let mc_joints = build_unstable_main_chain_from_joint(best_joint)?;
 
     let stable_mci = mc_joints[mc_joints.len() - 1].get_mci();
     if Level::ZERO < stable_mci && stable_mci < get_last_stable_mci() {
@@ -100,7 +105,12 @@ fn update_main_chain(joint: RcuReader<JointData>) -> Result<Level> {
         ::std::process::abort();
     }
 
-    update_stable_main_chain(mc_joints)
+    if mc_joints.contains(&joint) {
+        update_stable_main_chain(mc_joints, joint)
+    } else {
+        // do nothing here
+        Ok(last_stable_level)
+    }
 }
 
 fn build_unstable_main_chain_from_joint(
@@ -308,7 +318,10 @@ fn update_stable_main_chain_to_joint(
     Ok(stable_joint)
 }
 
-fn update_stable_main_chain(mut unstable_mc_joints: Vec<RcuReader<JointData>>) -> Result<Level> {
+fn update_stable_main_chain(
+    mut unstable_mc_joints: Vec<RcuReader<JointData>>,
+    end_joint: RcuReader<JointData>,
+) -> Result<Level> {
     let mut stable_joint = unstable_mc_joints.pop().expect("no stable joint found!");
 
     // directly update to longest last ball unit since we have already verified
@@ -319,29 +332,20 @@ fn update_stable_main_chain(mut unstable_mc_joints: Vec<RcuReader<JointData>>) -
 
     // find valid end points in order
     let mut last_stable_level = stable_joint.get_level();
-    let mut end_joints = Vec::new();
-    for joint in &unstable_mc_joints {
-        if joint.is_min_wl_increased() && joint.get_min_wl() > last_stable_level {
-            end_joints.push(joint.clone());
-        }
-    }
+    let min_wl = end_joint.get_min_wl();
 
     // forward main chain in order
-    while let Some(mc_free_joint) = end_joints.pop() {
-        let min_wl = mc_free_joint.get_min_wl();
+    while let Some(unstable_mc_joint) = unstable_mc_joints.pop() {
+        //Alternative roots are last stable mc joint's best children but not on current main chain
+        let max_alt_level = calc_max_alt_level(&unstable_mc_joint, &end_joint)?;
 
-        while let Some(unstable_mc_joint) = unstable_mc_joints.pop() {
-            //Alternative roots are last stable mc joint's best children but not on current main chain
-            let max_alt_level = calc_max_alt_level(&unstable_mc_joint, &mc_free_joint)?;
-
-            if min_wl > max_alt_level {
-                mark_main_chain_joint_stable(&unstable_mc_joint, stable_joint.get_mci() + 1)?;
-                stable_joint = unstable_mc_joint;
-                last_stable_level = stable_joint.get_level();
-            } else {
-                unstable_mc_joints.push(unstable_mc_joint);
-                break;
-            }
+        if min_wl > max_alt_level {
+            mark_main_chain_joint_stable(&unstable_mc_joint, stable_joint.get_mci() + 1)?;
+            stable_joint = unstable_mc_joint;
+            last_stable_level = stable_joint.get_level();
+        } else {
+            unstable_mc_joints.push(unstable_mc_joint);
+            break;
         }
     }
 
