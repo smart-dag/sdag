@@ -67,21 +67,22 @@ fn start_main_chain_worker(rx: mpsc::Receiver<RcuReader<JointData>>) -> JoinHand
             last_stable_level
         );
 
-        while let Ok(joint) = rx.recv() {
-            let min_wl = joint.get_min_wl();
+        let mut best_joint: Option<RcuReader<JointData>> = None;
 
-            if min_wl > last_stable_level {
-                info!(
-                    "main chain worker get a valid joint, min_wl = {:?}, unit={}",
-                    min_wl, joint.unit.unit
-                );
-                // last_stable_level = t_c!(update_main_chain(joint));
-                // always update from the global main chain
-                let free_joints = t_c!(SDAG_CACHE.get_all_free_joints());
-                if let Some(best_joint) = t_c!(find_best_joint(free_joints.iter())) {
-                    last_stable_level =
-                        t_c!(update_main_chain(best_joint, joint, last_stable_level));
+        while let Ok(joint) = rx.recv() {
+            if let Some(old_joint) = best_joint.take() {
+                if !joint.is_precedence_than(&old_joint) {
+                    continue;
                 }
+            }
+            best_joint = Some(joint.clone());
+
+            if joint.get_min_wl() > last_stable_level {
+                info!(
+                    "main chain worker get a valid joint, unit={}",
+                    joint.unit.unit
+                );
+                last_stable_level = t_c!(update_main_chain(joint));
             }
         }
         error!("main chain worker stopped!");
@@ -89,12 +90,8 @@ fn start_main_chain_worker(rx: mpsc::Receiver<RcuReader<JointData>>) -> JoinHand
     })
 }
 
-fn update_main_chain(
-    best_joint: RcuReader<JointData>,
-    joint: RcuReader<JointData>,
-    last_stable_level: Level,
-) -> Result<Level> {
-    let mc_joints = build_unstable_main_chain_from_joint(best_joint)?;
+fn update_main_chain(joint: RcuReader<JointData>) -> Result<Level> {
+    let mc_joints = build_unstable_main_chain_from_joint(joint)?;
 
     let stable_mci = mc_joints[mc_joints.len() - 1].get_mci();
     if Level::ZERO < stable_mci && stable_mci < get_last_stable_mci() {
@@ -102,12 +99,7 @@ fn update_main_chain(
         ::std::process::abort();
     }
 
-    if mc_joints.contains(&joint) {
-        update_stable_main_chain(mc_joints, joint)
-    } else {
-        // do nothing here
-        Ok(last_stable_level)
-    }
+    update_stable_main_chain(mc_joints)
 }
 
 fn build_unstable_main_chain_from_joint(
@@ -315,14 +307,12 @@ fn update_stable_main_chain_to_joint(
     Ok(stable_joint)
 }
 
-fn update_stable_main_chain(
-    mut unstable_mc_joints: Vec<RcuReader<JointData>>,
-    end_joint: RcuReader<JointData>,
-) -> Result<Level> {
+fn update_stable_main_chain(mut unstable_mc_joints: Vec<RcuReader<JointData>>) -> Result<Level> {
     let mut stable_joint = unstable_mc_joints.pop().expect("no stable joint found!");
+    let end_joint = unstable_mc_joints[0].clone();
 
     // directly update to longest last ball unit since we have already verified
-    if let Some(ref my_last_ball_unit) = unstable_mc_joints[0].unit.last_ball_unit {
+    if let Some(ref my_last_ball_unit) = end_joint.unit.last_ball_unit {
         let my_last_ball_joint = SDAG_CACHE.get_joint(my_last_ball_unit)?.read()?;
         stable_joint = update_stable_main_chain_to_joint(stable_joint, my_last_ball_joint)?;
     }
