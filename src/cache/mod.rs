@@ -101,7 +101,7 @@ impl SDagCache {
 
     /// get a joint form the hashmap, if not exist just insert one with none
     fn get_joint_or_none(&self, key: &str) -> CachedJoint {
-        match self.joints.read().unwrap().get_joint(key) {
+        match self.try_get_joint(key) {
             None => self.insert_empty_joint(key),
             Some(j) => j,
         }
@@ -114,7 +114,7 @@ impl SDagCache {
 
     /// get a joint from the hashmap, if not exist try load from kv store
     pub fn get_joint(&self, key: &str) -> Result<CachedJoint> {
-        match self.joints.read().unwrap().get_joint(key) {
+        match self.try_get_joint(key) {
             None => self.load_joint_from_kv(key),
             Some(j) => Ok(j),
         }
@@ -249,16 +249,16 @@ impl SDagCache {
         let mut valid_parents = SmallVec::<[CachedJoint; config::MAX_PARENT_PER_UNIT]>::new();
         let mut missing_parents = SmallVec::<[String; config::MAX_PARENT_PER_UNIT]>::new();
 
-        let reader = self.joints.read().unwrap();
-        for parent in &joint_data.unit.parent_units {
-            // check if it's a known bad joint
-            if reader.is_known_bad_joint(parent) {
-                self.purge_bad_joint(&key, String::from("bad parent"));
-                bail!("joint parents contains known bad joint");
+        {
+            let reader = self.joints.read().unwrap();
+            for parent in &joint_data.unit.parent_units {
+                // check if it's a known bad joint
+                if reader.is_known_bad_joint(parent) {
+                    self.purge_bad_joint(&key, String::from("bad parent"));
+                    bail!("joint parents contains known bad joint");
+                }
             }
         }
-        // release the read lock
-        drop(reader);
 
         let mut g = self.joints.write().unwrap();
         for parent in &joint_data.unit.parent_units {

@@ -106,6 +106,7 @@ impl<K, V: LoadFromKv<K>> CachedData<K, V> {
     pub fn read(&self) -> Result<RcuReader<V>> {
         match self.data.read() {
             None => {
+                // TODO: check if the unit is known bad, we may purge it already
                 // we should read from KV store and
                 // return update self with the correct data
                 self.read_from_db()
