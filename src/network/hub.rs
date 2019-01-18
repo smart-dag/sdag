@@ -1097,6 +1097,17 @@ impl HubConn {
 // Global Functions
 //---------------------------------------------------------------------------------------
 
+/// timely broadcast the good free joints in case they are not send out successfully
+pub fn broadcast_free_joints() {
+    if let Ok(free_joints) = SDAG_CACHE.get_good_free_joints() {
+        for joint in free_joints {
+            if let Ok(joint_data) = joint.read() {
+                t_c!(WSS.broadcast_joint(joint_data));
+            }
+        }
+    }
+}
+
 pub fn auto_connection() {
     let mut counts = WSS.get_needed_outbound_peers();
     if counts == 0 {
