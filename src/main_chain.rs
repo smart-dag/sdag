@@ -57,10 +57,12 @@ impl MainChainWorker {
 fn start_main_chain_worker(rx: mpsc::Receiver<RcuReader<JointData>>) -> JoinHandle<()> {
     go!(move || {
         // init it as -1 then the genesis min_wl = 0 can go forward
-        let mut last_stable_level = match LAST_STABLE_JOINT.read() {
-            Some(j) => j.get_mci(),
-            None => Level::MINIMUM,
-        };
+        let mut last_stable_level = Level::MINIMUM;
+
+        // let mut last_stable_level = match LAST_STABLE_JOINT.read() {
+        //     Some(j) => j.get_mci(),
+        //     None => Level::MINIMUM,
+        // };
 
         info!(
             "main chain worker started, last_stable_level = {:?}",

@@ -5,7 +5,7 @@ mod utxo;
 use std::collections::{BTreeMap, HashMap};
 
 use self::utxo::{UtxoData, UtxoKey};
-use cache::{JointData, SDAG_CACHE};
+use cache::{CachedJoint, JointData, SDAG_CACHE};
 use config;
 use error::Result;
 use joint::{JointSequence, Level};
@@ -454,9 +454,10 @@ impl BusinessCache {
     }
 
     /// validate unstable joint with no global order
-    pub fn validate_unstable_joint(&self, joint: &JointData) -> Result<JointSequence> {
+    pub fn validate_unstable_joint(&self, cached_joint: CachedJoint) -> Result<JointSequence> {
+        let joint = cached_joint.read()?;
         // global check
-        let state = validate_unstable_joint_serial(joint)?;
+        let state = validate_unstable_joint_serial(cached_joint)?;
         if state != JointSequence::Good {
             return Ok(state);
         }
@@ -467,7 +468,7 @@ impl BusinessCache {
                 .temp_business_state
                 .read()
                 .unwrap()
-                .validate_message(joint, i);
+                .validate_message(&joint, i);
             if let Err(e) = state {
                 error!("validate_unstable_joint, err={}", e);
                 return Ok(JointSequence::TempBad);
@@ -476,7 +477,7 @@ impl BusinessCache {
                 self.temp_business_state
                     .write()
                     .unwrap()
-                    .apply_message(joint, i)?;
+                    .apply_message(&joint, i)?;
             }
         }
 
@@ -647,11 +648,8 @@ fn validate_message_format(msg: &Message) -> Result<()> {
     Ok(())
 }
 
-fn validate_unstable_joint_serial(joint: &JointData) -> Result<JointSequence> {
-    // check unstable joints non serial
-    let cached_joint = SDAG_CACHE.try_get_joint(&joint.unit.unit).unwrap();
-
-    if crate::serial_check::is_unstable_joint_non_serial(cached_joint)? {
+fn validate_unstable_joint_serial(joint: CachedJoint) -> Result<JointSequence> {
+    if ::serial_check::is_unstable_joint_non_serial(joint)? {
         return Ok(JointSequence::NonserialBad);
     }
 

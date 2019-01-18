@@ -52,29 +52,23 @@ pub fn validate_ready_joint(joint: CachedJoint) -> Result<()> {
     // got triggered, unless setup a timer to seek those valid joints that are ready
     joint_data.cacl_static_props()?;
 
-    match normal_validate(&joint_data) {
+    match normal_validate(joint) {
         Ok(_) => {
             // save the unhandled joint to normal
-            SDAG_CACHE.normalize_joint(&joint.key);
+            SDAG_CACHE.normalize_joint(&joint_data.unit.unit);
             statistics::update_statistics(joint_data.get_peer_id(), true, true);
         }
         Err(e) => {
             // validation failed, purge the bad joint
             error!(
                 "normal_validate, unit={}, err={}",
-                &joint.key,
+                &joint_data.unit.unit,
                 e.to_string()
             );
-            SDAG_CACHE.purge_bad_joint(&joint.key, e.to_string());
+            SDAG_CACHE.purge_bad_joint(&joint_data.unit.unit, e.to_string());
             statistics::update_statistics(joint_data.get_peer_id(), true, false);
             return Err(e);
         }
-    }
-
-    // validate messages after joint transfer to normal joints
-    // we need a complete graph data to check the non-serial joint
-    if joint_data.unit.content_hash.is_none() {
-        validate_messages(&joint_data);
     }
 
     // only broadcast good joints
@@ -92,26 +86,31 @@ pub fn validate_ready_joint(joint: CachedJoint) -> Result<()> {
 }
 
 // validation before move the joint to normal joints
-fn normal_validate(joint: &JointData) -> Result<()> {
-    let unit = &joint.unit;
+fn normal_validate(cached_joint: CachedJoint) -> Result<()> {
+    let joint = cached_joint.read()?;
 
-    if !unit.is_genesis_unit() {
-        validate_parents(joint)?;
+    if !joint.unit.is_genesis_unit() {
+        validate_parents(&joint)?;
         // validate_ball(joint)?;
     }
 
-    validate_witnesses(joint).context("validate witnesses failed")?;
+    validate_witnesses(&joint).context("validate witnesses failed")?;
 
     if !joint.skiplist_units.is_empty() {
         validate_skip_list(&joint.skiplist_units)?;
     }
 
-    validate_authors(joint)?;
+    validate_authors(&joint)?;
 
     // check if include last self unit
-    business::BUSINESS_CACHE.is_include_last_stable_self_joint(joint)?;
+    business::BUSINESS_CACHE.is_include_last_stable_self_joint(&joint)?;
     // check sub businesses
-    business::check_business(joint)?;
+    business::check_business(&joint)?;
+
+    // temp validate the business
+    if joint.unit.content_hash.is_none() {
+        validate_messages(cached_joint);
+    }
 
     // save definition after validate success
     for author in joint.unit.authors.iter() {
@@ -746,26 +745,28 @@ pub fn validate_authentifiers<S: std::hash::BuildHasher>(
 }
 
 /// after normalization
-fn validate_messages(joint: &JointData) {
-    info!("validateMessages {:?}", joint.unit.unit);
+fn validate_messages(joint: CachedJoint) {
+    info!("validateMessages {:?}", joint.key);
+    // we can safely unwrap here since we come here
+    let joint_data = joint.read().unwrap();
 
-    if joint.unit.content_hash.is_some() {
+    if joint_data.unit.content_hash.is_some() {
         info!(
             "payload has been cleared, content_hash is [{:?}]",
-            joint.unit.content_hash
+            joint_data.unit.content_hash
         );
         return;
     }
 
     // validate if have enough balance to pay commission first
     match business::BUSINESS_CACHE.validate_unstable_joint(joint) {
-        Ok(s) => joint.set_sequence(s),
+        Ok(s) => joint_data.set_sequence(s),
         Err(e) => {
             error!(
                 "validate_unstable_joint failed, unit = {}, err={}",
-                joint.unit.unit, e
+                joint_data.unit.unit, e
             );
-            joint.set_sequence(JointSequence::FinalBad);
+            joint_data.set_sequence(JointSequence::FinalBad);
         }
     }
 }
