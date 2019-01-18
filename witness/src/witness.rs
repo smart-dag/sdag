@@ -128,6 +128,7 @@ fn adjust_witnessing_speed() -> Result<()> {
 /// 2) non witness joint mci > min retrievable mci, min retrievable is last_stable_joint's last_stable_unit mci
 /// 3) last self unstable joint support current main chain, that means current main chain include my last unstable joint (cancel)
 fn is_need_witnessing() -> Result<(bool)> {
+    info!("if need post witness joint?");
     let _g = match IS_WITNESSING.try_lock() {
         Some(g) => g,
         None => {
@@ -150,6 +151,7 @@ fn is_need_witnessing() -> Result<(bool)> {
     if !need_witness {
         return Ok(false);
     }
+    info!("more than 6 witness on path of best parents");
 
     if has_normal_joint {
         return Ok(true);
@@ -289,7 +291,7 @@ fn witness() -> Result<()> {
 
     // divide one output into two outputs, to increase witnessing concurrent performance
     // let amount = divide_money(&WALLET_INFO._00_address)?;
-
+    info!("will compose and post a witness joint");
     for i in 0..10 {
         match compose_and_normalize() {
             Ok(_) => break,
@@ -353,7 +355,9 @@ fn compose_and_normalize() -> Result<()> {
     }
 
     let joint = sdag::composer::compose_joint(compose_info, &*WALLET_INFO)?;
+
     let cached_joint = SDAG_CACHE.add_new_joint(joint, None)?;
+
     let joint_data = cached_joint.read()?;
     sdag::validation::validate_ready_joint(cached_joint)?;
 
@@ -366,7 +370,10 @@ fn compose_and_normalize() -> Result<()> {
         }
     }
     SELF_LEVEL.store(max_parent_level.value() as isize + 1, Ordering::Relaxed);
-
+    info!(
+        "comose and validate success, will post [{}]",
+        joint_data.unit.unit
+    );
     // we just post the joint to one hub
     if let Some(ws) = sdag::network::hub::WSS.get_next_peer() {
         ws.post_joint(&joint_data)?;
