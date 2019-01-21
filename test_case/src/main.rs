@@ -209,8 +209,14 @@ fn send_payment(
 
     println!("FROM  : {}", wallet_info._00_address);
     println!("TO    : ");
-    for (address, amount) in address_amount.clone() {
-        println!("      address : {}, amount : {}", address, amount);
+    for (index, (address, amount)) in address_amount.clone().iter().enumerate() {
+        if index < 20 {
+            println!("      address : {}, amount : {}", address, amount);
+        } else {
+            println!("      ......");
+            println!("      {} outputs", address_amount.len() + 1);
+            break;
+        }
     }
     println!("UNIT  : {}", joint.unit.unit);
 
@@ -420,9 +426,9 @@ fn main() -> Result<()> {
         }
 
         let cycle_index = value_t!(send.value_of("continue"), usize).ok();
-        let amount = value_t!(send.value_of("pay"), f64).ok();
+        let paid_amount = value_t!(send.value_of("pay"), f64).ok();
 
-        if cycle_index.is_some() && amount.is_none() {
+        if cycle_index.is_some() && paid_amount.is_none() {
             info!("continuously");
 
             for _ in 0..cycle_index.unwrap() {
@@ -444,7 +450,7 @@ fn main() -> Result<()> {
             }
         }
 
-        if let Some(num) = amount {
+        if let Some(num) = paid_amount {
             let mut address_amount = test_wallets
                 .iter()
                 .map(|w| (w._00_address.clone(), num as f64))
@@ -457,12 +463,18 @@ fn main() -> Result<()> {
                     .collect::<Vec<(String, f64)>>(),
             );
 
+            // When to compose,it will add a change_address automatically,
+            // and each transaction only supports 128 outputs,
+            // so MAX_OUTPUTS_PER_PAYMENT_MESSAGE has to sub 1
             for _ in 0..cycle_index.unwrap_or(1) {
-                for chunk in address_amount.chunks(sdag::config::MAX_OUTPUTS_PER_PAYMENT_MESSAGE) {
+                for chunk in
+                    address_amount.chunks(sdag::config::MAX_OUTPUTS_PER_PAYMENT_MESSAGE - 1)
+                {
                     while let Err(e) = send_payment(&ws, chunk.to_vec(), &wallet_info, "good") {
                         coroutine::sleep(Duration::from_secs(10));
                         eprintln!("{}", e);
                     }
+                    coroutine::sleep(Duration::from_secs(7));
                 }
             }
 

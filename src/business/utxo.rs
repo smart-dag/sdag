@@ -667,7 +667,11 @@ fn validate_payment_format(message: &Message) -> Result<()> {
             if payment.inputs.len() > config::MAX_INPUTS_PER_PAYMENT_MESSAGE
                 || payment.outputs.len() > config::MAX_OUTPUTS_PER_PAYMENT_MESSAGE
             {
-                bail!("too many inputs or output")
+                bail!(
+                    "too many inputs {} or output {}",
+                    payment.inputs.len(),
+                    payment.outputs.len()
+                )
             }
         }
         _ => bail!("validate_payment_format: not payment"),
