@@ -535,7 +535,6 @@ pub fn is_stable_to_joint(
                 );
                 return Ok(false);
             }
-            return Ok(true);
         }
     } else {
         // earlier joint is after stable point
