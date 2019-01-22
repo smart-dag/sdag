@@ -79,8 +79,12 @@ pub fn validate_ready_joint(joint: CachedJoint) -> Result<()> {
         });
     }
 
-    if joint_data.is_min_wl_increased() && sequence == JointSequence::Good {
-        main_chain::MAIN_CHAIN_WORKER.push_ready_joint(joint_data)?;
+    if sequence == JointSequence::Good {
+        if joint_data.get_last_ball_joint()?.get_level() > main_chain::get_last_stable_level()
+            || joint_data.is_min_wl_increased()
+        {
+            main_chain::MAIN_CHAIN_WORKER.push_ready_joint(joint_data)?;
+        }
     }
 
     Ok(())

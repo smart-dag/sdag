@@ -281,10 +281,7 @@ fn update_stable_main_chain_to_joint(
     mut stable_joint: RcuReader<JointData>,
     unstable_mc_joints: &mut Vec<RcuReader<JointData>>,
 ) -> Result<RcuReader<JointData>> {
-    let last_ball_joint = match unstable_mc_joints[0].unit.last_ball_unit.clone() {
-        None => return Ok(stable_joint),
-        Some(ref unit) => SDAG_CACHE.get_joint(unit)?.read()?,
-    };
+    let last_ball_joint = unstable_mc_joints[0].get_last_ball_joint()?;
 
     let mut stable_level = stable_joint.get_level();
     let last_ball_level = last_ball_joint.get_level();
@@ -608,6 +605,14 @@ pub fn build_unstable_main_chain() -> Result<Vec<RcuReader<JointData>>> {
 pub fn get_last_stable_mci() -> Level {
     match LAST_STABLE_JOINT.read() {
         Some(j) => j.get_mci(),
+        None => Level::ZERO,
+    }
+}
+
+/// get stable point level
+pub fn get_last_stable_level() -> Level {
+    match LAST_STABLE_JOINT.read() {
+        Some(j) => j.get_level(),
         None => Level::ZERO,
     }
 }
