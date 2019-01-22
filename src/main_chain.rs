@@ -508,7 +508,7 @@ pub fn is_stable_to_joint(
     let stable_point_level = stable_point.get_level();
 
     // earlier joint is on main chain and before the stable point
-    if earlier_joint_level < stable_point_level {
+    if earlier_joint_level <= stable_point_level {
         // earlier joint must be stable if it on main chain
         if !earlier_joint.is_on_main_chain() {
             // earlier joint must not no main chain

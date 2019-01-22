@@ -341,8 +341,11 @@ impl SDagCacheInner {
             .filter_map(|(k, j)| {
                 // free joints must be in cache so that we can safely unwrap it
                 let joint = j.raw_read();
-                if joint.get_sequence() == JointSequence::Good {
-                    return None;
+                match joint.get_sequence() {
+                    JointSequence::Good | JointSequence::FinalBad | JointSequence::NoCommission => {
+                        return None;
+                    }
+                    JointSequence::TempBad | JointSequence::NonserialBad => {}
                 }
 
                 if now - joint.get_create_time() < timeout {

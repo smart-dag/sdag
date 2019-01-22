@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use config;
 use error::Result;
-use joint::{Joint, Level};
+use joint::{Joint, JointSequence, Level};
 use kv_store::{LoadFromKv, KV_STORE};
 use may::coroutine;
 use may::sync::RwLock;
@@ -144,8 +144,13 @@ impl SDagCache {
                 v.into_iter()
                     .filter_map(|j| {
                         if let Ok(joint) = j.read() {
-                            if joint.get_sequence() != ::joint::JointSequence::Good {
-                                return Some(joint.unit.unit.clone());
+                            match joint.get_sequence() {
+                                JointSequence::Good
+                                | JointSequence::FinalBad
+                                | JointSequence::NoCommission => return None,
+                                JointSequence::TempBad | JointSequence::NonserialBad => {
+                                    return Some(joint.unit.unit.clone());
+                                }
                             }
                         }
                         None
