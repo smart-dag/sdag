@@ -276,31 +276,24 @@ fn mark_main_chain_joint_stable(main_chain_joint: &RcuReader<JointData>, mci: Le
     Ok(())
 }
 
+// update to last stable ball unit and pop from unstable_mc_joints
 fn update_stable_main_chain_to_joint(
     mut stable_joint: RcuReader<JointData>,
-    mut to_joint: RcuReader<JointData>,
+    unstable_mc_joints: &mut Vec<RcuReader<JointData>>,
 ) -> Result<RcuReader<JointData>> {
+    let last_ball_joint = match unstable_mc_joints[0].unit.last_ball_unit.clone() {
+        None => return Ok(stable_joint),
+        Some(ref unit) => SDAG_CACHE.get_joint(unit)?.read()?,
+    };
+
     let mut stable_level = stable_joint.get_level();
-    let to_joint_level = to_joint.get_level();
-    if to_joint_level <= stable_level {
-        return Ok(stable_joint);
-    }
+    let last_ball_level = last_ball_joint.get_level();
+    while last_ball_level > stable_level {
+        let joint = match unstable_mc_joints.pop() {
+            None => break,
+            Some(joint) => joint,
+        };
 
-    let mut stable_joints = Vec::new();
-    while to_joint.get_level() > stable_level {
-        stable_joints.push(to_joint.clone());
-        to_joint = to_joint.get_best_parent().read()?;
-    }
-
-    if to_joint != stable_joint {
-        bail!(
-            "update_stable_main_chain_to_joint not lead to main chain, joint={}, stale_joint={}",
-            stable_joints[0].unit.unit,
-            stable_joint.unit.unit
-        );
-    }
-
-    while let Some(joint) = stable_joints.pop() {
         stable_level += 1;
         mark_main_chain_joint_stable(&joint, stable_level)?;
         stable_joint = joint;
@@ -314,10 +307,7 @@ fn update_stable_main_chain(mut unstable_mc_joints: Vec<RcuReader<JointData>>) -
     let end_joint = unstable_mc_joints[0].clone();
 
     // directly update to longest last ball unit since we have already verified
-    if let Some(ref my_last_ball_unit) = end_joint.unit.last_ball_unit {
-        let my_last_ball_joint = SDAG_CACHE.get_joint(my_last_ball_unit)?.read()?;
-        stable_joint = update_stable_main_chain_to_joint(stable_joint, my_last_ball_joint)?;
-    }
+    stable_joint = update_stable_main_chain_to_joint(stable_joint, &mut unstable_mc_joints)?;
 
     // find valid end points in order
     let mut last_stable_level = stable_joint.get_level();
@@ -432,7 +422,6 @@ fn is_stable_to_joints(
     // Fast return if min_wl is already greater than max_alt_level_possible
     // this max_alt_level_possible is not the real max_alt_level
     // but it's fine to return since it can't affect the stable result
-
     'check_end_joints: for (min_wl, end_joint) in joints {
         if min_wl > max_alt_level_possible {
             return Ok(true);

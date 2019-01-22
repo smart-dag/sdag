@@ -72,13 +72,14 @@ pub fn validate_ready_joint(joint: CachedJoint) -> Result<()> {
     }
 
     // only broadcast good joints
-    if joint_data.get_sequence() == JointSequence::Good {
+    let sequence = joint_data.get_sequence();
+    if sequence == JointSequence::Good {
         ::utils::event::emit_event(NewJointEvent {
             joint: joint_data.clone(),
         });
     }
 
-    if joint_data.is_min_wl_increased() {
+    if joint_data.is_min_wl_increased() && sequence == JointSequence::Good {
         main_chain::MAIN_CHAIN_WORKER.push_ready_joint(joint_data)?;
     }
 
