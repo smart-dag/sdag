@@ -221,6 +221,10 @@ impl JointData {
     }
 
     pub fn set_sequence(&self, sequence: JointSequence) {
+        match sequence {
+            JointSequence::Good | JointSequence::TempBad => {}
+            _ => warn!("unit={}, set sequence={:?}", self.unit.unit, sequence),
+        }
         self.props.write().unwrap().sequence = sequence;
     }
 
