@@ -609,14 +609,6 @@ pub fn get_last_stable_mci() -> Level {
     }
 }
 
-/// get stable point level
-pub fn get_last_stable_level() -> Level {
-    match LAST_STABLE_JOINT.read() {
-        Some(j) => j.get_level(),
-        None => Level::ZERO,
-    }
-}
-
 /// get the stable point joint
 pub fn get_last_stable_joint() -> RcuReader<JointData> {
     use std::time::Duration;

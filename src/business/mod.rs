@@ -463,21 +463,16 @@ impl BusinessCache {
         }
 
         // for each message do business related validation
+        let mut g = self.temp_business_state.write().unwrap();
         for i in 0..joint.unit.messages.len() {
-            let state = self
-                .temp_business_state
-                .read()
-                .unwrap()
-                .validate_message(&joint, i);
+            let state = g.validate_message(&joint, i);
             if let Err(e) = state {
                 error!("validate_unstable_joint, err={}", e);
+                // now we only support one message for a unit
                 return Ok(JointSequence::TempBad);
             } else {
                 // unordered validate pass, apply it
-                self.temp_business_state
-                    .write()
-                    .unwrap()
-                    .apply_message(&joint, i)?;
+                g.apply_message(&joint, i)?;
             }
         }
 
