@@ -504,6 +504,9 @@ pub fn is_stable_to_joint(
     let stable_point = get_last_stable_joint();
     let stable_point_level = stable_point.get_level();
 
+    // select the latest joint between stable joint and earlier joint
+    let mut entry_point = &stable_point;
+
     // earlier joint is on main chain and before the stable point
     if earlier_joint_level <= stable_point_level {
         // earlier joint must be stable if it on main chain
@@ -551,6 +554,8 @@ pub fn is_stable_to_joint(
             );
             return Ok(false);
         }
+
+        entry_point = &earlier_joint;
     }
 
     // earlier unit must be ancestor of joint on main chain
@@ -568,7 +573,7 @@ pub fn is_stable_to_joint(
             }
         }
 
-        if *earlier_joint == best_parent {
+        if *entry_point == best_parent {
             is_ancestor = true;
             break;
         }
