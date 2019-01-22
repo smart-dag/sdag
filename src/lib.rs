@@ -75,29 +75,26 @@ macro_rules! try_go {
 #[macro_use]
 pub mod utils;
 
-pub mod cache;
-pub mod kv_store;
-
 pub mod business;
-pub mod config;
-pub mod error;
-
-pub mod my_witness;
-pub mod network;
-pub mod paid_witnessing;
-
-pub mod serial_check;
-pub mod spec;
-
+pub mod cache;
 pub mod catchup;
 pub mod composer;
+pub mod config;
+pub mod error;
 pub mod finalization;
 pub mod joint;
+pub mod kv_store;
 pub mod light;
 pub mod main_chain;
+pub mod my_witness;
+pub mod network;
 mod obj_ser;
 pub mod object_hash;
+pub mod paid_witnessing;
+pub mod serial_check;
 pub mod signature;
+pub mod spec;
+pub mod statistics;
 pub mod time;
 pub mod validation;
 pub mod witness_proof;

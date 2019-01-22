@@ -18,6 +18,7 @@ extern crate serde_json;
 
 mod config;
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -29,6 +30,7 @@ use sdag::cache::SDAG_CACHE;
 use sdag::error::Result;
 use sdag::joint::{Joint, JointSequence};
 use sdag::network::wallet::WalletConn;
+use sdag::statistics::{LastConnStat, StatsPerPeriod};
 use sdag::try_go;
 use sdag::validation;
 use sdag_wallet_base::{Base64KeyExt, ExtendedPrivKey, ExtendedPubKey, Mnemonic};
@@ -179,40 +181,80 @@ fn net_state(ws: &Arc<WalletConn>) -> Result<()> {
     Ok(())
 }
 
-fn print_stats_matrix(conn: sdag::network::statistics::ConnStats) {
+fn print_stats_matrix(stat: LastConnStat) {
     println!("|           |  RX_GOOD |  RX_BAD  |    TX    |");
     println!("|-----------|----------|----------|----------|");
+
     println!(
         "| LAST_SEC  | {:>8} | {:>8} | {:>8} |",
-        conn.last_sec.rx_good, conn.last_sec.rx_bad, conn.last_sec.tx_total
+        stat.sec.rx_good, stat.sec.rx_bad, stat.sec.tx_total
     );
+
     println!(
         "| LAST_MIN  | {:>8} | {:>8} | {:>8} |",
-        conn.last_min.rx_good, conn.last_min.rx_bad, conn.last_min.tx_total
+        stat.min.rx_good, stat.min.rx_bad, stat.min.tx_total
     );
+
     println!(
         "| LAST_HOUR | {:>8} | {:>8} | {:>8} |",
-        conn.last_hour.rx_good, conn.last_hour.rx_bad, conn.last_hour.tx_total
+        stat.hour.rx_good, stat.hour.rx_bad, stat.hour.tx_total
     );
+
     println!(
-        "| LAST_DAY  | {:>8} | {:>8} | {:>8} |\n",
-        conn.last_day.rx_good, conn.last_day.rx_bad, conn.last_day.tx_total
+        "| LAST_DAY  | {:>8} | {:>8} | {:>8} |",
+        stat.day.rx_good, stat.day.rx_bad, stat.day.tx_total
     );
+}
+
+fn calc_overall_stats(stats: &HashMap<String, LastConnStat>) -> LastConnStat {
+    let mut total_sec = StatsPerPeriod::default();
+    let mut total_min = StatsPerPeriod::default();
+    let mut total_hour = StatsPerPeriod::default();
+    let mut total_day = StatsPerPeriod::default();
+
+    for stat in stats.values() {
+        total_sec.rx_good += stat.sec.rx_good;
+        total_sec.rx_bad += stat.sec.rx_bad;
+        total_sec.tx_total += stat.sec.tx_total;
+
+        total_min.rx_good += stat.min.rx_good;
+        total_min.rx_bad += stat.min.rx_bad;
+        total_min.tx_total += stat.min.tx_total;
+
+        total_hour.rx_good += stat.hour.rx_good;
+        total_hour.rx_bad += stat.hour.rx_bad;
+        total_hour.tx_total += stat.hour.tx_total;
+
+        total_day.rx_good += stat.day.rx_good;
+        total_day.rx_bad += stat.day.rx_bad;
+        total_day.tx_total += stat.day.tx_total;
+    }
+
+    LastConnStat {
+        sec: total_sec,
+        min: total_min,
+        hour: total_hour,
+        day: total_day,
+        ..Default::default()
+    }
 }
 
 fn net_statistics(ws: &Arc<WalletConn>) -> Result<()> {
     let net_stats = ws.get_net_statistics()?;
-
+    let overall_stats = calc_overall_stats(&net_stats);
     // Overall Stats
     println!("---\n");
     println!("- OVERALL\n");
-    print_stats_matrix(net_stats.overall);
+    print_stats_matrix(overall_stats);
 
-    for conn in net_stats.connections {
-        println!("---\n");
-        println!("- PEER_ID   : {}", conn.peer_id);
-        println!("- PEER_ADDR : {}\n", conn.peer_addr);
-        print_stats_matrix(conn);
+    for (id, stat) in net_stats {
+        if stat.is_connected {
+            println!("---\n");
+            println!("- PEER_ID   : {}", id);
+            println!("- PEER_ADDR : {}", stat.peer_addr);
+            // println!("- IS_CONN   : {}\n", stat.is_connected);
+            print_stats_matrix(stat);
+        }
     }
 
     Ok(())

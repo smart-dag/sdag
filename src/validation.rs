@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use business;
 use cache::{CachedJoint, JointData, SDAG_CACHE};
@@ -7,13 +8,13 @@ use error::Result;
 use failure::ResultExt;
 use joint::{Joint, JointSequence};
 use main_chain;
-use network::statistics;
 use object_hash;
 use rcu_cell::RcuReader;
 use serde::Deserialize;
 use serde_json::Value;
 use signature;
 use spec::{Definition, Unit};
+use statistics;
 
 //---------------------------------------------------------------------------------------
 // MciStableEvent
@@ -52,11 +53,15 @@ pub fn validate_ready_joint(joint: CachedJoint) -> Result<()> {
     // got triggered, unless setup a timer to seek those valid joints that are ready
     joint_data.cacl_static_props()?;
 
+    let peer_id = joint_data
+        .get_peer_id()
+        .unwrap_or_else(|| Arc::new(String::from("unknown")));
     match normal_validate(joint) {
         Ok(_) => {
             // save the unhandled joint to normal
             SDAG_CACHE.normalize_joint(&joint_data.unit.unit);
-            statistics::update_statistics(joint_data.get_peer_id(), true, true);
+
+            statistics::increase_stats(peer_id, true, true);
         }
         Err(e) => {
             // validation failed, purge the bad joint
@@ -66,7 +71,7 @@ pub fn validate_ready_joint(joint: CachedJoint) -> Result<()> {
                 e.to_string()
             );
             SDAG_CACHE.purge_bad_joint(&joint_data.unit.unit, e.to_string());
-            statistics::update_statistics(joint_data.get_peer_id(), true, false);
+            statistics::increase_stats(peer_id, true, false);
             return Err(e);
         }
     }
@@ -579,7 +584,7 @@ fn validate_witnesses(joint: &JointData) -> Result<()> {
 
 fn validate_authors(joint: &JointData) -> Result<()> {
     let validate_author_state = joint.get_validate_authors_state();
-    // this must be the scond call in normal validate stage
+    // this must be the second call in normal validate stage
     // the basic validation has done it already
     if validate_author_state & 0x01 == 0x01 {
         return Ok(());
@@ -610,7 +615,7 @@ fn validate_authors(joint: &JointData) -> Result<()> {
             let unit_hash = joint.unit.calc_unit_hash_to_sign();
             validate_authentifiers(&Value::Null, definition, &unit_hash, &author.authentifiers)?;
         } else {
-            // get_definitons failed, or definition unit is not stable,
+            // get_definitions failed, or definition unit is not stable,
             // basic validate can set validate_authors_state 0x10|0x11
             let definition = match get_definition(&author.address) {
                 Ok(v) => v,

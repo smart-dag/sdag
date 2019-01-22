@@ -339,8 +339,8 @@ impl JointData {
         self.props.read().unwrap().create_time
     }
 
-    pub fn get_peer_id(&self) -> Option<&str> {
-        self.peer_id.as_ref().map(|s| s.as_str())
+    pub fn get_peer_id(&self) -> Option<Arc<String>> {
+        self.peer_id.clone()
     }
 
     pub fn set_stable_prev_self_unit(&self, unit: String) {

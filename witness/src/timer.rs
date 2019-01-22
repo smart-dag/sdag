@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use may::coroutine;
 use sdag::network::hub;
+use sdag::statistics;
 
 use witness;
 
@@ -25,7 +26,7 @@ pub fn start_global_timers() {
     go!(move || loop {
         const TIMEOUT: u64 = 60; // 1min
         coroutine::sleep(Duration::from_secs(TIMEOUT / 2));
-        info!("purge_junk_unhandled_joints");
+        info!("purge_tempbad_joints");
         t!(hub::purge_temp_bad_free_joints(TIMEOUT * 1000));
     });
 
@@ -44,5 +45,11 @@ pub fn start_global_timers() {
             Duration::from_secs(1)
         });
         coroutine::sleep(dur);
+    });
+
+    // reset peer statistics
+    go!(move || loop {
+        statistics::update_stats();
+        coroutine::sleep(Duration::from_secs(1));
     });
 }

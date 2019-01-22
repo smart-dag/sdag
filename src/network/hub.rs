@@ -5,7 +5,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use super::network_base::{Sender, Server, WsConnection};
-use super::statistics::{self, ConnStats, ConnectionStats};
 use business::BUSINESS_CACHE;
 use cache::{JointData, SDAG_CACHE};
 use catchup;
@@ -23,6 +22,7 @@ use may::sync::RwLock;
 use object_hash;
 use rcu_cell::RcuReader;
 use serde_json::{self, Value};
+use statistics;
 use tungstenite::client::client;
 use tungstenite::handshake::client::Request;
 use tungstenite::protocol::Role;
@@ -61,16 +61,6 @@ pub struct HubNetState {
     // peer_id, peer_addr, is_source, is_subscribed
     pub in_bounds: Vec<ConnState>,
     pub out_bounds: Vec<ConnState>,
-}
-
-//---------------------------------------------------------------------------------------
-// HubStatistics
-//---------------------------------------------------------------------------------------
-
-#[derive(Serialize, Deserialize)]
-pub struct HubStatistics {
-    pub overall: ConnStats,
-    pub connections: Vec<ConnStats>,
 }
 
 //---------------------------------------------------------------------------------------
@@ -166,7 +156,7 @@ impl WsConnections {
 
         for conn in self.conns.read().unwrap().values().cloned() {
             // only send to who subscribed and not the source
-            if conn.is_subscribed() && joint.get_peer_id() != Some(conn.get_peer_id().as_str()) {
+            if conn.is_subscribed() && joint.get_peer_id() != Some(conn.get_peer_id()) {
                 let joint = joint.clone();
                 try_go!(move || conn.send_joint(&joint));
             }
@@ -223,24 +213,16 @@ impl WsConnections {
         }
     }
 
-    fn get_net_statistics(&self) -> HubStatistics {
-        HubStatistics {
-            overall: statistics::get_overall(),
-            connections: self
-                .conns
-                .read()
-                .unwrap()
-                .values()
-                .map(|c| ConnStats {
-                    peer_id: c.get_peer_id().to_string(),
-                    peer_addr: c.get_peer_addr().to_string(),
-                    last_sec: c.get_stats().get_sec(),
-                    last_min: c.get_stats().get_min(),
-                    last_hour: c.get_stats().get_hour(),
-                    last_day: c.get_stats().get_day(),
-                })
-                .collect(),
+    fn get_net_statistics(&self) -> HashMap<String, statistics::LastConnStat> {
+        let mut all_stats = statistics::get_all_last_stats();
+        let g = self.conns.read().unwrap();
+        for conn in g.keys() {
+            if let Some(stat) = all_stats.get_mut(conn.as_str()) {
+                stat.is_connected = true;
+            }
         }
+
+        all_stats
     }
 
     fn get_needed_outbound_peers(&self) -> usize {
@@ -264,42 +246,6 @@ impl WsConnections {
             .values()
             .any(|v| v.get_peer_addr() == addr)
     }
-
-    pub fn reset_stats_last_sec(&self) {
-        let g = self.conns.read().unwrap();
-        let conns = g.values().cloned();
-
-        for conn in conns {
-            conn.get_stats().reset_sec();
-        }
-    }
-
-    pub fn reset_stats_last_min(&self) {
-        let g = self.conns.read().unwrap();
-        let conns = g.values().cloned();
-
-        for conn in conns {
-            conn.get_stats().reset_min();
-        }
-    }
-
-    pub fn reset_stats_last_hour(&self) {
-        let g = self.conns.read().unwrap();
-        let conns = g.values().cloned();
-
-        for conn in conns {
-            conn.get_stats().reset_hour();
-        }
-    }
-
-    pub fn reset_stats_last_day(&self) {
-        let g = self.conns.read().unwrap();
-        let conns = g.values().cloned();
-
-        for conn in conns {
-            conn.get_stats().reset_day();
-        }
-    }
 }
 
 //---------------------------------------------------------------------------------------
@@ -312,7 +258,6 @@ pub struct HubData {
     is_source: AtomicBool,
     is_inbound: AtomicBool,
     peer_id: ArcCell<String>,
-    stats: ConnectionStats,
 }
 
 pub type HubConn = WsConnection<HubData>;
@@ -324,7 +269,6 @@ impl Default for HubData {
             is_source: AtomicBool::new(false),
             is_inbound: AtomicBool::new(false),
             peer_id: ArcCell::new(Arc::new("unknown".to_owned())),
-            stats: ConnectionStats::default(),
         }
     }
 }
@@ -425,11 +369,6 @@ impl HubConn {
     pub fn set_peer_id(&self, peer_id: &str) {
         let data = self.get_data();
         data.peer_id.set(Arc::new(peer_id.to_owned()));
-    }
-
-    pub fn get_stats(&self) -> &ConnectionStats {
-        let data = self.get_data();
-        &data.stats
     }
 }
 
@@ -547,7 +486,8 @@ impl HubConn {
 
         match SDAG_CACHE.get_joint(&unit).and_then(|j| j.read()) {
             Ok(joint) => {
-                statistics::update_statistics(Some(self.get_peer_id().as_str()), false, true);
+                statistics::increase_stats(self.get_peer_id(), false, true);
+
                 Ok(json!({ "joint": clear_ball_after_min_retrievable_mci(&joint)?}))
             }
 
@@ -919,7 +859,8 @@ impl HubConn {
 
     #[inline]
     fn send_joint(&self, joint: &Joint) -> Result<()> {
-        statistics::update_statistics(Some(self.get_peer_id().as_str()), false, true);
+        statistics::increase_stats(self.get_peer_id(), false, true);
+
         self.send_just_saying("joint", serde_json::to_value(joint)?)
     }
 
@@ -1377,7 +1318,7 @@ fn notify_watchers(joint: &Joint) -> Result<()> {
     let mut joint = joint.clone();
     joint.unit.timestamp = Some(::time::now() / 1000);
 
-    let peer_id = Arc::new(String::from("interestred_id"));
+    let peer_id = Arc::new(String::from("interested_id"));
     if let Some(ws) = WSS.get_connection(peer_id) {
         ws.send_joint(&joint)?;
     }

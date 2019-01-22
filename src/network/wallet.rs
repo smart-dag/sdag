@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::net::ToSocketAddrs;
 use std::sync::Arc;
 use std::time::Duration;
@@ -130,7 +131,7 @@ impl WalletConn {
     }
 
     // get the network statistics
-    pub fn get_net_statistics(&self) -> Result<super::hub::HubStatistics> {
+    pub fn get_net_statistics(&self) -> Result<HashMap<String, ::statistics::LastConnStat>> {
         let response = self.send_request("net_statistics", &Value::Null)?;
         Ok(serde_json::from_value(response)?)
     }

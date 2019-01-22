@@ -13,6 +13,7 @@ use may::coroutine;
 use may::sync::RwLock;
 use serde_json::Value;
 use smallvec::SmallVec;
+use statistics;
 use validation;
 
 pub use self::{
@@ -257,6 +258,10 @@ impl SDagCache {
         if let Err(e) = validation::basic_validate(&joint_data) {
             // need to record as known bad joint
             self.purge_bad_joint(&key, e.to_string());
+            let peer_id = joint_data
+                .get_peer_id()
+                .unwrap_or_else(|| Arc::new(String::from("unknown")));
+            statistics::increase_stats(peer_id, true, false);
             bail!("base validation failed, err={}", e);
         }
 
