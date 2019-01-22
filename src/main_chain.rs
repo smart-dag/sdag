@@ -433,7 +433,7 @@ fn is_stable_to_joints(
     // this max_alt_level_possible is not the real max_alt_level
     // but it's fine to return since it can't affect the stable result
 
-    for (min_wl, end_joint) in joints {
+    'check_end_joints: for (min_wl, end_joint) in joints {
         if min_wl > max_alt_level_possible {
             return Ok(true);
         }
@@ -441,7 +441,7 @@ fn is_stable_to_joints(
         // Limit the max_alt_level to the history in end joint's perspective
         let mut joints = VecDeque::new();
         let mut visited = HashSet::new();
-        let min_wl = end_joint.get_min_wl();
+
         joints.push_back(end_joint.clone());
         while let Some(joint) = joints.pop_front() {
             let joint_level = joint.get_level();
@@ -450,8 +450,9 @@ fn is_stable_to_joints(
             }
 
             // find a candidate level that is bigger than min_wl
+            // continue to check with the next end joint
             if alt_candidates.contains(&joint) {
-                return Ok(true);
+                continue 'check_end_joints;
             }
 
             for parent in joint.parents.iter() {
@@ -461,6 +462,9 @@ fn is_stable_to_joints(
                 }
             }
         }
+
+        // No alt candidates found, it is stable
+        return Ok(true);
     }
 
     Ok(false)
