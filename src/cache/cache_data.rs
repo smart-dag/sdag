@@ -133,7 +133,6 @@ impl<K, V: LoadFromKv<K>> CachedData<K, V> {
 
     // save the value to database and clear the data memory
     pub fn save_to_db(&self) -> Result<()> {
-        #[cfg(feature = "kv_store")]
         loop {
             if let Some(g) = self.data.try_lock() {
                 match g.as_ref() {
@@ -148,6 +147,5 @@ impl<K, V: LoadFromKv<K>> CachedData<K, V> {
             }
             coroutine::yield_now();
         }
-        Ok(())
     }
 }

@@ -6,7 +6,7 @@ authors = ["SDAG TEAM"]
 license = "MIT"
 
 [dependencies]
-sdag = { path = ".."}
+sdag = { path = "..", default-features = false}
 
 may = "0.3"
 log = "0.4"
@@ -15,3 +15,8 @@ chrono = "0.4"
 num_cpus = "1"
 serde_json = "1"
 may_signal = {git = "https://github.com/Xudong-Huang/may_signal.git"}
+
+[features]
+default = ["kv_store_none"]
+kv_store_none = ["sdag/kv_store_none"]
+kv_store_sled = ["sdag/kv_store_sled"]

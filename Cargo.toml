@@ -33,12 +33,17 @@ sha2 = "0.8"
 ripemd160 = "0.8"
 bit-vec = "0.5"
 
-sled = "0.17"
+sled = {version = "0.17", optional = true}
 
 [profile.release]
 lto = true
 codegen-units = 1
 # panic = "abort"
+
+[features]
+default = ["kv_store_none"]
+kv_store_none = []
+kv_store_sled = ["sled"]
 
 [workspace]
 members = [

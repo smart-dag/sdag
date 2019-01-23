@@ -1,9 +1,10 @@
 use error::Result;
-use failure::ResultExt;
-use joint::{Joint, JointProperty};
-use serde_json;
-use sled::{Db, Tree};
-use std::sync::Arc;
+
+#[cfg(feature = "kv_store_none")]
+use self::kv_store_none::KvStore;
+
+#[cfg(feature = "kv_store_sled")]
+use self::kv_store_sled::KvStore;
 
 lazy_static! {
     pub static ref KV_STORE: KvStore = KvStore::default();
@@ -18,81 +19,139 @@ pub trait LoadFromKv<K: ?Sized>: Sized {
     fn save_to_kv<T: ::std::borrow::Borrow<K>>(&self, key: &T) -> Result<()>;
 }
 
-//---------------------------------------------------------------------------------------
-// KvStore
-//---------------------------------------------------------------------------------------
-pub struct KvStore {
-    pub joints: Arc<Tree>,
-    pub properties: Arc<Tree>,
-}
+#[cfg(feature = "kv_store_none")]
+mod kv_store_none {
+    use error::Result;
+    use joint::{Joint, JointProperty};
 
-impl Default for KvStore {
-    fn default() -> Self {
-        KvStore::load("./sdag_kv").expect("init KvStore failed")
-    }
-}
+    pub struct KvStore {}
 
-impl KvStore {
-    pub fn load(path: &str) -> Result<Self> {
-        let db = Db::start_default(path).context("Failed to read file for KvStore")?;
-        let joints = db
-            .open_tree(b"joints".to_vec())
-            .context("Failed to init joints KvStore")?;
-        let properties = db
-            .open_tree(b"properties".to_vec())
-            .context("Failed to init properties KvStore")?;
-        Ok(KvStore { joints, properties })
+    impl Default for KvStore {
+        fn default() -> Self {
+            KvStore::load("./sdag_kv").expect("init KvStore failed")
+        }
     }
 
-    pub fn is_joint_exist(&self, _key: &str) -> Result<bool> {
-        Ok(false)
-    }
-
-    pub fn read_joint(&self, key: &str) -> Result<Joint> {
-        if let Some(value) = self.joints.get(key)? {
-            return Ok(serde_json::from_str(::std::str::from_utf8(&value)?)?);
+    impl KvStore {
+        pub fn load(_path: &str) -> Result<Self> {
+            Ok(KvStore {})
         }
 
-        bail!("joint {} not exist in KV", key)
-    }
-
-    pub fn read_joint_children(&self, _key: &str) -> Result<Vec<String>> {
-        Ok(vec![])
-    }
-
-    pub fn read_joint_property(&self, key: &str) -> Result<JointProperty> {
-        if let Some(value) = self.properties.get(key)? {
-            return Ok(serde_json::from_str(::std::str::from_utf8(&value)?)?);
+        pub fn is_joint_exist(&self, _key: &str) -> Result<bool> {
+            Ok(false)
         }
 
-        bail!("joint property {} not exist in KV", key)
-    }
+        pub fn read_joint(&self, key: &str) -> Result<Joint> {
+            bail!("joint {} not exist in KV", key)
+        }
 
-    // TODO: save a joint
-    pub fn save_joint(&self, key: &str, joint: &Joint) -> Result<()> {
-        self.joints
-            .set(key, serde_json::to_string(joint)?.into_bytes())?;
-        self.joints.flush()?;
+        pub fn read_joint_children(&self, key: &str) -> Result<Vec<String>> {
+            bail!("joint children {} not exist in KV", key)
+        }
 
-        Ok(())
-    }
+        pub fn read_joint_property(&self, key: &str) -> Result<JointProperty> {
+            bail!("joint property {} not exist in KV", key)
+        }
 
-    pub fn save_joint_children(&self, _key: &str, _children: Vec<String>) -> Result<()> {
-        Ok(())
-    }
+        pub fn save_joint(&self, _key: &str, _joint: &Joint) -> Result<()> {
+            Ok(())
+        }
 
-    pub fn save_joint_property(&self, key: &str, property: &JointProperty) -> Result<()> {
-        self.properties
-            .set(key, serde_json::to_string(property)?.into_bytes())?;
-        self.properties.flush()?;
+        pub fn save_joint_children(&self, _key: &str, _children: Vec<String>) -> Result<()> {
+            Ok(())
+        }
 
-        Ok(())
+        pub fn save_joint_property(&self, _key: &str, _property: &JointProperty) -> Result<()> {
+            Ok(())
+        }
     }
 }
 
-#[test]
-fn kv_store_joint_test() -> Result<()> {
-    let joint = r#"{
+#[cfg(feature = "kv_store_sled")]
+mod kv_store_sled {
+    extern crate sled;
+
+    use self::sled::{Db, Tree};
+    use error::Result;
+    use failure::ResultExt;
+    use joint::{Joint, JointProperty};
+    use serde_json;
+    use std::sync::Arc;
+
+    pub struct KvStore {
+        pub joints: Arc<Tree>,
+        pub properties: Arc<Tree>,
+    }
+
+    impl Default for KvStore {
+        fn default() -> Self {
+            KvStore::load("./sdag_kv").expect("init KvStore failed")
+        }
+    }
+
+    impl KvStore {
+        pub fn load(path: &str) -> Result<Self> {
+            let db = Db::start_default(path).context("Failed to read file for KvStore")?;
+            let joints = db
+                .open_tree(b"joints".to_vec())
+                .context("Failed to init joints KvStore")?;
+            let properties = db
+                .open_tree(b"properties".to_vec())
+                .context("Failed to init properties KvStore")?;
+            Ok(KvStore { joints, properties })
+        }
+
+        pub fn is_joint_exist(&self, _key: &str) -> Result<bool> {
+            Ok(false)
+        }
+
+        pub fn read_joint(&self, key: &str) -> Result<Joint> {
+            if let Some(value) = self.joints.get(key)? {
+                return Ok(serde_json::from_str(::std::str::from_utf8(&value)?)?);
+            }
+
+            bail!("joint {} not exist in KV", key)
+        }
+
+        pub fn read_joint_children(&self, _key: &str) -> Result<Vec<String>> {
+            Ok(vec![])
+        }
+
+        pub fn read_joint_property(&self, key: &str) -> Result<JointProperty> {
+            if let Some(value) = self.properties.get(key)? {
+                return Ok(serde_json::from_str(::std::str::from_utf8(&value)?)?);
+            }
+
+            bail!("joint property {} not exist in KV", key)
+        }
+
+        // TODO: save a joint
+        pub fn save_joint(&self, key: &str, joint: &Joint) -> Result<()> {
+            self.joints
+                .set(key, serde_json::to_string(joint)?.into_bytes())?;
+            self.joints.flush()?;
+
+            Ok(())
+        }
+
+        pub fn save_joint_children(&self, _key: &str, _children: Vec<String>) -> Result<()> {
+            Ok(())
+        }
+
+        pub fn save_joint_property(&self, key: &str, property: &JointProperty) -> Result<()> {
+            self.properties
+                .set(key, serde_json::to_string(property)?.into_bytes())?;
+            self.properties.flush()?;
+
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn kv_store_joint_test() -> Result<()> {
+        use super::*;
+
+        let joint = r#"{
         "unit":{
             "alt":"1",
             "authors":[
@@ -138,31 +197,34 @@ fn kv_store_joint_test() -> Result<()> {
             "witness_list_unit":"Gz0nOu5Utp3WtCZwlfG5+TbqRMGvF8fDsAVWh9BJc7Q="
         }
     }"#;
-    let joint: Joint = serde_json::from_str(&joint)?;
+        let joint: Joint = serde_json::from_str(&joint)?;
 
-    KV_STORE.save_joint(&joint.unit.unit, &joint)?;
-    let read_joint = KV_STORE.read_joint(&joint.unit.unit)?;
+        KV_STORE.save_joint(&joint.unit.unit, &joint)?;
+        let read_joint = KV_STORE.read_joint(&joint.unit.unit)?;
 
-    assert_eq!(
-        serde_json::to_string(&joint)?,
-        serde_json::to_string(&read_joint)?
-    );
+        assert_eq!(
+            serde_json::to_string(&joint)?,
+            serde_json::to_string(&read_joint)?
+        );
 
-    Ok(())
-}
+        Ok(())
+    }
 
-#[test]
-fn kv_store_property_test() -> Result<()> {
-    let key = "MHBF65OZbRHOEVyicHo7DUfUjxt41ILtQ7f7QAwBPGc=";
-    let property: JointProperty = JointProperty::default();
+    #[test]
+    fn kv_store_property_test() -> Result<()> {
+        use super::*;
 
-    KV_STORE.save_joint_property(&key, &property)?;
-    let read_property = KV_STORE.read_joint_property(&key)?;
+        let key = "MHBF65OZbRHOEVyicHo7DUfUjxt41ILtQ7f7QAwBPGc=";
+        let property: JointProperty = JointProperty::default();
 
-    assert_eq!(
-        serde_json::to_string(&property)?,
-        serde_json::to_string(&read_property)?
-    );
+        KV_STORE.save_joint_property(&key, &property)?;
+        let read_property = KV_STORE.read_joint_property(&key)?;
 
-    Ok(())
+        assert_eq!(
+            serde_json::to_string(&property)?,
+            serde_json::to_string(&read_property)?
+        );
+
+        Ok(())
+    }
 }
