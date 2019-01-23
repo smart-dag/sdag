@@ -18,17 +18,19 @@ extern crate serde_json;
 #[macro_use]
 extern crate lazy_static;
 
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
-use std::time::Duration;
-
 use chrono::{Local, TimeZone};
 use clap::App;
+use std::collections::HashSet;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
+use std::sync::RwLock;
+
 use failure::ResultExt;
 use may::*;
-use rand::{thread_rng, Rng};
+
 use sdag_wallet_base::Base64KeyExt;
 
+mod con_test;
 mod config;
 mod genesis;
 mod wallet;
@@ -40,6 +42,7 @@ use self::wallet::WalletInfo;
 
 lazy_static! {
     pub static ref TRANSANTION_NUM: AtomicUsize = AtomicUsize::new(1);
+    pub static ref REGISTERED_WALLETS: RwLock<HashSet<usize>> = RwLock::new(HashSet::new());
 }
 
 fn init_log(verbosity: u64) {
@@ -275,23 +278,6 @@ fn send_payment(
     Ok(())
 }
 
-fn continue_sending(ws: Arc<WalletConn>, wallets_info: &[wallet::WalletInfo]) -> Result<()> {
-    let mut rng = thread_rng();
-    let len = wallets_info.len();
-
-    let n1: usize = rng.gen_range(0, len);
-    let n2: usize = rng.gen_range(0, len);
-
-    let wallets = vec![(wallets_info[n1]._00_address.clone(), 0.001)];
-
-    if let Err(e) = send_payment(&ws, wallets, &wallets_info[n2], "good") {
-        coroutine::sleep(Duration::from_secs(10));
-        eprintln!("{}", e);
-    }
-
-    Ok(())
-}
-
 fn genesis_init() -> Result<()> {
     // TODO: get total amount and msg from args
     let total = 500_000_000_000_000;
@@ -404,82 +390,10 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
+    let wallet_info = WalletInfo::from_mnemonic(&settings.mnemonic)?;
     //transfer
     if let Some(send) = m.subcommand_matches("send") {
-        let test_wallets = match wallet::get_wallets() {
-            Ok(wallets) => Arc::new(wallets),
-            Err(_) => {
-                let wallets_info = wallet::gen_wallets(100)?;
-                let wallets = wallets_info
-                    .iter()
-                    .map(|v| (v.mnemonic.clone(), v._00_address.clone()))
-                    .collect::<Vec<_>>();
-                config::save_results(&wallets, config::WALLET_ADDRESSES)?;
-                Arc::new(wallets_info)
-            }
-        };
-
-        let wallet_info = WalletInfo::from_mnemonic(&settings.mnemonic)?;
-
-        if witnesses.contains(&wallet_info._00_address) {
-            bail!("witness can not send payment by test");
-        }
-
-        let cycle_index = value_t!(send.value_of("continue"), usize).ok();
-        let paid_amount = value_t!(send.value_of("pay"), f64).ok();
-
-        if cycle_index.is_some() && paid_amount.is_none() {
-            info!("continuously");
-
-            for _ in 0..cycle_index.unwrap() {
-                let tmp_ws = Arc::clone(&ws);
-                let tmp_test_wallets = Arc::clone(&test_wallets);
-
-                go!(move || loop {
-                    let tmp_ws = Arc::clone(&tmp_ws);
-                    if let Err(e) = continue_sending(tmp_ws, &tmp_test_wallets) {
-                        error!("continue_sending err={}", e);
-                    };
-                    coroutine::yield_now();
-                    coroutine::sleep(Duration::from_millis(10));
-                });
-            }
-
-            loop {
-                coroutine::sleep(Duration::from_secs(1));
-            }
-        }
-
-        if let Some(num) = paid_amount {
-            let mut address_amount = test_wallets
-                .iter()
-                .map(|w| (w._00_address.clone(), num as f64))
-                .collect::<Vec<(String, f64)>>();
-
-            address_amount.append(
-                &mut witnesses
-                    .iter()
-                    .map(|w| (w.clone(), num as f64))
-                    .collect::<Vec<(String, f64)>>(),
-            );
-
-            // When to compose,it will add a change_address automatically,
-            // and each transaction only supports 128 outputs,
-            // so MAX_OUTPUTS_PER_PAYMENT_MESSAGE has to sub 1
-            for _ in 0..cycle_index.unwrap_or(1) {
-                for chunk in
-                    address_amount.chunks(sdag::config::MAX_OUTPUTS_PER_PAYMENT_MESSAGE - 1)
-                {
-                    while let Err(e) = send_payment(&ws, chunk.to_vec(), &wallet_info, "good") {
-                        coroutine::sleep(Duration::from_secs(10));
-                        eprintln!("{}", e);
-                    }
-                    coroutine::sleep(Duration::from_secs(7));
-                }
-            }
-
-            return Ok(());
-        }
+        con_test::distrubite_coins_and_cocurrency(&ws, &send, &wallet_info, &witnesses)?;
     }
 
     //Send one payment to address
@@ -489,7 +403,6 @@ fn main() -> Result<()> {
     // 3) pay LWFAESN3EB5E5VFXJ7JWIJB7K5MDQCZE 1 -ds
     // 4) pay LWFAESN3EB5E5VFXJ7JWIJB7K5MDQCZE 1 -sa
     if let Some(pay) = m.subcommand_matches("pay") {
-        let wallet_info = WalletInfo::from_mnemonic(&settings.mnemonic)?;
         let witnesses = ws.get_witnesses()?;
         if witnesses.contains(&wallet_info._00_address) {
             bail!("witness can not send payment by sdg");
