@@ -313,9 +313,9 @@ fn update_stable_main_chain(mut unstable_mc_joints: Vec<RcuReader<JointData>>) -
     // forward main chain in order
     while let Some(unstable_mc_joint) = unstable_mc_joints.pop() {
         //Alternative roots are last stable mc joint's best children but not on current main chain
-        let max_alt_level = calc_max_alt_level(&unstable_mc_joint, &end_joint)?;
-
-        if min_wl > max_alt_level {
+        if min_wl >= unstable_mc_joint.get_level()
+            && min_wl > calc_max_alt_level(&unstable_mc_joint, &end_joint)?
+        {
             mark_main_chain_joint_stable(&unstable_mc_joint, stable_joint.get_mci() + 1)?;
             stable_joint = unstable_mc_joint;
             last_stable_level = stable_joint.get_level();
@@ -514,8 +514,8 @@ pub fn is_stable_to_joint(
     let stable_point = get_last_stable_joint();
     let stable_point_level = stable_point.get_level();
 
-    // select the latest joint between stable joint and earlier joint
-    let mut entry_point = &stable_point;
+    // find valid end points in order
+    let mut end_joints = Vec::new();
 
     // earlier joint is on main chain and before the stable point
     if earlier_joint_level <= stable_point_level {
@@ -527,27 +527,32 @@ pub fn is_stable_to_joint(
                 earlier_joint.unit.unit
             );
             return Ok(false);
-        } else {
-            // we alreay verify the earlier_joint is stable to some point on the main chain
-            // stable unit must be ancestor of joint on main chain
-            let mut is_ancestor = false;
-            let mut best_parent = joint.clone();
+        }
 
-            while best_parent.get_level() >= stable_point_level {
-                if stable_point == best_parent {
-                    is_ancestor = true;
-                    break;
+        // earlier unit must be ancestor of joint
+        let mut is_ancestor = false;
+        let mut best_parent = joint.clone();
+        while best_parent.get_level() >= earlier_joint_level {
+            if best_parent.is_min_wl_increased() {
+                let min_wl = best_parent.get_min_wl();
+                if min_wl >= earlier_joint_level {
+                    end_joints.push((min_wl, best_parent.clone()));
                 }
-                best_parent = best_parent.get_best_parent().read()?;
             }
 
-            if !is_ancestor {
-                error!(
-                    "is_stable_to_joint return false, unit={}, last_ball_unit={} can't lead to stable unit",
-                    joint.unit.unit, earlier_joint.unit.unit
-                );
-                return Ok(false);
+            if best_parent.is_on_main_chain() {
+                is_ancestor = true;
+                break;
             }
+            best_parent = best_parent.get_best_parent().read()?;
+        }
+
+        if !is_ancestor {
+            error!(
+                "is_stable_to_joint return false, unit={}, last_ball_unit={} can't lead to last stable unit",
+                joint.unit.unit, earlier_joint.unit.unit
+            );
+            return Ok(false);
         }
     } else {
         // earlier joint is after stable point
@@ -565,37 +570,25 @@ pub fn is_stable_to_joint(
             return Ok(false);
         }
 
-        entry_point = &earlier_joint;
-    }
-
-    // earlier unit must be ancestor of joint on main chain
-    let mut is_ancestor = false;
-
-    // find valid end points in order
-    let mut end_joints = Vec::new();
-
-    let mut best_parent = joint.clone();
-    while best_parent.get_level() >= earlier_joint_level {
-        if best_parent.is_min_wl_increased() {
-            let min_wl = best_parent.get_min_wl();
-            if min_wl >= earlier_joint_level {
-                end_joints.push((min_wl, best_parent.clone()));
+        // earlier unit must be ancestor of joint
+        let mut best_parent = joint.clone();
+        while best_parent.get_level() > earlier_joint_level {
+            if best_parent.is_min_wl_increased() {
+                let min_wl = best_parent.get_min_wl();
+                if min_wl >= earlier_joint_level {
+                    end_joints.push((min_wl, best_parent.clone()));
+                }
             }
+            best_parent = best_parent.get_best_parent().read()?;
         }
 
-        if *entry_point == best_parent {
-            is_ancestor = true;
-            break;
+        if *earlier_joint != best_parent {
+            error!(
+                "is_stable_to_joint return false, unit={}, last_ball_unit={} can't lead to last ball unit",
+                joint.unit.unit, earlier_joint.unit.unit
+            );
+            return Ok(false);
         }
-        best_parent = best_parent.get_best_parent().read()?;
-    }
-
-    if !is_ancestor {
-        error!(
-            "is_stable_to_joint return false, unit={}, last_ball_unit={} can't lead to last ball unit",
-            joint.unit.unit, earlier_joint.unit.unit
-        );
-        return Ok(false);
     }
 
     is_stable_to_joints(earlier_joint, end_joints)

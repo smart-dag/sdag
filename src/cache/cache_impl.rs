@@ -345,7 +345,12 @@ impl SDagCacheInner {
                     JointSequence::Good | JointSequence::FinalBad | JointSequence::NoCommission => {
                         return None;
                     }
-                    JointSequence::TempBad | JointSequence::NonserialBad => {}
+                    JointSequence::TempBad | JointSequence::NonserialBad => {
+                        if joint.unit.is_authored_by_witness() {
+                            error!("detect purge temp bad witness unit={}", joint.unit.unit);
+                            return None;
+                        }
+                    }
                 }
 
                 if now - joint.get_create_time() < timeout {
