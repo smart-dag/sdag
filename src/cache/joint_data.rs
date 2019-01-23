@@ -306,7 +306,7 @@ impl JointData {
     }
 
     pub fn is_missing_parent(&self) -> bool {
-        self.joint.unit.parent_units.len() > self.valid_parent_num.load(Ordering::Relaxed)
+        self.joint.unit.parent_units.len() > self.valid_parent_num.load(Ordering::Acquire)
     }
 
     pub fn get_missing_parents<'a>(&'a self) -> Result<impl Iterator<Item = &'a String>> {
@@ -318,7 +318,7 @@ impl JointData {
     }
 
     pub fn add_parent(&self, parent: CachedJoint) {
-        self.valid_parent_num.fetch_add(1, Ordering::AcqRel);
+        self.valid_parent_num.fetch_add(1, Ordering::Release);
         self.parents.append(parent);
     }
 
