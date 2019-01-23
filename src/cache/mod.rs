@@ -114,8 +114,17 @@ impl SDagCache {
 
     /// get a joint from the hashmap, if not exist try load from kv store
     pub fn get_joint(&self, key: &str) -> Result<CachedJoint> {
-        match self.try_get_joint(key) {
-            None => self.load_joint_from_kv(key),
+        let g = self.joints.read().unwrap();
+        match g.get_joint(key) {
+            None => {
+                if g.is_known_unhandled_joint(key) {
+                    bail!("unit={} is unhandled", key);
+                }
+                if g.is_known_bad_joint(key) {
+                    bail!("unit={} is known bad", key);
+                }
+                self.load_joint_from_kv(key)
+            }
             Some(j) => Ok(j),
         }
     }

@@ -300,7 +300,12 @@ impl JointData {
     }
 
     pub fn set_best_parent(&self, parent: CachedJoint) {
-        assert_eq!(self.best_parent.iter().next(), None);
+        if let Some(j) = self.best_parent.iter().next() {
+            panic!(
+                "unit={} best parent is already set {}",
+                self.unit.unit, j.key
+            );
+        }
         self.props.write().unwrap().best_parent_unit = parent.key.to_string();
         self.best_parent.append(parent);
     }
