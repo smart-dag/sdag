@@ -1,17 +1,130 @@
+use chrono::{Local, TimeZone};
 use clap::ArgMatches;
 use may::*;
 use rand::{thread_rng, Rng};
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 
 use sdag::error::Result;
 use sdag::network::wallet::WalletConn;
+use sdag_wallet_base::Base64KeyExt;
 
 use super::{
     config,
     wallet::{self, WalletInfo},
-    REGISTERED_WALLETS,
+    REGISTERED_WALLETS, TRANSANTION_NUM,
 };
+
+pub(super) fn send_payment(
+    ws: &Arc<WalletConn>,
+    address_amount: Vec<(String, f64)>,
+    wallet_info: &WalletInfo,
+    flag: &str,
+) -> Result<()> {
+    let outputs = address_amount
+        .iter()
+        .map(|(address, amount)| sdag::spec::Output {
+            address: address.clone(),
+            amount: (amount * 1_000_000.0).round() as u64,
+        })
+        .collect::<Vec<_>>();
+
+    let total_amount = outputs.iter().fold(0, |acc, x| acc + x.amount);
+
+    let inputs: sdag::light::InputsResponse = ws.get_inputs_from_hub(
+        &wallet_info._00_address,
+        total_amount + 1000, // we need another 1000 sdg (usually 431 + 197)
+        false,               // is_spend_all
+    )?;
+
+    let light_props = ws.get_light_props(&wallet_info._00_address)?;
+
+    let mut compose_info = sdag::composer::ComposeInfo {
+        paid_address: wallet_info._00_address.clone(),
+        change_address: wallet_info._00_address.clone(),
+        outputs,
+        text_message: None,
+        inputs,
+        transaction_amount: total_amount,
+        light_props,
+        pubk: wallet_info._00_address_pubk.to_base64_key(),
+    };
+
+    let joint = sdag::composer::compose_joint(compose_info.clone(), wallet_info)?;
+
+    if let Err(e) = ws.post_joint(&joint) {
+        eprintln!("post_joint err={}", e);
+        return Err(e);
+    }
+
+    println!("FROM  : {}", wallet_info._00_address);
+    println!("TO    : ");
+    for (index, (address, amount)) in address_amount.clone().iter().enumerate() {
+        if index < 20 {
+            println!("      address : {}, amount : {}", address, amount);
+        } else {
+            println!("      ......");
+            println!("      {} outputs", address_amount.len() + 1);
+            break;
+        }
+    }
+    println!("UNIT  : {}", joint.unit.unit);
+
+    println!(
+        "DATE  : {}",
+        Local
+            .timestamp_millis(sdag::time::now() as i64)
+            .naive_local()
+    );
+    println!("Total :{}", TRANSANTION_NUM.fetch_add(1, Ordering::SeqCst));
+
+    //println!("\n the original joint: \n [{:#?}] \n", joint);
+
+    match flag {
+        "good" => return Ok(()),
+        "nonserial" => {
+            compose_info.inputs = ws.get_inputs_from_hub(
+                &wallet_info._00_address,
+                total_amount + 1000, // we need another 1000 sdg (usually 431 + 197)
+                false,               // is_spend_all
+            )?;
+
+            let joint = sdag::composer::compose_joint(compose_info, wallet_info)?;
+
+            if let Err(e) = ws.post_joint(&joint) {
+                eprintln!("post_joint err={}", e);
+                return Err(e);
+            }
+
+            println!("\n non serial joint: \n [{:#?}] \n", joint);
+        }
+        "doublespend" => {
+            compose_info.light_props.parent_units = vec![joint.unit.unit];
+            let joint = sdag::composer::compose_joint(compose_info, wallet_info)?;
+
+            if let Err(e) = ws.post_joint(&joint) {
+                eprintln!("post_joint err={}", e);
+                return Err(e);
+            }
+
+            println!("\n double spend joint: \n [{:#?}] \n", joint);
+        }
+        "samejoint" => {
+            let joint = sdag::composer::compose_joint(compose_info, wallet_info)?;
+
+            if let Err(e) = ws.post_joint(&joint) {
+                eprintln!("post_joint err={}", e);
+                return Err(e);
+            }
+
+            println!("\n the same joint: \n [{:#?}] \n", joint);
+        }
+        _ => bail!("flag is invalid"),
+    }
+
+    Ok(())
+}
 
 // choose a wallet more than all trading wallets's index if max index equals test_wallets.len() -1
 // other case, choose from usize::min_value()
@@ -33,17 +146,18 @@ pub fn choose_wallet(cur_wallet: usize, test_wallets: &[wallet::WalletInfo]) -> 
         _ => usize::min_value(),
     };
 
-    for index in max_wallet..test_wallets.len() {
+    for index in (max_wallet + 1)..test_wallets.len() {
+        registered_wallets.remove(&cur_wallet);
+        registered_wallets.insert(index);
+
+        return Ok(index);
+    }
+
+    for index in 0..max_wallet {
         if registered_wallets.contains(&index) {
             continue;
-        } else {
-            if index > max_wallet || max_wallet == 0 {
-                registered_wallets.remove(&cur_wallet);
-                registered_wallets.insert(index);
-
-                return Ok(index);
-            }
         }
+        return Ok(index);
     }
 
     Ok(0)
@@ -66,7 +180,7 @@ pub fn continue_sending(
 
     let paid_wallets = vec![(test_wallets[w1]._00_address.clone(), 0.1)];
 
-    super::send_payment(&ws, paid_wallets, wallets_info, "good")?;
+    send_payment(&ws, paid_wallets, wallets_info, "good")?;
 
     Ok(())
 }
@@ -153,7 +267,7 @@ pub fn distrubite_coins_and_cocurrency(
         // so MAX_OUTPUTS_PER_PAYMENT_MESSAGE has to sub 1
         for _ in 0..cycle_index.unwrap_or(1) {
             for chunk in address_amount.chunks(sdag::config::MAX_OUTPUTS_PER_PAYMENT_MESSAGE - 1) {
-                while let Err(e) = super::send_payment(&ws, chunk.to_vec(), &wallet_info, "good") {
+                while let Err(e) = send_payment(&ws, chunk.to_vec(), &wallet_info, "good") {
                     coroutine::sleep(Duration::from_secs(10));
                     eprintln!("{}", e);
                 }

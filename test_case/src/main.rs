@@ -21,7 +21,7 @@ extern crate lazy_static;
 use chrono::{Local, TimeZone};
 use clap::App;
 use std::collections::HashSet;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 use std::sync::RwLock;
 
@@ -30,9 +30,9 @@ use may::*;
 
 use sdag_wallet_base::Base64KeyExt;
 
-mod con_test;
 mod config;
 mod genesis;
+mod send_payment;
 mod wallet;
 
 use sdag::error::Result;
@@ -168,116 +168,6 @@ fn show_history(
     Ok(())
 }
 
-fn send_payment(
-    ws: &Arc<WalletConn>,
-    address_amount: Vec<(String, f64)>,
-    wallet_info: &WalletInfo,
-    flag: &str,
-) -> Result<()> {
-    let outputs = address_amount
-        .iter()
-        .map(|(address, amount)| sdag::spec::Output {
-            address: address.clone(),
-            amount: (amount * 1_000_000.0).round() as u64,
-        })
-        .collect::<Vec<_>>();
-
-    let total_amount = outputs.iter().fold(0, |acc, x| acc + x.amount);
-
-    let inputs: sdag::light::InputsResponse = ws.get_inputs_from_hub(
-        &wallet_info._00_address,
-        total_amount + 1000, // we need another 1000 sdg (usually 431 + 197)
-        false,               // is_spend_all
-    )?;
-
-    let light_props = ws.get_light_props(&wallet_info._00_address)?;
-
-    let mut compose_info = sdag::composer::ComposeInfo {
-        paid_address: wallet_info._00_address.clone(),
-        change_address: wallet_info._00_address.clone(),
-        outputs,
-        text_message: None,
-        inputs,
-        transaction_amount: total_amount,
-        light_props,
-        pubk: wallet_info._00_address_pubk.to_base64_key(),
-    };
-
-    let joint = sdag::composer::compose_joint(compose_info.clone(), wallet_info)?;
-
-    if let Err(e) = ws.post_joint(&joint) {
-        eprintln!("post_joint err={}", e);
-        return Err(e);
-    }
-
-    println!("FROM  : {}", wallet_info._00_address);
-    println!("TO    : ");
-    for (index, (address, amount)) in address_amount.clone().iter().enumerate() {
-        if index < 20 {
-            println!("      address : {}, amount : {}", address, amount);
-        } else {
-            println!("      ......");
-            println!("      {} outputs", address_amount.len() + 1);
-            break;
-        }
-    }
-    println!("UNIT  : {}", joint.unit.unit);
-
-    println!(
-        "DATE  : {}",
-        Local
-            .timestamp_millis(sdag::time::now() as i64)
-            .naive_local()
-    );
-    println!("Total :{}", TRANSANTION_NUM.fetch_add(1, Ordering::SeqCst));
-
-    //println!("\n the original joint: \n [{:#?}] \n", joint);
-
-    match flag {
-        "good" => return Ok(()),
-        "nonserial" => {
-            compose_info.inputs = ws.get_inputs_from_hub(
-                &wallet_info._00_address,
-                total_amount + 1000, // we need another 1000 sdg (usually 431 + 197)
-                false,               // is_spend_all
-            )?;
-
-            let joint = sdag::composer::compose_joint(compose_info, wallet_info)?;
-
-            if let Err(e) = ws.post_joint(&joint) {
-                eprintln!("post_joint err={}", e);
-                return Err(e);
-            }
-
-            println!("\n non serial joint: \n [{:#?}] \n", joint);
-        }
-        "doublespend" => {
-            compose_info.light_props.parent_units = vec![joint.unit.unit];
-            let joint = sdag::composer::compose_joint(compose_info, wallet_info)?;
-
-            if let Err(e) = ws.post_joint(&joint) {
-                eprintln!("post_joint err={}", e);
-                return Err(e);
-            }
-
-            println!("\n double spend joint: \n [{:#?}] \n", joint);
-        }
-        "samejoint" => {
-            let joint = sdag::composer::compose_joint(compose_info, wallet_info)?;
-
-            if let Err(e) = ws.post_joint(&joint) {
-                eprintln!("post_joint err={}", e);
-                return Err(e);
-            }
-
-            println!("\n the same joint: \n [{:#?}] \n", joint);
-        }
-        _ => bail!("flag is invalid"),
-    }
-
-    Ok(())
-}
-
 fn genesis_init() -> Result<()> {
     // TODO: get total amount and msg from args
     let total = 500_000_000_000_000;
@@ -393,7 +283,7 @@ fn main() -> Result<()> {
     let wallet_info = WalletInfo::from_mnemonic(&settings.mnemonic)?;
     //transfer
     if let Some(send) = m.subcommand_matches("send") {
-        con_test::distrubite_coins_and_cocurrency(&ws, &send, &wallet_info, &witnesses)?;
+        send_payment::distrubite_coins_and_cocurrency(&ws, &send, &wallet_info, &witnesses)?;
     }
 
     //Send one payment to address
@@ -445,7 +335,7 @@ fn main() -> Result<()> {
             return Ok(());
         }
 
-        send_payment(&ws, address_amount, &wallet_info, flag)?;
+        send_payment::send_payment(&ws, address_amount, &wallet_info, flag)?;
     }
 
     //balance
