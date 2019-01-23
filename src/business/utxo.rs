@@ -24,7 +24,11 @@ pub struct UtxoCache {
     pub headers_commission_output: HashMap<HeadersCommissionOutputKey, usize>,
 }
 
-fn get_output_by_unit(unit: &str, output_index: usize, message_index: usize) -> Result<Output> {
+pub(super) fn get_output_by_unit(
+    unit: &str,
+    output_index: usize,
+    message_index: usize,
+) -> Result<Output> {
     let joint = SDAG_CACHE.get_joint(unit)?.read()?;
     if message_index >= joint.unit.messages.len() {
         bail!(

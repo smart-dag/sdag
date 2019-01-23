@@ -86,7 +86,7 @@ fn start_business_worker(rx: mpsc::Receiver<RcuReader<JointData>>) -> JoinHandle
                                 BUSINESS_CACHE.temp_business_state.write().unwrap();
                             for i in 0..joint.unit.messages.len() {
                                 if let Err(e) = temp_business_state.apply_message(&joint, i) {
-                                    error!("apply temp state failed, err = {:?}", e);
+                                    warn!("apply temp state failed, err = {:?}", e);
                                 }
                             }
                         }
@@ -118,8 +118,10 @@ fn start_business_worker(rx: mpsc::Receiver<RcuReader<JointData>>) -> JoinHandle
                         let mut temp_business_state =
                             BUSINESS_CACHE.temp_business_state.write().unwrap();
                         for i in 0..joint.unit.messages.len() {
-                            if let Err(e) = temp_business_state.revert_message(&joint, i) {
-                                error!("revert temp state failed, err = {:?}", e);
+                            if let Ok(true) = BUSINESS_CACHE.stable_utxo_contains(&joint, i) {
+                                if let Err(e) = temp_business_state.revert_message(&joint, i) {
+                                    error!("revert temp state failed, err = {:?}", e);
+                                }
                             }
                         }
                     }
@@ -282,6 +284,49 @@ pub struct BusinessState {
 }
 
 impl BusinessState {
+    //check if the joint contains spending utxo
+    fn utxo_contains(&self, joint: &JointData, msg_index: usize) -> Result<bool> {
+        if joint.unit.messages.len() <= msg_index {
+            bail!(
+                "unknown message, max index : {}, error index: {}",
+                joint.unit.messages.len() - 1,
+                msg_index
+            )
+        }
+
+        let message = &joint.unit.messages[msg_index];
+        let outputs = self.get_utxos_by_address(&joint.unit.authors[0].address)?;
+
+        match message.payload {
+            Some(Payload::Payment(ref payment)) => {
+                for Input {
+                    unit,
+                    output_index,
+                    message_index,
+                    ..
+                } in &payment.inputs
+                {
+                    let unit = unit.clone().unwrap();
+                    let output_index = output_index.unwrap() as usize;
+                    let message_index = message_index.unwrap() as usize;
+                    let output = utxo::get_output_by_unit(&unit, output_index, message_index)?;
+
+                    if !outputs.contains_key(&UtxoKey {
+                        unit,
+                        output_index,
+                        message_index,
+                        amount: output.amount,
+                    }) {
+                        return Ok(false);
+                    }
+                }
+            }
+            _ => bail!("payload is not a payment"),
+        }
+
+        Ok(true)
+    }
+
     fn get_utxos_by_address(&self, address: &str) -> Result<&BTreeMap<UtxoKey, UtxoData>> {
         self.utxo
             .get_utxos_by_address(address)
@@ -357,6 +402,13 @@ pub struct BusinessCache {
 }
 
 impl BusinessCache {
+    pub fn stable_utxo_contains(&self, joint: &JointData, msg_index: usize) -> Result<bool> {
+        self.business_state
+            .read()
+            .unwrap()
+            .utxo_contains(joint, msg_index)
+    }
+
     /// select unspent outputs from temp output
     /// determine if units releated with selected outputs is stable
     /// if no, caculate unstable outputs' amount
