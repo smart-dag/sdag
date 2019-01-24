@@ -56,11 +56,11 @@ pub fn validate_ready_joint(joint: CachedJoint) -> Result<()> {
     let peer_id = joint_data
         .get_peer_id()
         .unwrap_or_else(|| Arc::new(String::from("unknown")));
+
     match normal_validate(joint.clone()) {
         Ok(_) => {
             // save the unhandled joint to normal
             SDAG_CACHE.normalize_joint(joint);
-
             statistics::increase_stats(peer_id, true, true);
         }
         Err(e) => {

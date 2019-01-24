@@ -187,7 +187,7 @@ impl SDagCacheInner {
             for child in v {
                 let child_data = child.raw_read();
                 child_data.add_parent(joint.clone());
-                if !child_data.is_missing_parent() {
+                if child_data.is_ready() {
                     // trigger the child ready here, start validate, save and so on
                     try_go!(|| ::validation::validate_ready_joint(child));
                 }

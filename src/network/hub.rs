@@ -734,7 +734,7 @@ impl HubConn {
             joint_data.set_sequence(JointSequence::FinalBad);
         }
 
-        if !joint_data.is_missing_parent() {
+        if joint_data.is_ready() {
             return validation::validate_ready_joint(cached_joint);
         }
 

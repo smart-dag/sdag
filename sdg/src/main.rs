@@ -422,7 +422,7 @@ fn verify_joints(joints: Vec<Joint>, last_mci: usize) -> Result<()> {
                 joint_data.set_sequence(JointSequence::FinalBad);
             }
 
-            if !joint_data.is_missing_parent() {
+            if joint_data.is_ready() {
                 validation::validate_ready_joint(cached_joint)?;
             }
 

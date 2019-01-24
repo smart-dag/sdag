@@ -310,8 +310,14 @@ impl JointData {
         self.best_parent.append(parent);
     }
 
-    pub fn is_missing_parent(&self) -> bool {
-        self.joint.unit.parent_units.len() > self.valid_parent_num.load(Ordering::Acquire)
+    // to make sure we only ready once, after return true,
+    // the next time call would always return fasle
+    pub fn is_ready(&self) -> bool {
+        let len = self.joint.unit.parent_units.len();
+        // only ready once!
+        len == self
+            .valid_parent_num
+            .compare_and_swap(len, 0, Ordering::AcqRel)
     }
 
     pub fn get_missing_parents<'a>(&'a self) -> Result<impl Iterator<Item = &'a String>> {
