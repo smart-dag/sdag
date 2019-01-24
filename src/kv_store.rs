@@ -81,6 +81,7 @@ mod kv_store_sled {
     pub struct KvStore {
         pub joints: Arc<Tree>,
         pub properties: Arc<Tree>,
+        pub children: Arc<Tree>,
     }
 
     impl Default for KvStore {
@@ -98,7 +99,14 @@ mod kv_store_sled {
             let properties = db
                 .open_tree(b"properties".to_vec())
                 .context("Failed to init properties KvStore")?;
-            Ok(KvStore { joints, properties })
+            let children = db
+                .open_tree(b"children".to_vec())
+                .context("Failed to init children KvStore")?;
+            Ok(KvStore {
+                joints,
+                properties,
+                children,
+            })
         }
 
         pub fn is_joint_exist(&self, _key: &str) -> Result<bool> {
@@ -113,8 +121,12 @@ mod kv_store_sled {
             bail!("joint {} not exist in KV", key)
         }
 
-        pub fn read_joint_children(&self, _key: &str) -> Result<Vec<String>> {
-            Ok(vec![])
+        pub fn read_joint_children(&self, key: &str) -> Result<Vec<String>> {
+            if let Some(v) = self.children.get(key)? {
+                return Ok(serde_json::from_str(::std::str::from_utf8(&v)?)?);
+            }
+
+            bail!("joint property {} not exist in KV", key)
         }
 
         pub fn read_joint_property(&self, key: &str) -> Result<JointProperty> {
@@ -134,7 +146,10 @@ mod kv_store_sled {
             Ok(())
         }
 
-        pub fn save_joint_children(&self, _key: &str, _children: Vec<String>) -> Result<()> {
+        pub fn save_joint_children(&self, key: &str, children: Vec<String>) -> Result<()> {
+            self.children
+                .set(key, serde_json::to_string(&children)?.into_bytes())?;
+            self.children.flush()?;
             Ok(())
         }
 
@@ -224,6 +239,24 @@ mod kv_store_sled {
             serde_json::to_string(&property)?,
             serde_json::to_string(&read_property)?
         );
+
+        Ok(())
+    }
+
+    #[test]
+    fn kv_store_children_test() -> Result<()> {
+        use super::*;
+
+        let key = "MHBF65OZbRHOEVyicHo7DUfUjxt41ILtQ7f7QAwBPGc=";
+        let mut children = vec![];
+        for i in 0..20 {
+            children.push(i.to_string());
+        }
+
+        KV_STORE.save_joint_children(&key, children.clone())?;
+        let read_children = KV_STORE.read_joint_children(&key)?;
+
+        assert_eq!(children, read_children);
 
         Ok(())
     }
