@@ -317,10 +317,10 @@ impl SDagCache {
     }
 
     /// normalize a joint: move the joint from unhandled to normal
-    pub fn normalize_joint(&self, key: &str) {
+    pub fn normalize_joint(&self, joint: CachedJoint) {
         let mut g = self.joints.write().unwrap();
-        g.transfer_joint_to_normal(key);
-        g.update_parent_and_child(key);
+        g.transfer_joint_to_normal(joint.clone());
+        g.update_parent_and_child(joint);
     }
 
     /// judge if a ball is exit in the hash tree ball

@@ -158,10 +158,11 @@ impl SDagCacheInner {
     }
 
     /// move a joint from unhandled to normal
-    pub fn transfer_joint_to_normal(&mut self, key: &str) {
-        if let Some((k, v)) = self.unhandled_joints.remove_entry(key) {
-            self.normal_joints.entry(k).or_insert_with(|| v.clone());
-        }
+    pub fn transfer_joint_to_normal(&mut self, joint: CachedJoint) {
+        self.unhandled_joints.remove(joint.key.as_str());
+        self.normal_joints
+            .entry(HashKey(joint.key.clone()))
+            .or_insert(joint);
     }
 
     /// query if joint is known bad
@@ -180,11 +181,9 @@ impl SDagCacheInner {
     /// remove the missing parent entry if the parent is validate good
     /// and trigger dependent children that are satisfied
     /// append the joint as child for all it's parents
-    pub fn update_parent_and_child(&mut self, key: &str) {
-        let joint = self.get_joint(key).expect("not found ready joint");
-
+    pub fn update_parent_and_child(&mut self, joint: CachedJoint) {
         // add parents for my children
-        if let Some((_k, v)) = self.missing_parents.remove_entry(key) {
+        if let Some((_k, v)) = self.missing_parents.remove_entry(joint.key.as_str()) {
             for child in v {
                 let child_data = child.raw_read();
                 child_data.add_parent(joint.clone());
