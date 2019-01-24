@@ -370,6 +370,12 @@ fn is_stable_to_joints(
     last_ball: &RcuReader<JointData>,
     joints: Vec<(Level, RcuReader<JointData>)>,
 ) -> Result<bool> {
+    // if we can't find any end points, just return true
+    // this could happen if we select very old parents
+    if joints.is_empty() {
+        return Ok(true);
+    }
+
     let stable_point = last_ball.get_best_parent().read()?;
     let stable_point_level = stable_point.get_level();
 
