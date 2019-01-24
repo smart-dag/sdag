@@ -70,6 +70,22 @@ macro_rules! try_go {
             error!("back_trace={}", e.backtrace());
         })
     }};
+
+    // for builder/scope spawn
+    ($builder:expr, $func:expr) => {{
+        fn _go_check<F, E>(f: F) -> F
+        where
+            F: FnOnce() -> ::std::result::Result<(), E> + Send,
+            E: Send,
+        {
+            f
+        }
+        let f = _go_check($func);
+        go!($builder, move || if let Err(e) = f() {
+            error!("coroutine error: {}", e);
+            error!("back_trace={}", e.backtrace());
+        })
+    }};
 }
 
 #[macro_use]

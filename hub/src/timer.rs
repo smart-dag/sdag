@@ -35,11 +35,11 @@ pub fn start_global_timers() {
         hub::auto_connection();
     });
 
-    // broadcast good free joints timely
+    // broadcast good free joints list timely
     go!(move || loop {
         coroutine::sleep(Duration::from_secs(10));
-        info!("broadcast_free_joints to peers");
-        hub::broadcast_free_joints();
+        info!("broadcast_free_joint_list to peers");
+        hub::broadcast_free_joint_list();
     });
 
     // reset peer statistics

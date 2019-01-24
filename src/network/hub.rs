@@ -147,11 +147,11 @@ impl WsConnections {
         g.get(&peer_id).cloned()
     }
 
-    pub fn broadcast_joint(&self, joint: RcuReader<JointData>) -> Result<()> {
+    pub fn broadcast_joint(&self, joint: RcuReader<JointData>) {
         // disable broadcast during catchup
         let _g = match IS_CATCHING_UP.try_lock() {
             Some(g) => g,
-            None => return Ok(()),
+            None => return,
         };
 
         for conn in self.conns.read().unwrap().values().cloned() {
@@ -161,7 +161,23 @@ impl WsConnections {
                 try_go!(move || conn.send_joint(&joint));
             }
         }
-        Ok(())
+    }
+
+    fn broadcast_free_joint_list(&self, free_units: &[String]) {
+        // disable broadcast during catchup
+        let _g = match IS_CATCHING_UP.try_lock() {
+            Some(g) => g,
+            None => return,
+        };
+
+        coroutine::scope(|scope| {
+            for conn in self.conns.read().unwrap().values().cloned() {
+                // only send to who subscribed
+                if conn.is_subscribed() {
+                    try_go!(scope, move || conn.send_free_joint_list(free_units));
+                }
+            }
+        });
     }
 
     pub fn request_free_joints_from_all_peers(&self) -> Result<()> {
@@ -283,6 +299,8 @@ impl Server<HubData> for HubData {
             "joint" => ws.on_joint(body)?,
             "refresh" => ws.on_refresh(body)?,
             "light/new_address_to_watch" => ws.on_new_address_to_watch(body)?,
+            "free_joint_list" => ws.on_free_joint_list(body)?,
+
             subject => bail!(
                 "on_message unknown subject: {} body {}",
                 subject,
@@ -593,6 +611,31 @@ impl HubConn {
         Ok(serde_json::to_value(&*MY_WITNESSES)?)
     }
 
+    /// get free joint list from peers, request my lost free joints
+    fn on_free_joint_list(&self, param: Value) -> Result<()> {
+        // disable broadcast during catchup
+        let _g = match IS_CATCHING_UP.try_lock() {
+            Some(g) => g,
+            None => return Ok(()),
+        };
+
+        let free_units: Vec<String> =
+            serde_json::from_value(param).context("failed to parse free list")?;
+        let mut lost_frees = Vec::new();
+        for unit in free_units {
+            // if my normal/ unhandle/ known bad joints all have no the unit, means I lost the unit
+            if SDAG_CACHE.check_new_joint(&unit).is_ok() {
+                lost_frees.push(unit);
+            }
+        }
+
+        if !lost_frees.is_empty() {
+            self.request_joints(lost_frees)?;
+        }
+
+        Ok(())
+    }
+
     fn on_post_joint(&self, param: Value) -> Result<Value> {
         let joint: Joint = serde_json::from_value(param)?;
         info!("receive a posted joint: {:?}", joint);
@@ -864,6 +907,10 @@ impl HubConn {
         self.send_just_saying("joint", serde_json::to_value(joint)?)
     }
 
+    fn send_free_joint_list(&self, free_units: &[String]) -> Result<()> {
+        self.send_just_saying("free_joint_list", serde_json::to_value(free_units)?)
+    }
+
     /// send stable joints to trigger peer catchup
     fn send_joints_since_mci(&self, mci: Level) -> Result<()> {
         let last_stable_mci = main_chain::get_last_stable_mci();
@@ -1038,14 +1085,11 @@ impl HubConn {
 // Global Functions
 //---------------------------------------------------------------------------------------
 
-/// timely broadcast the good free joints in case they are not send out successfully
-pub fn broadcast_free_joints() {
+/// timely broadcast the good free units in case they are not send out successfully
+pub fn broadcast_free_joint_list() {
     if let Ok(free_joints) = SDAG_CACHE.get_good_free_joints() {
-        for joint in free_joints {
-            if let Ok(joint_data) = joint.read() {
-                t_c!(WSS.broadcast_joint(joint_data));
-            }
-        }
+        let free_units: Vec<String> = free_joints.iter().map(|v| v.key.to_string()).collect();
+        WSS.broadcast_free_joint_list(&free_units)
     }
 }
 

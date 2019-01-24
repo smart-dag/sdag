@@ -77,7 +77,7 @@ fn register_event_handlers() {
     use validation::NewJointEvent;
 
     // MciStableEvent::add_handler(|v| t!(network::hub::notify_watchers_about_stable_joints(v.mci)));
-    NewJointEvent::add_handler(|e| t!(network::hub::WSS.broadcast_joint(e.joint.clone())));
+    NewJointEvent::add_handler(|e| network::hub::WSS.broadcast_joint(e.joint.clone()));
 }
 
 // the hub server logic that run in coroutine context
