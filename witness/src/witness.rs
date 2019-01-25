@@ -360,6 +360,14 @@ fn compose_and_normalize() -> Result<()> {
 
     let joint_data = cached_joint.read()?;
     sdag::validation::validate_ready_joint(cached_joint)?;
+    let sequence = joint_data.get_sequence();
+    if sequence != JointSequence::Good {
+        bail!(
+            "only good joint is allowed to post for witness, unit={}, sequence={:?}",
+            joint_data.unit.unit,
+            sequence
+        );
+    }
 
     let mut max_parent_level = Level::MINIMUM;
     for parent in joint_data.parents.iter() {

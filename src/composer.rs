@@ -70,16 +70,39 @@ pub fn pick_parents_and_last_ball(_address: &str) -> Result<ParentsAndLastBall> 
 
     // pick other joints freely
     let mut parents = vec![best_joint.unit.unit.clone()];
+    let mut authors: Vec<String> = best_joint
+        .unit
+        .authors
+        .iter()
+        .map(|v| v.address.clone())
+        .collect();
+
     if free_joints.len() > config::MAX_PARENT_PER_UNIT {
         // get the free joint which include last my unstable joint first
         if let Some(unit) = get_include_self_free_joint(&free_joints, _address)? {
-            parents.push(unit);
+            if !parents.contains(&unit) {
+                let joint = SDAG_CACHE.get_joint(&unit)?.read()?;
+                for author in joint.unit.authors.iter() {
+                    if authors.contains(&author.address) {
+                        bail!("detect same author in parents");
+                    }
+                    authors.push(author.address.clone());
+                }
+                parents.push(unit);
+            }
         }
     }
 
-    for joint in free_joints {
+    'outer: for joint in free_joints {
         if parents.contains(&*joint.key) {
             continue;
+        }
+
+        for author in joint.read()?.unit.authors.iter() {
+            if authors.contains(&author.address) {
+                continue 'outer;
+            }
+            authors.push(author.address.clone());
         }
 
         parents.push(joint.key.to_string());

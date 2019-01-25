@@ -130,8 +130,7 @@ fn start_business_worker(rx: mpsc::Receiver<RcuReader<JointData>>) -> JoinHandle
                 }
             }
 
-            // TODO: set ball in property
-            // need to generate ball
+            // FIXME: the joint may not exist due to purege temp-bad
             let joint = t_c!(SDAG_CACHE.get_joint(&joint.unit.unit));
             t_c!(::finalization::FINALIZATION_WORKER.push_final_joint(joint));
         }
