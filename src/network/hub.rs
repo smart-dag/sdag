@@ -149,9 +149,10 @@ impl WsConnections {
 
     pub fn broadcast_joint(&self, joint: RcuReader<JointData>) {
         // disable broadcast during catchup
-        if is_catching_up() {
-            return;
-        }
+        let _g = match IS_CATCHING_UP.try_lock() {
+            Some(g) => g,
+            None => return,
+        };
 
         for conn in self.conns.read().unwrap().values().cloned() {
             // only send to who subscribed and not the source
@@ -164,9 +165,10 @@ impl WsConnections {
 
     fn broadcast_free_joint_list(&self, free_units: &[String]) {
         // disable broadcast during catchup
-        if is_catching_up() {
-            return;
-        }
+        let _g = match IS_CATCHING_UP.try_lock() {
+            Some(g) => g,
+            None => return,
+        };
 
         coroutine::scope(|scope| {
             for conn in self.conns.read().unwrap().values().cloned() {
@@ -559,9 +561,10 @@ impl HubConn {
     }
 
     fn on_refresh(&self, param: Value) -> Result<()> {
-        if is_catching_up() {
-            return Ok(());
-        }
+        let _g = match IS_CATCHING_UP.try_lock() {
+            Some(g) => g,
+            None => return Ok(()),
+        };
 
         let mci = param.as_u64();
         if let Some(mci) = mci {
@@ -611,9 +614,10 @@ impl HubConn {
     /// get free joint list from peers, request my lost free joints
     fn on_free_joint_list(&self, param: Value) -> Result<()> {
         // disable broadcast during catchup
-        if is_catching_up() {
-            return Ok(());
-        }
+        let _g = match IS_CATCHING_UP.try_lock() {
+            Some(g) => g,
+            None => return Ok(()),
+        };
 
         let free_units: Vec<String> =
             serde_json::from_value(param).context("failed to parse free list")?;
@@ -784,9 +788,10 @@ impl HubConn {
                 let ws = WSS.get_connection(self.get_peer_id()).unwrap();
                 try_go!(move || {
                     // if we already in catchup mode, just return
-                    if is_catching_up() {
-                        return Ok(());
-                    }
+                    let _g = match IS_CATCHING_UP.try_lock() {
+                        Some(g) => g,
+                        None => return Ok(()),
+                    };
 
                     let ret = start_catchup(ws);
                     // after the catchup done, clear the hash tree ball
@@ -1171,9 +1176,10 @@ pub fn purge_temp_bad_free_joints(timeout: u64) -> Result<()> {
 
 /// this fn will be called every 8s in a timer
 pub fn re_request_lost_joints() -> Result<()> {
-    if is_catching_up() {
-        return Ok(());
-    }
+    let _g = match IS_CATCHING_UP.try_lock() {
+        Some(g) => g,
+        None => return Ok(()),
+    };
 
     let units = SDAG_CACHE.get_missing_joints();
     if units.is_empty() {
@@ -1382,11 +1388,4 @@ fn clear_ball_after_min_retrievable_mci(joint_data: &JointData) -> Result<Joint>
     }
 
     Ok(joint)
-}
-
-pub fn is_catching_up() -> bool {
-    match IS_CATCHING_UP.try_lock() {
-        Some(_) => return false,
-        None => return true,
-    };
 }

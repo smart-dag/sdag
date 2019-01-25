@@ -71,11 +71,6 @@ fn check_timeout() -> Option<Duration> {
 
 pub fn check_and_witness() {
     info!("check and witness");
-    // can not witnessing during catchup
-    if sdag::network::hub::is_catching_up() {
-        return;
-    }
-
     let _g = match IS_WITNESSING.try_lock() {
         Some(g) => g,
         None => {
@@ -133,11 +128,6 @@ fn adjust_witnessing_speed() -> Result<()> {
 /// 2) non witness joint mci > min retrievable mci, min retrievable is last_stable_joint's last_stable_unit mci
 /// 3) last self unstable joint support current main chain, that means current main chain include my last unstable joint (cancel)
 fn is_need_witnessing() -> Result<(bool)> {
-    // can not witnessing during catchup
-    if sdag::network::hub::is_catching_up() {
-        return Ok(false);
-    }
-
     info!("if need post witness joint?");
     let _g = match IS_WITNESSING.try_lock() {
         Some(g) => g,
