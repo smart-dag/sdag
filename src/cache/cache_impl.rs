@@ -237,8 +237,11 @@ impl SDagCacheInner {
         self.missing_parents
             .entry(missing_parent)
             .and_modify(|v| {
-                assert_eq!(v.contains(&child), false);
-                v.push(child.clone());
+                if v.contains(&child) {
+                    error!("missing_parent already contains unit={}", child.key);
+                } else {
+                    v.push(child.clone());
+                }
             })
             .or_insert_with(|| vec![child]);
     }
@@ -254,18 +257,32 @@ impl SDagCacheInner {
 
     /// remove the parent and all it's descendants
     fn purge_unhandled_joint(&mut self, key: Arc<String>) {
-        let mut stack = vec![key];
+        let joint = match self.unhandled_joints.get(&*key) {
+            None => return,
+            Some(j) => j.read().expect("purge_unhandled_joint read failed"),
+        };
 
+        // unregister self missing parent
+        for parent in &joint.unit.parent_units {
+            self.missing_parents
+                .entry(parent.to_owned())
+                .and_modify(|v| v.retain(|x| x.key != key));
+        }
+
+        let mut stack = vec![key];
         // recursively remove the joint along the child of the graph
         // we use deep search without a revisited hashmap
         while let Some(key) = stack.pop() {
             // remove from unhandled
-            warn!("purge unhandled unit = {}", key);
-            self.unhandled_joints.remove(&*key);
-            // remove all it's descendants
-            if let Some(v) = self.missing_parents.remove(&*key) {
-                for child in v {
-                    stack.push(child.key);
+            if self.unhandled_joints.remove(&*key).is_some() {
+                warn!("purge unhandled unit = {}", key);
+                // remove all it's descendants
+                if let Some(v) = self.missing_parents.remove(&*key) {
+                    for child in v {
+                        if !stack.contains(&child.key) {
+                            stack.push(child.key);
+                        }
+                    }
                 }
             }
         }
@@ -300,7 +317,7 @@ impl SDagCacheInner {
         let mut stack = vec![joint.to_owned()];
 
         while let Some(ref joint) = stack.pop() {
-            warn!("purge temb-bad free unit = {}", joint);
+            warn!("purge temp-bad free unit = {}", joint);
             self.free_joints.remove(joint);
             let joint = self
                 .normal_joints

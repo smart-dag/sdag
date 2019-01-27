@@ -65,12 +65,6 @@ pub struct SDagCache {
 }
 
 impl SDagCache {
-    /// add empty joint into the cache
-    /// this is used when there are some (parents) refs that need to create
-    fn insert_empty_joint(&self, key: &str) -> CachedJoint {
-        self.joints.write().unwrap().add_empty_joint(key)
-    }
-
     /// insert a valid joint into the cache
     /// the joint data can be from internet or load from kv store
     fn insert_joint(&self, hash_key: HashKey, data: JointData) -> CachedJoint {
@@ -101,9 +95,11 @@ impl SDagCache {
     }
 
     /// get a joint form the hashmap, if not exist just insert one with none
+    /// this is used when there are some (parents) refs that need to create
     fn get_joint_or_none(&self, key: &str) -> CachedJoint {
-        match self.try_get_joint(key) {
-            None => self.insert_empty_joint(key),
+        let mut g = self.joints.write().unwrap();
+        match g.get_joint(key) {
+            None => g.add_empty_joint(key),
             Some(j) => j,
         }
     }
@@ -181,6 +177,7 @@ impl SDagCache {
     pub fn get_num_of_normal_joints(&self) -> usize {
         self.joints.read().unwrap().get_num_of_normal_joints()
     }
+
     /// get all unstable joints
     pub fn get_unstable_joints(&self) -> Result<Vec<CachedJoint>> {
         let mut queue = VecDeque::new();
@@ -253,14 +250,12 @@ impl SDagCache {
         let key = HashKey::new(&joint.unit.unit);
         self.check_new_joint(&key)?;
 
-        let joint_data = JointData::from_joint(joint, peer_id);
+        let joint_data = JointData::from_joint(joint, peer_id.clone());
 
         if let Err(e) = validation::basic_validate(&joint_data) {
             // need to record as known bad joint
             self.purge_bad_joint(&key, e.to_string());
-            let peer_id = joint_data
-                .get_peer_id()
-                .unwrap_or_else(|| Arc::new(String::from("unknown")));
+            let peer_id = peer_id.unwrap_or_else(|| Arc::new(String::from("unknown")));
             statistics::increase_stats(peer_id, true, false);
             bail!("base validation failed, err={}", e);
         }
