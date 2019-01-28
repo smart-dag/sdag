@@ -92,7 +92,7 @@ fn run_hub_server() -> Result<()> {
 fn main() -> Result<()> {
     // init default coroutine settings
     let stack_size = if cfg!(debug_assertions) {
-        0x6000
+        0x4000
     } else {
         0x2000
     };
