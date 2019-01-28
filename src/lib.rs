@@ -34,7 +34,7 @@ macro_rules! t {
         match $e {
             Ok(val) => val,
             Err(err) => {
-                error!("call = {:?}\nerr = {:?}", stringify!($e), err);
+                error!("call = {:?}\nerr = {}", stringify!($e), err);
             }
         }
     };
@@ -46,7 +46,7 @@ macro_rules! t_c {
         match $e {
             Ok(val) => val,
             Err(err) => {
-                error!("call = {:?}\nerr = {:?}", stringify!($e), err);
+                error!("call = {:?}\nerr = {}", stringify!($e), err);
                 continue;
             }
         }
@@ -67,7 +67,6 @@ macro_rules! try_go {
         let f = _go_check($func);
         go!(move || if let Err(e) = f() {
             error!("coroutine error: {}", e);
-            error!("back_trace={}", e.backtrace());
         })
     }};
 
@@ -83,7 +82,6 @@ macro_rules! try_go {
         let f = _go_check($func);
         go!($builder, move || if let Err(e) = f() {
             error!("coroutine error: {}", e);
-            error!("back_trace={}", e.backtrace());
         })
     }};
 }

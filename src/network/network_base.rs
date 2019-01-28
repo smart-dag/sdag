@@ -119,14 +119,14 @@ impl<T> WsConnection<T> {
 
 impl<T> Drop for WsConnection<T> {
     fn drop(&mut self) {
-        error!("connection dropped. peer_addr={}", self.get_peer_addr());
+        warn!("connection dropped. peer_addr={}", self.get_peer_addr());
         if ::std::thread::panicking() {
             return;
         }
-        if let Some(h) = self.listener.take(Ordering::Relaxed) {
+        if let Some(_h) = self.listener.take(Ordering::Relaxed) {
             // close the connection first
             self.ws.write().unwrap().ws.close(None).ok();
-            unsafe { h.coroutine().cancel() };
+            // unsafe { h.coroutine().cancel() };
             // h.join().ok();
         }
     }
@@ -159,15 +159,7 @@ impl<T> WsConnection<T> {
         let ws_1 = Arc::downgrade(&ws);
 
         let listener = go!(move || {
-            loop {
-                let msg = match reader.read_message() {
-                    Ok(msg) => msg,
-                    Err(e) => {
-                        error!("WebSocket read_message err={}", e.to_string());
-                        break;
-                    }
-                };
-
+            while let Ok(msg) = reader.read_message() {
                 let msg = match msg {
                     Message::Text(s) => s,
                     _ => {
@@ -228,7 +220,7 @@ impl<T> WsConnection<T> {
                                     t!(ws.send_response(&tag, rsp));
                                 }
                                 Err(e) => {
-                                    error!("{:?}", e);
+                                    error!("on request err={}", e);
                                     let error = json!(e.to_string());
                                     t!(ws.send_error_response(&tag, error));
                                 }
