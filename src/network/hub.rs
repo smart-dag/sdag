@@ -88,7 +88,7 @@ impl WsConnections {
         }
         add_peer_host(&conn)?;
         let peer_id = conn.get_peer_id();
-        error!(
+        warn!(
             "add_p2p_conn peer_id={} peer_addr={}",
             peer_id,
             conn.get_peer_addr()
@@ -786,18 +786,18 @@ impl HubConn {
             if !SDAG_CACHE.is_ball_in_hash_tree(ball) {
                 // need to catchup and keep the joint in unhandled till timeout
                 let ws = WSS.get_connection(self.get_peer_id()).unwrap();
-                try_go!(move || {
+                go!(move || {
                     // if we already in catchup mode, just return
                     let _g = match IS_CATCHING_UP.try_lock() {
                         Some(g) => g,
-                        None => return Ok(()),
+                        None => return,
                     };
 
-                    let ret = start_catchup(ws);
+                    if let Err(e) = start_catchup(ws) {
+                        error!("catchup failed, err={}", e);
+                    }
                     // after the catchup done, clear the hash tree ball
                     SDAG_CACHE.clear_hash_tree_ball();
-
-                    ret
                 });
                 return Ok(());
             }
@@ -1160,9 +1160,10 @@ pub fn purge_junk_unhandled_joints(timeout: u64) {
     let now = crate::time::now();
 
     // maybe we are catching up the missing parents
-    if IS_CATCHING_UP.is_locked() {
-        return;
-    }
+    let _g = match IS_CATCHING_UP.try_lock() {
+        Some(g) => g,
+        None => return,
+    };
 
     // remove those joints that stay in unhandled more that 10min
     SDAG_CACHE.purge_old_unhandled_joints(now, timeout);
@@ -1178,7 +1179,10 @@ pub fn purge_temp_bad_free_joints(timeout: u64) -> Result<()> {
 pub fn re_request_lost_joints() -> Result<()> {
     let _g = match IS_CATCHING_UP.try_lock() {
         Some(g) => g,
-        None => return Ok(()),
+        None => {
+            warn!("in catching up");
+            return Ok(());
+        }
     };
 
     let units = SDAG_CACHE.get_missing_joints();
@@ -1286,7 +1290,7 @@ fn get_unconnected_peers_in_db() -> Vec<String> {
 }
 
 fn start_catchup(ws: Arc<HubConn>) -> Result<()> {
-    error!("catchup started");
+    info!("catchup started");
 
     // before a catchup the hash_tree_ball should be clear
     assert_eq!(SDAG_CACHE.get_hash_tree_ball_len(), 0);
@@ -1319,7 +1323,7 @@ fn start_catchup(ws: Arc<HubConn>) -> Result<()> {
         SDAG_CACHE.get_hash_tree_ball_len() == 0
     })
     .context("catchup wait last ball timeout")?;
-    error!("catchup done");
+    info!("catchup done");
 
     // wait until there is no more working
     ::utils::wait_cond(None, || UNIT_IN_WORK.get_waiter_num() == 0).ok();
