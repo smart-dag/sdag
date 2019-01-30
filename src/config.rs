@@ -47,7 +47,7 @@ lazy_static! {
 pub fn show_config() {
     println!("\nconfig:");
     println!("\thub_url = {:?}", get_remote_hub_url());
-    println!("\thub_server_port = {}", get_hub_server_port());
+    println!("\tlisten_address = {:?}", get_listen_address());
     println!("\tdatabase_path = {:?}", get_database_path(false));
     println!("\n");
 }
@@ -66,9 +66,9 @@ pub fn get_remote_hub_url() -> Vec<String> {
         .unwrap_or_else(|_| vec!["127.0.0.1:6655".to_string()])
 }
 
-pub fn get_hub_server_port() -> u16 {
+pub fn get_listen_address() -> Option<String> {
     let cfg = CONFIG.read().unwrap();
-    cfg.get::<u16>("hub_server_port").unwrap_or(6615)
+    cfg.get::<String>("listen_address").ok()
 }
 
 pub fn get_database_path(is_light: bool) -> ::std::path::PathBuf {

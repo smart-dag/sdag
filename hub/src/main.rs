@@ -32,12 +32,12 @@ fn start_ws_server() -> Result<::may::coroutine::JoinHandle<()>> {
     use network::hub::WSS;
     use network::WsServer;
 
-    let port = config::get_hub_server_port();
+    let addr = config::get_listen_address().expect("no listen address for hub");
 
-    let server = WsServer::start(("0.0.0.0", port), |c| {
+    let server = WsServer::start(&addr, |c| {
         t!(WSS.add_p2p_conn(c, true));
     })?;
-    println!("Websocket server running on ws://0.0.0.0:{}", port);
+    println!("Websocket server running on ws://{}", addr);
 
     Ok(server)
 }

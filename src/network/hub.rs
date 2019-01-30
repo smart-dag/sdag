@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::net::ToSocketAddrs;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
+
 use std::time::Duration;
 
 use super::network_base::{Sender, Server, WsConnection};
@@ -43,6 +44,7 @@ lazy_static! {
     static ref JOINT_IN_REQ: MapLock<String> = MapLock::new();
     static ref IS_CATCHING_UP: AtomicLock = AtomicLock::new();
     static ref SELF_HUB_ID: String = object_hash::gen_random_string(30);
+    static ref SELF_LISTEN_ADDRESS: Option<String> = config::get_listen_address();
     static ref BAD_CONNECTION: FifoCache<String, ()> = FifoCache::with_capacity(10);
 }
 
@@ -53,14 +55,36 @@ lazy_static! {
 pub struct ConnState {
     peer_id: String,
     peer_addr: String,
-    is_source: bool,
     is_subscribed: bool,
+    listen_addr: Option<String>,
 }
+
 #[derive(Serialize, Deserialize)]
 pub struct HubNetState {
     // peer_id, peer_addr, is_source, is_subscribed
     pub in_bounds: Vec<ConnState>,
     pub out_bounds: Vec<ConnState>,
+}
+
+//---------------------------------------------------------------------------------------
+// RequestSubscribe
+//---------------------------------------------------------------------------------------
+#[derive(Serialize, Deserialize)]
+struct RequestSubscribe {
+    peer_id: String,
+    last_mci: Level,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    listen_addr: Option<String>,
+}
+
+//---------------------------------------------------------------------------------------
+// ResponseSubscribe
+//---------------------------------------------------------------------------------------
+#[derive(Serialize, Deserialize)]
+pub struct ResponseSubscribe {
+    pub peer_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub listen_addr: Option<String>,
 }
 
 //---------------------------------------------------------------------------------------
@@ -127,7 +151,7 @@ impl WsConnections {
         let g = self.conns.read().unwrap();
 
         // only get peers from source connections
-        let conns = g.values().filter(|c| c.is_source());
+        let conns = g.values().filter(|c| c.get_listen_addr().is_some());
         for conn in conns {
             if let Ok(value) = conn.send_request("get_peers", &hub_id) {
                 if let Ok(mut tmp) = serde_json::from_value(value) {
@@ -184,7 +208,7 @@ impl WsConnections {
         let g = self.conns.read().unwrap();
         let conns = g.values().cloned();
         for conn in conns {
-            if conn.is_source() {
+            if conn.get_listen_addr().is_some() {
                 try_go!(move || conn.send_just_saying("refresh", Value::Null));
             }
         }
@@ -201,10 +225,39 @@ impl WsConnections {
             .map(|c| ConnState {
                 peer_id: c.get_peer_id().to_string(),
                 peer_addr: c.get_peer_addr().to_string(),
-                is_source: c.is_source(),
                 is_subscribed: c.is_subscribed(),
+                listen_addr: c.get_listen_addr(),
             })
             .collect()
+    }
+
+    fn get_hub_peers(&self, hub_id: &str) -> Vec<ConnState> {
+        // filter out the connection with the same hub_id
+        let mut peers = self
+            .conns
+            .read()
+            .unwrap()
+            .values()
+            .filter(|c| c.get_listen_addr().is_some() && c.get_peer_id().as_str() != hub_id)
+            .map(|c| ConnState {
+                peer_id: c.get_peer_id().to_string(),
+                peer_addr: c.get_peer_addr().to_string(),
+                is_subscribed: c.is_subscribed(),
+                listen_addr: c.get_listen_addr(),
+            })
+            .collect::<Vec<_>>();
+
+        // include self listen address
+        if let Some(ref addr) = *SELF_LISTEN_ADDRESS {
+            peers.push(ConnState {
+                peer_id: SELF_HUB_ID.to_string(),
+                peer_addr: addr.to_owned(),
+                is_subscribed: true,
+                listen_addr: Some(addr.to_owned()),
+            })
+        }
+
+        peers
     }
 
     fn get_inbound_peers(&self) -> Vec<ConnState> {
@@ -216,8 +269,8 @@ impl WsConnections {
             .map(|c| ConnState {
                 peer_id: c.get_peer_id().to_string(),
                 peer_addr: c.get_peer_addr().to_string(),
-                is_source: c.is_source(),
                 is_subscribed: c.is_subscribed(),
+                listen_addr: c.get_listen_addr(),
             })
             .collect()
     }
@@ -271,9 +324,9 @@ impl WsConnections {
 pub struct HubData {
     // indicate if this connection is a subscribed peer
     is_subscribed: AtomicBool,
-    is_source: AtomicBool,
     is_inbound: AtomicBool,
     peer_id: ArcCell<String>,
+    listen_addr: ArcCell<Option<String>>,
 }
 
 pub type HubConn = WsConnection<HubData>;
@@ -282,9 +335,9 @@ impl Default for HubData {
     fn default() -> Self {
         HubData {
             is_subscribed: AtomicBool::new(false),
-            is_source: AtomicBool::new(false),
             is_inbound: AtomicBool::new(false),
             peer_id: ArcCell::new(Arc::new("unknown".to_owned())),
+            listen_addr: ArcCell::new(Arc::new(None)),
         }
     }
 }
@@ -359,16 +412,6 @@ impl HubConn {
         data.is_subscribed.store(true, Ordering::Relaxed);
     }
 
-    pub fn is_source(&self) -> bool {
-        let data = self.get_data();
-        data.is_source.load(Ordering::Relaxed)
-    }
-
-    fn set_source(&self) {
-        let data = self.get_data();
-        data.is_source.store(true, Ordering::Relaxed);
-    }
-
     pub fn is_inbound(&self) -> bool {
         let data = self.get_data();
         data.is_inbound.load(Ordering::Relaxed)
@@ -387,6 +430,16 @@ impl HubConn {
     pub fn set_peer_id(&self, peer_id: &str) {
         let data = self.get_data();
         data.peer_id.set(Arc::new(peer_id.to_owned()));
+    }
+
+    pub fn get_listen_addr(&self) -> Option<String> {
+        let data = self.get_data();
+        (*data.listen_addr.get()).clone()
+    }
+
+    pub fn set_listen_addr(&self, listen_addr: Option<String>) {
+        let data = self.get_data();
+        data.listen_addr.set(Arc::new(listen_addr));
     }
 }
 
@@ -461,23 +514,22 @@ impl HubConn {
     }
 
     fn on_subscribe(&self, param: Value) -> Result<Value> {
-        let subscription_id = param["subscription_id"]
-            .as_str()
-            .ok_or_else(|| format_err!("no subscription_id"))?;
-        if subscription_id == *SELF_HUB_ID {
+        let request: RequestSubscribe = serde_json::from_value(param)?;
+
+        if request.peer_id == *SELF_HUB_ID {
             self.close();
-            return Err(format_err!("self-connect"));
+            bail!("self-connect");
         }
+
         info!(
             "on_subscribe peer_id={}, peer_addr={}",
-            subscription_id,
+            request.peer_id,
             self.get_peer_addr()
         );
         self.set_subscribed();
-        self.set_peer_id(subscription_id);
+        self.set_peer_id(&request.peer_id);
 
         // send some joint in a background task
-        let last_mci = param["last_mci"].as_u64();
         let peer_id = self.get_peer_id();
         try_go!(move || -> Result<()> {
             // wait connection init done
@@ -485,8 +537,8 @@ impl HubConn {
             let ws = WSS
                 .get_connection(peer_id)
                 .ok_or_else(|| format_err!("connection not init done yet"))?;
-            if let Some(last_mci) = last_mci {
-                ws.send_joints_since_mci(Level::from(last_mci as usize))?;
+            if request.last_mci.is_valid() {
+                ws.send_joints_since_mci(request.last_mci)?;
             } else {
                 // send genesis unit
                 let genesis = SDAG_CACHE.get_joint(&::spec::GENESIS_UNIT)?.read()?;
@@ -496,7 +548,12 @@ impl HubConn {
             Ok(())
         });
 
-        Ok(json!({"peer_id": *SELF_HUB_ID, "is_source": true}))
+        let response = ResponseSubscribe {
+            peer_id: (*SELF_HUB_ID).to_string(),
+            listen_addr: (*SELF_LISTEN_ADDRESS).clone(),
+        };
+
+        Ok(serde_json::to_value(response)?)
     }
 
     fn on_get_joint(&self, param: Value) -> Result<Value> {
@@ -591,7 +648,7 @@ impl HubConn {
 
     fn on_get_peers(&self, param: Value) -> Result<Value> {
         let peer_id = param.as_str();
-        let peers = WSS.get_outbound_peers(peer_id.unwrap_or("unknown"));
+        let peers = WSS.get_hub_peers(peer_id.unwrap_or("unknown"));
         let peer_addrs = peers.into_iter().map(|p| p.peer_addr).collect::<Vec<_>>();
         Ok(serde_json::to_value(peer_addrs)?)
     }
@@ -961,33 +1018,29 @@ impl HubConn {
     }
 
     fn send_subscribe(&self) -> Result<()> {
-        let last_mci = main_chain::get_last_stable_mci();
+        let request = RequestSubscribe {
+            peer_id: (*SELF_HUB_ID).to_string(),
+            last_mci: main_chain::get_last_stable_mci(),
+            listen_addr: (*SELF_LISTEN_ADDRESS).clone(),
+        };
 
-        match self.send_request(
-            "subscribe",
-            &json!({ "subscription_id": *SELF_HUB_ID, "last_mci": last_mci.value()}),
-        ) {
+        match self.send_request("subscribe", &serde_json::to_value(request)?) {
             Ok(value) => {
+                let response: ResponseSubscribe = serde_json::from_value(value)?;
+
                 // the peer id may be ready set in on_subscribe
                 // the light client peer_id is the return value
-                match value["peer_id"].as_str() {
-                    Some(peer_id) => {
-                        if self.get_peer_id().as_str() == "unknown" {
-                            self.set_peer_id(peer_id);
-                        }
-                    }
-                    // the client must send it peer id back, or this would wait for ever!
-                    None => {
+                if self.get_peer_id().as_str() == "unknown" {
+                    if !response.peer_id.is_empty() {
+                        self.set_peer_id(&response.peer_id);
+                    } else {
                         ::utils::wait_cond(Some(Duration::from_secs(10)), || {
                             self.get_peer_id().as_str() != "unknown"
                         })?;
                     }
                 }
 
-                let is_source = value["is_source"].as_bool().unwrap_or(true);
-                if is_source {
-                    self.set_source();
-                }
+                self.set_listen_addr(response.listen_addr);
             }
             Err(e) => {
                 // save the peer address to avoid connect to it again
