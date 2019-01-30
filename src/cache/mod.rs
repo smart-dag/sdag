@@ -360,10 +360,8 @@ impl SDagCache {
 
     /// clear all the  hash tree balls
     pub fn clear_hash_tree_ball(&self) {
+        error!("clear hash tree");
         let mut g = self.hash_tree_balls.write().unwrap();
-        for (ball, unit) in &*g {
-            error!("clear hash tree: ball={}, unit={}", ball, unit);
-        }
         g.clear()
     }
 

@@ -8,7 +8,7 @@ extern crate serde_derive;
 extern crate clap;
 
 extern crate chrono;
-extern crate fern;
+extern crate env_logger;
 extern crate may;
 extern crate sdag;
 extern crate sdag_wallet_base;
@@ -53,20 +53,8 @@ fn init_log(verbosity: u64) {
         _ => log::LevelFilter::Debug,
     };
 
-    fern::Dispatch::new()
-        .format(|out, message, record| {
-            out.finish(format_args!(
-                "{}[{}][{}] {}",
-                chrono::Local::now().format("[%Y-%m-%d][%H:%M:%S%.3f]"),
-                record.level(),
-                record.target(),
-                message
-            ))
-        })
-        .level(log_lvl)
-        .chain(std::io::stdout())
-        .apply()
-        .unwrap();
+    let mut builder = env_logger::Builder::from_default_env();
+    builder.filter(None, log_lvl).init();
 
     debug!("log init done!");
 }

@@ -12,7 +12,7 @@ extern crate serde_derive;
 extern crate lazy_static;
 
 extern crate chrono;
-extern crate fern;
+extern crate env_logger;
 extern crate may_signal;
 extern crate rand;
 extern crate rcu_cell;
@@ -96,22 +96,10 @@ fn init_log() {
         log::LevelFilter::Warn
     };
 
-    fern::Dispatch::new()
-        .format(|out, message, record| {
-            out.finish(format_args!(
-                "{}[{}][{}] {}",
-                chrono::Local::now().format("[%Y-%m-%d][%H:%M:%S%.3f]"),
-                record.level(),
-                record.target(),
-                message
-            ))
-        })
-        .level(log_lvl)
-        .chain(std::io::stdout())
-        .apply()
-        .unwrap();
+    let mut builder = env_logger::Builder::from_default_env();
+    builder.filter(None, log_lvl).init();
 
-    debug!("log init done!");
+    info!("log init done!");
 }
 
 fn init() -> Result<()> {

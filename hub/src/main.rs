@@ -1,7 +1,7 @@
 #[macro_use]
 extern crate log;
 extern crate chrono;
-extern crate fern;
+extern crate env_logger;
 #[macro_use]
 extern crate sdag;
 #[macro_use]
@@ -22,20 +22,8 @@ fn log_init() {
         log::LevelFilter::Warn
     };
 
-    fern::Dispatch::new()
-        .format(|out, message, record| {
-            out.finish(format_args!(
-                "{}[{}][{}] {}",
-                chrono::Local::now().format("[%Y-%m-%d][%H:%M:%S%.3f]"),
-                record.level(),
-                record.target(),
-                message
-            ))
-        })
-        .level(log_lvl)
-        .chain(std::io::stdout())
-        .apply()
-        .unwrap();
+    let mut builder = env_logger::Builder::from_default_env();
+    builder.filter(None, log_lvl).init();
 
     info!("log init done!");
 }

@@ -307,16 +307,18 @@ impl<T> WsServer<T> {
             Err(e) => bail!("can't bind to address {}, err={}", address, e),
         };
 
-        Ok(go!(move || {
-            // for stream in listener.incoming() {
-            while let Ok((stream, _)) = listener.accept() {
-                let peer = match stream.peer_addr() {
-                    Ok(addr) => addr.to_string(),
-                    Err(_) => "unknown peer".to_owned(),
-                };
-                let ws = t_c!(accept(stream));
-                let ws = t_c!(WsConnection::new(ws, T::default(), peer, Role::Server));
-                f(ws);
+        Ok(go!(move || for stream in listener.incoming() {
+            match stream {
+                Ok(stream) => {
+                    let peer = match stream.peer_addr() {
+                        Ok(addr) => addr.to_string(),
+                        Err(_) => "unknown peer".to_owned(),
+                    };
+                    let ws = t_c!(accept(stream));
+                    let ws = t_c!(WsConnection::new(ws, T::default(), peer, Role::Server));
+                    f(ws);
+                }
+                Err(e) => error!("failed to accept, err={}", e),
             }
         }))
     }

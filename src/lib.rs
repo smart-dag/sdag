@@ -34,7 +34,7 @@ macro_rules! t {
         match $e {
             Ok(val) => val,
             Err(err) => {
-                error!("call = {:?}\nerr = {}", stringify!($e), err);
+                error!("call = {:?} err = {}", stringify!($e), err);
             }
         }
     };
@@ -46,7 +46,7 @@ macro_rules! t_c {
         match $e {
             Ok(val) => val,
             Err(err) => {
-                error!("call = {:?}\nerr = {}", stringify!($e), err);
+                error!("call = {:?} err = {}", stringify!($e), err);
                 continue;
             }
         }
