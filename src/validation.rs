@@ -595,6 +595,13 @@ fn validate_authors(joint: &JointData) -> Result<()> {
         return Ok(());
     }
 
+    let last_ball_unit = joint
+        .unit
+        .last_ball_unit
+        .as_ref()
+        .map(|s| s.as_str())
+        .unwrap_or("");
+
     for author in &joint.unit.authors {
         if !author.definition.is_null() {
             // only first joint need take definition
@@ -617,7 +624,7 @@ fn validate_authors(joint: &JointData) -> Result<()> {
         } else {
             // get_definitions failed, or definition unit is not stable,
             // basic validate can set validate_authors_state 0x10|0x11
-            let definition = match get_definition(&author.address) {
+            let definition = match get_definition(&author.address, last_ball_unit) {
                 Ok(v) => v,
                 Err(e) => {
                     // in normal validation stage just bail out the error
@@ -635,14 +642,20 @@ fn validate_authors(joint: &JointData) -> Result<()> {
         };
     }
 
-    fn get_definition(address: &str) -> Result<Value> {
+    fn get_definition(address: &str, last_ball_unit: &str) -> Result<Value> {
         let (unit, definition) = SDAG_CACHE
             .get_definition(address)
             .ok_or_else(|| format_err!("definition bound to address {} is not defined", address))?;
 
-        if !SDAG_CACHE.get_joint(&unit)?.read()?.is_stable() {
+        let definition_joint = SDAG_CACHE.get_joint(&unit)?.read()?;
+
+        // if definition unit is relative stable of last ball, means definition unit will be stable
+        let last_ball_joint = SDAG_CACHE.get_joint(last_ball_unit)?.read()?;
+        let is_include = *definition_joint <= *last_ball_joint;
+        if !is_include {
             bail!("definition is not stable, unit = {}", unit)
         }
+
         Ok(definition)
     }
 
