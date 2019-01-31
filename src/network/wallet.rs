@@ -246,12 +246,8 @@ impl WalletConn {
     fn on_subscribe(&self, _param: Value) -> Result<Value> {
         self.get_data().trigger_init_done();
         // TODO: use wallet address as the peer_id
-        let response = super::hub::ResponseSubscribe {
-            peer_id: ::object_hash::gen_random_string(30),
-            listen_addr: None,
-        };
-
-        Ok(serde_json::to_value(response)?)
+        let self_id = ::object_hash::gen_random_string(30);
+        Ok(json!({ "peer_id": self_id }))
     }
 }
 
