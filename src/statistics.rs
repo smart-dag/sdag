@@ -121,6 +121,17 @@ impl AllConnStats {
                 new_stats
             });
     }
+
+    fn get_peer_id_by_address(&self, peer_addr: &str) -> Option<String> {
+        let r_g = self.conn_stats.read().unwrap();
+        for (key, val) in r_g.iter() {
+            if peer_addr == val.peer_addr {
+                return Some(key.to_string());
+            }
+        }
+
+        None
+    }
 }
 
 //---------------------------------------------------------------------------------------
@@ -218,4 +229,8 @@ pub fn increase_stats(peer_id: Arc<String>, is_rx: bool, is_good: bool) {
 /// network interface: get all last statistics
 pub fn get_all_last_stats() -> HashMap<String, LastConnStat> {
     ALL_CONN_STATS.get_all_last_stats()
+}
+
+pub fn get_peer_id_by_address(peer_addr: &str) -> Option<String> {
+    ALL_CONN_STATS.get_peer_id_by_address(peer_addr)
 }

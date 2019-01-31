@@ -288,11 +288,15 @@ impl WsConnections {
     }
 
     fn contains(&self, addr: &str) -> bool {
-        self.conns
-            .read()
-            .unwrap()
-            .values()
-            .any(|v| v.get_peer_addr() == addr)
+        if addr.starts_with("127.0.0") {
+            return true;
+        }
+
+        if let Some(peer_id) = statistics::get_peer_id_by_address(addr) {
+            return self.conns.read().unwrap().contains_key(&peer_id);
+        }
+
+        false
     }
 }
 
