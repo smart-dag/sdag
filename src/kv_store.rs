@@ -68,6 +68,10 @@ mod kv_store_none {
         pub fn rebuild_from_kv(&self) -> Result<()> {
             Ok(())
         }
+
+        pub fn save_unstable_joints(&self) -> Result<()> {
+            Ok(())
+        }
     }
 }
 
@@ -76,6 +80,7 @@ mod kv_store_sled {
     extern crate sled;
 
     use self::sled::{Db, Tree};
+    use cache::SDAG_CACHE;
     use error::Result;
     use failure::ResultExt;
     use joint::{Joint, JointProperty};
@@ -190,10 +195,19 @@ mod kv_store_sled {
 
             Ok(())
         }
+
+        pub fn save_unstable_joints(&self) -> Result<()> {
+            let joints = SDAG_CACHE.get_unstable_joints()?;
+
+            for joint in joints {
+                joint.save_to_db()?;
+            }
+
+            Ok(())
+        }
     }
 
     fn handle_kv_joint(joint: Joint) -> Result<()> {
-        use cache::SDAG_CACHE;
         use joint::JointSequence;
         use validation;
 
