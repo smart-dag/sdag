@@ -159,7 +159,16 @@ impl<T> WsConnection<T> {
         let ws_1 = Arc::downgrade(&ws);
 
         let listener = go!(move || {
-            while let Ok(msg) = reader.read_message() {
+            loop {
+                let msg = match reader.read_message() {
+                    Ok(m) => m,
+                    Err(e) => {
+                        warn!("read_message failed, err={}", e);
+                        // cancell all the waiting response on this connection
+                        req_map_1.cancel_all();
+                        break;
+                    }
+                };
                 let msg = match msg {
                     Message::Text(s) => s,
                     _ => {

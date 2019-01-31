@@ -493,21 +493,24 @@ impl HubConn {
     }
 
     fn on_subscribe(&self, param: Value) -> Result<Value> {
-        let subscription_id = param["subscription_id"]
+        let peer_id = param["subscription_id"]
             .as_str()
             .ok_or_else(|| format_err!("no subscription_id"))?;
-        if subscription_id == *SELF_HUB_ID {
+        if peer_id == *SELF_HUB_ID {
             self.close();
             bail!("self-connect");
         }
 
         info!(
             "on_subscribe peer_id={}, peer_addr={}",
-            subscription_id,
+            peer_id,
             self.get_peer_addr()
         );
         self.set_subscribed();
-        self.set_peer_id(subscription_id);
+        self.set_peer_id(peer_id);
+        if WSS.get_connection(self.get_peer_id()).is_some() {
+            bail!("peer_id={} already connected", peer_id);
+        }
 
         // get listen address
         let listen_addr = param["listen_addr"].as_str();
@@ -533,7 +536,11 @@ impl HubConn {
             Ok(())
         });
 
-        Ok(json!({"peer_id": *SELF_HUB_ID, "is_source": true, "listen_addr": *SELF_LISTEN_ADDRESS}))
+        Ok(json!({
+            "subscription_id": *SELF_HUB_ID,
+            "is_source": true,
+            "listen_addr": *SELF_LISTEN_ADDRESS
+        }))
     }
 
     fn on_get_joint(&self, param: Value) -> Result<Value> {
@@ -1010,18 +1017,14 @@ impl HubConn {
             Ok(value) => {
                 // the peer id may be ready set in on_subscribe
                 // the light client peer_id is the return value
-                match value["peer_id"].as_str() {
+                match value["subscription_id"].as_str() {
                     Some(peer_id) => {
                         if self.get_peer_id().as_str() == "unknown" {
                             self.set_peer_id(peer_id);
                         }
                     }
-                    // the client must send it peer id back, or this would wait for ever!
-                    None => {
-                        ::utils::wait_cond(Some(Duration::from_secs(10)), || {
-                            self.get_peer_id().as_str() != "unknown"
-                        })?;
-                    }
+                    // the client must send it peer id back
+                    None => bail!("no subscription_id set in response of subscribe"),
                 }
 
                 // if has listen address
