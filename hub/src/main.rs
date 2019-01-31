@@ -92,6 +92,8 @@ fn main() -> Result<()> {
     log_init();
     config::show_config();
 
+    kv_store::KV_STORE.rebuild_from_kv()?;
+
     // uncomment it to test read joint from db
     go!(run_hub_server)
         .join()

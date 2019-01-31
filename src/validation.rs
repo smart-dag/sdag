@@ -158,7 +158,7 @@ pub fn basic_validate(joint: &JointData) -> Result<()> {
     validate_ball_basic(joint)?;
 
     // validate authors move here for improving TPS
-    validate_authors(joint)?;
+    // validate_authors(joint)?;
 
     Ok(())
 }

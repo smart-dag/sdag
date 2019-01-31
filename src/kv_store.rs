@@ -64,6 +64,10 @@ mod kv_store_none {
         pub fn save_joint_property(&self, _key: &str, _property: &JointProperty) -> Result<()> {
             Ok(())
         }
+
+        pub fn rebuild_from_kv(&self) -> Result<()> {
+            Ok(())
+        }
     }
 }
 
@@ -160,6 +164,64 @@ mod kv_store_sled {
 
             Ok(())
         }
+
+        pub fn rebuild_from_kv(&self) -> Result<()> {
+            let genesis = ::spec::GENESIS_UNIT.as_bytes();
+            let mut iter = self.joints.scan(&genesis);
+            while let Some(item) = iter.next() {
+                let (key, value) = item.unwrap();
+                let joint: Joint = serde_json::from_str(::std::str::from_utf8(&value)?)?;
+                if handle_kv_joint(joint).is_err() {
+                    error!("handle kv joint {} error", ::std::str::from_utf8(&key)?);
+                }
+            }
+
+            let mut iter = self.joints.scan(&genesis).rev();
+            //Skip the genesis to avoid read it again
+            iter.next();
+
+            while let Some(item) = iter.next() {
+                let (key, value) = item.unwrap();
+                let joint: Joint = serde_json::from_str(::std::str::from_utf8(&value)?)?;
+                if handle_kv_joint(joint).is_err() {
+                    error!("handle kv joint {} error", ::std::str::from_utf8(&key)?);
+                }
+            }
+
+            Ok(())
+        }
+    }
+
+    fn handle_kv_joint(joint: Joint) -> Result<()> {
+        use cache::SDAG_CACHE;
+        use joint::JointSequence;
+        use validation;
+
+        try_go!(move || {
+            // check content_hash or unit_hash first!
+            validation::validate_unit_hash(&joint.unit)?;
+            let cached_joint = match SDAG_CACHE.add_new_joint(joint, None) {
+                Ok(j) => j,
+                Err(e) => {
+                    error!("add new joint: err = {}", e);
+                    bail!("add_new_joint: err = {}", e);
+                }
+            };
+
+            let joint_data = cached_joint.read().unwrap();
+            if let Some(ref hash) = joint_data.unit.content_hash {
+                error!("unit {} content hash = {}", cached_joint.key, hash);
+                joint_data.set_sequence(JointSequence::FinalBad);
+            }
+
+            if joint_data.is_ready() {
+                validation::validate_ready_joint(cached_joint)?;
+            }
+
+            Ok(())
+        });
+
+        Ok(())
     }
 
     #[test]
