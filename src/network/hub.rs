@@ -635,7 +635,10 @@ impl HubConn {
     fn on_get_peers(&self, param: Value) -> Result<Value> {
         let peer_id = param.as_str();
         let peers = WSS.get_hub_peers(peer_id.unwrap_or("unknown"));
-        let peer_addrs = peers.into_iter().map(|p| p.peer_addr).collect::<Vec<_>>();
+        let peer_addrs = peers
+            .into_iter()
+            .filter_map(|p| p.listen_addr)
+            .collect::<Vec<String>>();
         Ok(serde_json::to_value(peer_addrs)?)
     }
 
@@ -1158,11 +1161,14 @@ pub fn auto_connection() {
         if BAD_CONNECTION.get(&peer).is_some() {
             continue;
         }
-        if create_outbound_conn(peer).is_ok() {
-            counts -= 1;
-            if counts == 0 {
-                return;
+        match create_outbound_conn(&peer) {
+            Ok(_) => {
+                counts -= 1;
+                if counts == 0 {
+                    return;
+                }
             }
+            Err(e) => error!("failed to connect to remote peer={}, err={}", peer, e),
         }
     }
 
@@ -1171,11 +1177,14 @@ pub fn auto_connection() {
         if BAD_CONNECTION.get(&peer).is_some() {
             continue;
         }
-        if create_outbound_conn(peer).is_ok() {
-            counts -= 1;
-            if counts == 0 {
-                return;
+        match create_outbound_conn(&peer) {
+            Ok(_) => {
+                counts -= 1;
+                if counts == 0 {
+                    return;
+                }
             }
+            Err(e) => error!("failed to connect to db peer={}, err={}", peer, e),
         }
     }
 }
