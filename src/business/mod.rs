@@ -86,7 +86,7 @@ fn start_business_worker(rx: mpsc::Receiver<RcuReader<JointData>>) -> JoinHandle
                                 BUSINESS_CACHE.temp_business_state.write().unwrap();
                             for i in 0..joint.unit.messages.len() {
                                 if let Err(e) = temp_business_state.apply_message(&joint, i) {
-                                    warn!("apply temp state failed, err = {:?}", e);
+                                    warn!("apply temp state failed, err = {}", e);
                                 }
                             }
                         }
@@ -99,7 +99,7 @@ fn start_business_worker(rx: mpsc::Receiver<RcuReader<JointData>>) -> JoinHandle
                         // we hope that the global state is still correct
                         // like transactions
                         error!(
-                            "apply_joint failed, unit = {}, err = {:?}",
+                            "apply_joint failed, unit = {}, err = {}",
                             joint.unit.unit, e
                         );
                         joint.set_sequence(JointSequence::FinalBad);
@@ -111,7 +111,7 @@ fn start_business_worker(rx: mpsc::Receiver<RcuReader<JointData>>) -> JoinHandle
                 }
                 Err(e) => {
                     error!(
-                        "validate_joint failed, unit = {}, err = {:?}",
+                        "validate_joint failed, unit = {}, err = {}",
                         joint.unit.unit, e
                     );
                     if let JointSequence::Good = joint.get_sequence() {
@@ -120,7 +120,7 @@ fn start_business_worker(rx: mpsc::Receiver<RcuReader<JointData>>) -> JoinHandle
                         for i in 0..joint.unit.messages.len() {
                             if let Ok(true) = BUSINESS_CACHE.stable_utxo_contains(&joint, i) {
                                 if let Err(e) = temp_business_state.revert_message(&joint, i) {
-                                    error!("revert temp state failed, err = {:?}", e);
+                                    error!("revert temp state failed, err = {}", e);
                                 }
                             }
                         }
@@ -518,7 +518,10 @@ impl BusinessCache {
         for i in 0..joint.unit.messages.len() {
             let state = g.validate_message(&joint, i);
             if let Err(e) = state {
-                error!("validate_unstable_joint, err={}", e);
+                error!(
+                    "validate_unstable_joint, unit = {}, err = {}",
+                    joint.unit.unit, e
+                );
                 // now we only support one message for a unit
                 return Ok(JointSequence::TempBad);
             } else {

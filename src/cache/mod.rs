@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use config;
 use error::Result;
-use joint::{Joint, JointSequence, Level};
+use joint::{Joint, Level};
 use kv_store::{LoadFromKv, KV_STORE};
 use may::coroutine;
 use may::sync::RwLock;
@@ -145,21 +145,19 @@ impl SDagCache {
     }
 
     pub fn get_temp_bad_joints(&self) -> Vec<String> {
-        self.get_unstable_joints()
+        self.get_all_free_joints()
             .map(|v| {
                 v.into_iter()
                     .filter_map(|j| {
                         if let Ok(joint) = j.read() {
-                            match joint.get_sequence() {
-                                JointSequence::Good
-                                | JointSequence::FinalBad
-                                | JointSequence::NoCommission => return None,
-                                JointSequence::TempBad | JointSequence::NonserialBad => {
-                                    return Some(joint.unit.unit.clone());
-                                }
+                            if joint.get_sequence().is_temp_bad() {
+                                Some(joint.unit.unit.clone())
+                            } else {
+                                None
                             }
+                        } else {
+                            None
                         }
-                        None
                     })
                     .collect::<Vec<_>>()
             })

@@ -77,8 +77,7 @@ pub fn validate_ready_joint(joint: CachedJoint) -> Result<()> {
     }
 
     // only broadcast good joints
-    let sequence = joint_data.get_sequence();
-    if sequence == JointSequence::Good {
+    if !joint_data.get_sequence().is_temp_bad() {
         ::utils::event::emit_event(NewJointEvent {
             joint: joint_data.clone(),
         });

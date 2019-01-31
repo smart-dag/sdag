@@ -131,10 +131,15 @@ impl Default for Level {
 pub enum JointSequence {
     Good,
     NonserialBad,
-    // SerialBad,
     TempBad,
     FinalBad,
     NoCommission,
+}
+
+impl JointSequence {
+    pub fn is_temp_bad(self) -> bool {
+        self == JointSequence::NonserialBad || self == JointSequence::TempBad
+    }
 }
 
 //---------------------------------------------------------------------------------------

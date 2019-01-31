@@ -21,12 +21,12 @@ pub fn start_global_timers() {
     // });
 
     // remove those temp-bad free joints
-    // go!(move || loop {
-    //     const TIMEOUT: u64 = 60; // 1min
-    //     coroutine::sleep(Duration::from_secs(TIMEOUT / 2));
-    //     info!("purge_tempbad_joints");
-    //     t!(hub::purge_temp_bad_free_joints(TIMEOUT * 1000));
-    // });
+    go!(move || loop {
+        const TIMEOUT: u64 = 60; // 1min
+        coroutine::sleep(Duration::from_secs(TIMEOUT / 2));
+        info!("purge_tempbad_joints");
+        t!(hub::purge_temp_bad_free_joints(TIMEOUT * 1000));
+    });
 
     // auto connection if peers count is under threshold
     go!(move || loop {

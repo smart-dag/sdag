@@ -3,7 +3,6 @@ use std::sync::Arc;
 
 use cache::{CachedData, CachedJoint, HashKey, JointData};
 use error::Result;
-use joint::JointSequence;
 use rcu_cell::RcuCell;
 
 //---------------------------------------------------------------------------------------
@@ -79,12 +78,10 @@ impl SDagCacheInner {
 
     fn try_get_free_joints(&self) -> Result<Vec<CachedJoint>> {
         // judge if the joint has all bad children
-        fn is_all_children_bad(joint: &JointData) -> Result<bool> {
+        fn is_all_children_temp_bad(joint: &JointData) -> Result<bool> {
             for child in joint.children.iter() {
                 let child_data = child.read()?;
-                if child_data.get_sequence() == JointSequence::Good
-                    || child_data.unit.is_authored_by_witness()
-                {
+                if !child_data.get_sequence().is_temp_bad() {
                     return Ok(false);
                 }
             }
@@ -101,10 +98,9 @@ impl SDagCacheInner {
         while let Some(joint) = joints.pop_front() {
             let joint_data = joint.read()?;
 
-            if joint_data.get_sequence() == JointSequence::Good
-                || joint_data.unit.is_authored_by_witness()
+            if !joint_data.get_sequence().is_temp_bad() || joint_data.unit.is_authored_by_witness()
             {
-                if is_all_children_bad(&joint_data)? {
+                if is_all_children_temp_bad(&joint_data)? {
                     free_joints.push(joint);
                 }
                 continue;
@@ -321,24 +317,32 @@ impl SDagCacheInner {
             self.free_joints.remove(joint);
             let joint = self
                 .normal_joints
-                .remove(joint)
+                .get(joint)
                 .expect("purge_free_joint not found")
                 .raw_read();
 
             let unit = &joint.unit.unit;
+
+            if !joint.children.is_empty() {
+                error!("detect purge free joint is not free, unit={}", unit);
+                continue;
+            }
+
+            self.normal_joints.remove(unit);
+
             for parent in joint.parents.iter() {
                 // remove the child for the parent
                 // if the parent becomes free just add back to free list
                 let parent_joint = parent.read()?;
                 parent_joint.children.remove_with(|j| &*j.key == unit);
                 if parent_joint.is_free() {
-                    if parent_joint.get_sequence() != JointSequence::Good {
-                        // remove this "bad" "free" parent
-                        stack.push(parent_joint.unit.unit.to_owned());
-                    } else {
-                        self.free_joints
-                            .insert(HashKey(parent.key.clone()), parent.clone());
+                    if parent_joint.get_sequence().is_temp_bad() {
+                        // remove this "bad" "free" parent in next round, should never happend
+                        error!("detect temp-bad unit's parent is still temp-bad!, unit = {}, parent = {}",
+                               unit, parent_joint.unit.unit);
                     }
+                    self.free_joints
+                        .insert(HashKey(parent.key.clone()), parent.clone());
                 }
             }
         }
@@ -357,19 +361,16 @@ impl SDagCacheInner {
             .filter_map(|(k, j)| {
                 // free joints must be in cache so that we can safely unwrap it
                 let joint = j.raw_read();
-                match joint.get_sequence() {
-                    JointSequence::Good | JointSequence::FinalBad | JointSequence::NoCommission => {
-                        return None;
-                    }
-                    JointSequence::TempBad | JointSequence::NonserialBad => {
-                        if joint.unit.is_authored_by_witness() {
-                            error!("detect purge temp bad witness unit={}", joint.unit.unit);
-                            return None;
-                        }
-                    }
+                if !joint.get_sequence().is_temp_bad() {
+                    return None;
                 }
 
                 if now - joint.get_create_time() < timeout {
+                    return None;
+                }
+
+                if joint.unit.is_authored_by_witness() {
+                    error!("detect purge temp bad witness unit={}", joint.unit.unit);
                     return None;
                 }
 
