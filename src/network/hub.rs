@@ -493,9 +493,9 @@ impl HubConn {
     }
 
     fn on_subscribe(&self, param: Value) -> Result<Value> {
-        let peer_id = param["subscription_id"]
+        let peer_id = param["peer_id"]
             .as_str()
-            .ok_or_else(|| format_err!("no subscription_id"))?;
+            .ok_or_else(|| format_err!("no peer_id"))?;
         if peer_id == *SELF_HUB_ID {
             self.close();
             bail!("self-connect");
@@ -537,8 +537,7 @@ impl HubConn {
         });
 
         Ok(json!({
-            "subscription_id": *SELF_HUB_ID,
-            "is_source": true,
+            "peer_id": *SELF_HUB_ID,
             "listen_addr": *SELF_LISTEN_ADDRESS
         }))
     }
@@ -1009,7 +1008,7 @@ impl HubConn {
 
         match self.send_request(
             "subscribe",
-            &json!({ "subscription_id": *SELF_HUB_ID,
+            &json!({ "peer_id": *SELF_HUB_ID,
               "last_mci": last_mci.value(),
               "listen_addr": *SELF_LISTEN_ADDRESS,
             }),
@@ -1017,14 +1016,14 @@ impl HubConn {
             Ok(value) => {
                 // the peer id may be ready set in on_subscribe
                 // the light client peer_id is the return value
-                match value["subscription_id"].as_str() {
+                match value["peer_id"].as_str() {
                     Some(peer_id) => {
                         if self.get_peer_id().as_str() == "unknown" {
                             self.set_peer_id(peer_id);
                         }
                     }
                     // the client must send it peer id back
-                    None => bail!("no subscription_id set in response of subscribe"),
+                    None => bail!("no peer_id set in response of subscribe"),
                 }
 
                 // if has listen address
