@@ -171,26 +171,11 @@ mod kv_store_sled {
         }
 
         pub fn rebuild_from_kv(&self) -> Result<()> {
-            let genesis = ::spec::GENESIS_UNIT.as_bytes();
-            let mut iter = self.joints.scan(&genesis);
+            let mut iter = self.joints.iter();
             while let Some(item) = iter.next() {
-                let (key, value) = item.unwrap();
+                let (_, value) = item.unwrap();
                 let joint: Joint = serde_json::from_str(::std::str::from_utf8(&value)?)?;
-                if handle_kv_joint(joint).is_err() {
-                    error!("handle kv joint {} error", ::std::str::from_utf8(&key)?);
-                }
-            }
-
-            let mut iter = self.joints.scan(&genesis).rev();
-            //Skip the genesis to avoid read it again
-            iter.next();
-
-            while let Some(item) = iter.next() {
-                let (key, value) = item.unwrap();
-                let joint: Joint = serde_json::from_str(::std::str::from_utf8(&value)?)?;
-                if handle_kv_joint(joint).is_err() {
-                    error!("handle kv joint {} error", ::std::str::from_utf8(&key)?);
-                }
+                handle_kv_joint(joint)?
             }
 
             Ok(())
@@ -217,7 +202,6 @@ mod kv_store_sled {
             let cached_joint = match SDAG_CACHE.add_new_joint(joint, None) {
                 Ok(j) => j,
                 Err(e) => {
-                    error!("add new joint: err = {}", e);
                     bail!("add_new_joint: err = {}", e);
                 }
             };

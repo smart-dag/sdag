@@ -89,6 +89,7 @@ impl SDagCache {
 
     /// load a joint from kv store directly
     /// usually we don't need to call this directly
+    #[allow(dead_code)]
     fn load_joint_from_kv(&self, key: &str) -> Result<CachedJoint> {
         let key = HashKey::new(key);
         let joint = JointData::load_from_kv(&key)?;
@@ -121,7 +122,14 @@ impl SDagCache {
                 if g.is_known_bad_joint(key) {
                     bail!("unit={} is known bad", key);
                 }
-                self.load_joint_from_kv(key)
+
+                // now we are rebuilding everything, joint read from kv can not be used directly
+                // since the cache and business state are not rebuild accordingly
+                bail!("unit={} does not exist", key);
+
+                // loading joint from kv needs the write guard
+                //drop(g);
+                //self.load_joint_from_kv(key)
             }
             Some(j) => Ok(j),
         }
