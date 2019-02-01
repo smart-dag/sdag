@@ -37,6 +37,19 @@ pub fn start_global_timers() {
         hub::auto_connection();
     });
 
+    // broadcast good free joints list timely
+    go!(move || loop {
+        coroutine::sleep(Duration::from_secs(10));
+        info!("broadcast_free_joint_list to peers");
+        hub::broadcast_free_joint_list();
+    });
+
+    // reset peer statistics
+    go!(move || loop {
+        statistics::update_stats();
+        coroutine::sleep(Duration::from_secs(1));
+    });
+
     // witness compose and send joint
     go!(move || loop {
         info!("witness_timer_check");
@@ -45,11 +58,5 @@ pub fn start_global_timers() {
             Duration::from_secs(1)
         });
         coroutine::sleep(dur);
-    });
-
-    // reset peer statistics
-    go!(move || loop {
-        statistics::update_stats();
-        coroutine::sleep(Duration::from_secs(1));
     });
 }

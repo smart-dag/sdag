@@ -13,12 +13,12 @@ pub fn start_global_timers() {
     });
 
     // remove those junk joints
-    // go!(move || loop {
-    //     const TIMEOUT: u64 = 2 * 60; // 2min
-    //     coroutine::sleep(Duration::from_secs(TIMEOUT / 2));
-    //     info!("purge_junk_unhandled_joints");
-    //     hub::purge_junk_unhandled_joints(TIMEOUT * 1000);
-    // });
+    go!(move || loop {
+        const TIMEOUT: u64 = 2 * 60; // 2min
+        coroutine::sleep(Duration::from_secs(TIMEOUT / 2));
+        info!("purge_junk_unhandled_joints");
+        hub::purge_junk_unhandled_joints(TIMEOUT * 1000);
+    });
 
     // remove those temp-bad free joints
     go!(move || loop {
