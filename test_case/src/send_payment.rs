@@ -146,6 +146,7 @@ pub fn choose_wallet(cur_wallet: usize, test_wallets: &[wallet::WalletInfo]) -> 
         _ => usize::min_value(),
     };
 
+    // FIXME: this never loops!!
     for index in (max_wallet + 1)..test_wallets.len() {
         registered_wallets.remove(&cur_wallet);
         registered_wallets.insert(index);

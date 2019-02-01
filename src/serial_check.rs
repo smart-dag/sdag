@@ -1,8 +1,9 @@
-use std::collections::{HashSet, VecDeque};
+use std::collections::VecDeque;
 use std::sync::Arc;
 
 use cache::{CachedJoint, SDAG_CACHE};
 use error::Result;
+use hashbrown::HashSet;
 use joint::{Joint, JointSequence};
 
 #[inline]

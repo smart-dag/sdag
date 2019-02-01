@@ -1,8 +1,9 @@
-use std::collections::{HashSet, VecDeque};
+use std::collections::VecDeque;
 
 use cache::CachedJoint;
 use config;
 use error::Result;
+use hashbrown::HashSet;
 use joint::Level;
 
 #[allow(dead_code)]

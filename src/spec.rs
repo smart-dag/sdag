@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::HashMap as StdHashMap;
 
 use config;
 use error::Result;
@@ -10,8 +10,9 @@ use serde_json::Value;
 #[serde(deny_unknown_fields)]
 pub struct Author {
     pub address: String,
-    #[serde(skip_serializing_if = "HashMap::is_empty")]
-    pub authentifiers: HashMap<String, String>,
+    // TODO: change it to Vec
+    #[serde(skip_serializing_if = "StdHashMap::is_empty")]
+    pub authentifiers: StdHashMap<String, String>,
     #[serde(default)]
     #[serde(skip_serializing_if = "Value::is_null")]
     pub definition: Value,
@@ -148,7 +149,7 @@ struct NakedMessage<'a> {
 struct NakedAuthor<'a> {
     address: &'a str,
     #[serde(skip_serializing_if = "Option::is_none")]
-    authentifiers: Option<&'a HashMap<String, String>>,
+    authentifiers: Option<&'a StdHashMap<String, String>>,
     #[serde(skip_serializing_if = "Value::is_null")]
     definition: &'a Value,
 }

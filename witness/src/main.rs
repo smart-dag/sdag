@@ -13,6 +13,7 @@ extern crate lazy_static;
 
 extern crate chrono;
 extern crate env_logger;
+extern crate hashbrown;
 extern crate may_signal;
 extern crate rand;
 extern crate rcu_cell;

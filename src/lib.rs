@@ -2,31 +2,31 @@
 extern crate log;
 #[macro_use]
 extern crate may;
-extern crate may_waiter;
-extern crate serde;
-extern crate smallvec;
+#[macro_use]
+extern crate failure;
+#[macro_use]
+extern crate lazy_static;
 #[macro_use]
 extern crate serde_json;
 #[macro_use]
 extern crate serde_derive;
-extern crate rcu_cell;
-extern crate tungstenite;
-extern crate url;
 
-#[macro_use]
-extern crate failure;
-
-#[macro_use]
-extern crate lazy_static;
 extern crate base32;
 extern crate base64;
 extern crate bit_vec;
 extern crate crossbeam;
+extern crate hashbrown;
+extern crate may_waiter;
 extern crate rand;
+extern crate rcu_cell;
 extern crate ripemd160;
 extern crate secp256k1;
+extern crate serde;
 extern crate sha1;
 extern crate sha2;
+extern crate smallvec;
+extern crate tungstenite;
+extern crate url;
 
 #[macro_export]
 macro_rules! t {

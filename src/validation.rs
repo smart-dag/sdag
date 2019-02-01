@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::HashMap as StdHashMap;
 use std::sync::Arc;
 
 use business;
@@ -723,7 +723,7 @@ pub fn validate_authentifiers<S: std::hash::BuildHasher>(
     asset: &Value,
     definition: &Value,
     unit_hash: &[u8],
-    authentifiers: &HashMap<String, String, S>,
+    authentifiers: &StdHashMap<String, String, S>,
 ) -> Result<()> {
     let evaluate = |definition: &Value, path: &str, used_path: &mut Vec<String>| -> Result<()> {
         let definition = Definition::from_value(definition)?;

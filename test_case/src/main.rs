@@ -9,6 +9,7 @@ extern crate clap;
 
 extern crate chrono;
 extern crate env_logger;
+extern crate hashbrown;
 extern crate may;
 extern crate sdag;
 extern crate sdag_wallet_base;
@@ -18,14 +19,14 @@ extern crate serde_json;
 #[macro_use]
 extern crate lazy_static;
 
-use chrono::{Local, TimeZone};
-use clap::App;
-use std::collections::HashSet;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 use std::sync::RwLock;
 
+use chrono::{Local, TimeZone};
+use clap::App;
 use failure::ResultExt;
+use hashbrown::HashSet;
 use may::*;
 
 use sdag_wallet_base::Base64KeyExt;
@@ -307,16 +308,15 @@ fn main() -> Result<()> {
             return Ok(());
         }
 
-        let mut flag = "good";
-        if pay.values_of("ns").is_some() {
-            flag = "nonserial";
-        }
-        if pay.values_of("ds").is_some() {
-            flag = "doublespend";
-        }
-        if pay.values_of("sa").is_some() {
-            flag = "samejoint";
-        }
+        let flag = if pay.values_of("ns").is_some() {
+            "nonserial"
+        } else if pay.values_of("ds").is_some() {
+            "doublespend"
+        } else if pay.values_of("sa").is_some() {
+            "samejoint"
+        } else {
+            "good"
+        };
         let flags = vec!["good", "nonserial", "doublespend", "samejoint"];
         if !flags.contains(&flag) {
             eprintln!("flag is invalid, valid flag [{:#?}]", flags);

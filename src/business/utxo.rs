@@ -1,7 +1,8 @@
 use failure::ResultExt;
 use std::cmp::Ordering;
-use std::collections::{hash_map::Entry, BTreeMap, HashMap, HashSet};
+use std::collections::BTreeMap;
 
+use hashbrown::{hash_map::Entry, HashMap, HashSet};
 use business::SubBusiness;
 use cache::JointData;
 use cache::SDAG_CACHE;

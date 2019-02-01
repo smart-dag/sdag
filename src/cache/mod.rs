@@ -2,11 +2,12 @@ mod cache_data;
 mod cache_impl;
 mod joint_data;
 
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::VecDeque;
 use std::sync::Arc;
 
 use config;
 use error::Result;
+use hashbrown::{HashMap, HashSet};
 use joint::{Joint, Level};
 use kv_store::{LoadFromKv, KV_STORE};
 use may::coroutine;
@@ -359,9 +360,11 @@ impl SDagCache {
 
     /// clear all the  hash tree balls
     pub fn clear_hash_tree_ball(&self) {
-        error!("clear hash tree");
         let mut g = self.hash_tree_balls.write().unwrap();
-        g.clear()
+        if !g.is_empty() {
+            error!("clear hash tree");
+            g.clear()
+        }
     }
 
     /// get last ball mci of mci
@@ -448,7 +451,7 @@ impl SDagCache {
 
     // insert entry <address, (unit, definition)> into definitions
     pub fn insert_definition(&self, addr: String, unit: String, def: Value) {
-        use std::collections::hash_map::Entry;
+        use hashbrown::hash_map::Entry;
         match self.definitions.write().unwrap().entry(addr) {
             Entry::Occupied(mut o) => {
                 o.insert((unit, def));

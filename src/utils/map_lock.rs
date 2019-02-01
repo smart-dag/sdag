@@ -1,10 +1,10 @@
-use may::sync::{Blocker, Mutex};
-
-use std::collections::HashSet;
 use std::collections::LinkedList;
 use std::fmt::{self, Debug};
 use std::hash::Hash;
 use std::sync::Arc;
+
+use hashbrown::HashSet;
+use may::sync::{Blocker, Mutex};
 
 struct Task<T> {
     keys: Vec<T>,

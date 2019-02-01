@@ -1,7 +1,6 @@
-use std::collections::HashMap;
-
 use cache::SDAG_CACHE;
 use error::Result;
+use hashbrown::HashMap;
 use joint::{Joint, JointSequence};
 use main_chain;
 use my_witness::MY_WITNESSES;

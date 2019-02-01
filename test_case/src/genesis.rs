@@ -1,11 +1,10 @@
-use std::collections::HashMap;
-
 use super::wallet::WalletInfo;
-use sdag_wallet_base::Base64KeyExt;
+use std::collections::HashMap as StdHashMap;
 
 use sdag::error::Result;
 use sdag::object_hash;
 use sdag::{config, joint::Joint, spec::*};
+use sdag_wallet_base::Base64KeyExt;
 
 pub const GENESIS_FILE: &str = "genesis.json";
 pub const FIRST_PAYMENT: &str = "first_payment.json";
@@ -114,7 +113,7 @@ pub fn gen_genesis_joint(wallets: &SdagInitInfo, total: u64, msg: &str) -> Resul
             address: from_address._00_address.clone(),
             authentifiers: {
                 // here we use a dummy signature to calc the correct header size
-                let mut sign = HashMap::new();
+                let mut sign = StdHashMap::new();
                 sign.insert("r".to_string(), "-".repeat(config::SIG_LENGTH));
                 sign
             },
@@ -264,7 +263,7 @@ pub fn gen_first_payment(
         address: paying_wallet._00_address.clone(),
         authentifiers: {
             // here we use a dummy signature to calc the correct header size
-            let mut sign = HashMap::new();
+            let mut sign = StdHashMap::new();
             sign.insert("r".to_string(), "-".repeat(config::SIG_LENGTH));
             sign
         },

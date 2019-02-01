@@ -1,8 +1,9 @@
-use std::collections::{HashSet, VecDeque};
+use std::collections::VecDeque;
 
 use cache::{CachedJoint, JointData, SDAG_CACHE};
 use error::Result;
 use failure::ResultExt;
+use hashbrown::HashSet;
 use joint::Level;
 use may::coroutine::JoinHandle;
 use may::sync::mpsc;

@@ -1,8 +1,7 @@
-use std::collections::HashMap;
+use std::collections::HashMap as StdHashMap;
 use std::net::ToSocketAddrs;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
-
 use std::time::Duration;
 
 use super::network_base::{Sender, Server, WsConnection};
@@ -14,6 +13,7 @@ use config;
 use crossbeam::atomic::ArcCell;
 use error::Result;
 use failure::ResultExt;
+use hashbrown::HashMap;
 use joint::{Joint, JointSequence, Level};
 use light;
 use main_chain;
@@ -261,7 +261,7 @@ impl WsConnections {
         }
     }
 
-    fn get_net_statistics(&self) -> HashMap<String, statistics::LastConnStat> {
+    fn get_net_statistics(&self) -> StdHashMap<String, statistics::LastConnStat> {
         let mut all_stats = statistics::get_all_last_stats();
         let g = self.conns.read().unwrap();
         for conn in g.keys() {

@@ -1,8 +1,9 @@
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::VecDeque;
 use std::sync::Arc;
 
 use cache::{CachedData, CachedJoint, HashKey, JointData};
 use error::Result;
+use hashbrown::{HashMap, HashSet};
 use rcu_cell::RcuCell;
 
 //---------------------------------------------------------------------------------------

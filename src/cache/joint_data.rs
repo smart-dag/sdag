@@ -1,11 +1,11 @@
 use std::cmp;
-use std::collections::HashSet;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
 use cache::{CachedJoint, SDAG_CACHE};
 use error::Result;
 use failure::ResultExt;
+use hashbrown::HashSet;
 use joint::{Joint, JointProperty, JointSequence, Level};
 use kv_store::{LoadFromKv, KV_STORE};
 use may::sync::{RwLock, SyncFlag};

@@ -2,12 +2,13 @@ mod data_feed;
 mod text;
 mod utxo;
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 
 use self::utxo::{UtxoData, UtxoKey};
 use cache::{CachedJoint, JointData, SDAG_CACHE};
 use config;
 use error::Result;
+use hashbrown::HashMap;
 use joint::{JointSequence, Level};
 use may::coroutine::JoinHandle;
 use may::sync::{mpsc, RwLock};

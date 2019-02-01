@@ -1,8 +1,7 @@
-use std::collections::{HashMap, HashSet};
-
 use cache::{CachedJoint, JointData, SDAG_CACHE};
 use config;
 use error::Result;
+use hashbrown::{HashMap, HashSet};
 use joint::Joint;
 use light::*;
 use object_hash;
@@ -220,7 +219,7 @@ pub fn compose_joint<T: Signer>(composer_info: ComposeInfo, signer: &T) -> Resul
         address: paid_address,
         authentifiers: {
             // here we use a dummy signature to calc the correct header size
-            let mut sign = HashMap::new();
+            let mut sign = ::std::collections::HashMap::new();
             sign.insert("r".to_string(), "-".repeat(config::SIG_LENGTH));
             sign
         },

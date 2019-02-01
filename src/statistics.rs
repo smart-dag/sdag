@@ -1,6 +1,7 @@
-use std::collections::HashMap;
+use std::collections::HashMap as StdHashMap;
 use std::sync::{Arc, RwLock};
 
+use hashbrown::HashMap;
 use network::hub;
 
 lazy_static! {
@@ -72,9 +73,9 @@ impl AllConnStats {
     /// 1) last_min is stats of (01:30:00, 01:30:30]
     /// 2) last_hour is stats of (01:00:00, 01:30:30]
     /// 3) last_day is stats of (00:30:00, 01:30:30]
-    fn get_all_last_stats(&self) -> HashMap<String, LastConnStat> {
+    fn get_all_last_stats(&self) -> StdHashMap<String, LastConnStat> {
         let now = (::time::now() / 1000) as usize;
-        let mut all_stats = HashMap::new();
+        let mut all_stats = StdHashMap::new();
         let r_g = self.conn_stats.read().unwrap();
 
         for (id, stat) in r_g.iter() {
@@ -227,7 +228,7 @@ pub fn increase_stats(peer_id: Arc<String>, is_rx: bool, is_good: bool) {
 }
 
 /// network interface: get all last statistics
-pub fn get_all_last_stats() -> HashMap<String, LastConnStat> {
+pub fn get_all_last_stats() -> StdHashMap<String, LastConnStat> {
     ALL_CONN_STATS.get_all_last_stats()
 }
 

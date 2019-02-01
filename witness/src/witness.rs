@@ -1,11 +1,12 @@
 extern crate sdag_wallet_base;
 
-use std::collections::{HashSet, VecDeque};
+use std::collections::{VecDeque};
 use std::sync::atomic::{AtomicIsize, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use may::sync::RwLock;
+use hashbrown::HashSet;
 use rcu_cell::RcuReader;
 use sdag::business::BUSINESS_CACHE;
 use sdag::cache::{CachedJoint, JointData, SDAG_CACHE};
