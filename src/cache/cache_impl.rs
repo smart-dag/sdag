@@ -182,6 +182,7 @@ impl SDagCacheInner {
         if let Some((_k, v)) = self.missing_parents.remove_entry(joint.key.as_str()) {
             for child in v {
                 let child_data = child.raw_read();
+                joint.raw_read().inc_unhandled_refs();
                 child_data.add_parent(joint.clone());
                 if child_data.is_ready() {
                     // trigger the child ready here, start validate, save and so on
@@ -204,27 +205,40 @@ impl SDagCacheInner {
         self.free_joints.insert(HashKey(joint.key.clone()), joint);
     }
 
-    /// remove the bad parent and all it's desendants
-    pub fn purge_bad_joint(&mut self, key: &str, err: String) {
+    /// remove the bad parent and all it's desendants in unhandled
+    pub fn purge_bad_joint(&mut self, key: Arc<String>, err: String) {
         let mut stack = vec![key.to_owned()];
         let mut error = Some(err);
 
-        // recursiely remove the bad joint along the child of the graph
+        // recursively remove the bad joint along the child of the graph
         // we use deep search without a revisited hashmap
         while let Some(key) = stack.pop() {
             // remove from unhandled
-            warn!("purge bad unit = {}", key);
-            self.unhandled_joints.remove(&key);
-            // remove all it's desendants
-            if let Some(v) = self.missing_parents.remove(&key) {
-                for child in v {
-                    stack.push(child.key.as_ref().to_owned());
+            if let Some(joint) = self.unhandled_joints.remove(&*key) {
+                warn!("purge bad unit = {}", key);
+                for parent in joint.raw_read().parents.iter() {
+                    // dec normal joint unhandled refs
+                    parent.raw_read().dec_unhandled_refs();
+                    // unregister self missing parent
+                    self.missing_parents
+                        .entry(parent.key.to_string())
+                        .and_modify(|v| v.retain(|x| x.key != key));
                 }
             }
+
+            // remove all it's descendants
+            if let Some(v) = self.missing_parents.remove(&*key) {
+                for child in v {
+                    if !stack.contains(&child.key) {
+                        stack.push(child.key);
+                    }
+                }
+            }
+
             // insert into known bad
             let err = error.take().unwrap_or_else(|| String::from("bad parent"));
             error!("add known bad joint = {}, err={}", key, err);
-            self.known_bad_joints.entry(key).or_insert(err);
+            self.known_bad_joints.entry(key.to_string()).or_insert(err);
         }
     }
 
@@ -253,31 +267,28 @@ impl SDagCacheInner {
 
     /// remove the parent and all it's descendants
     fn purge_unhandled_joint(&mut self, key: Arc<String>) {
-        let joint = match self.unhandled_joints.get(&*key) {
-            None => return,
-            Some(j) => j.read().expect("purge_unhandled_joint read failed"),
-        };
-
-        // unregister self missing parent
-        for parent in &joint.unit.parent_units {
-            self.missing_parents
-                .entry(parent.to_owned())
-                .and_modify(|v| v.retain(|x| x.key != key));
-        }
-
         let mut stack = vec![key];
         // recursively remove the joint along the child of the graph
         // we use deep search without a revisited hashmap
         while let Some(key) = stack.pop() {
             // remove from unhandled
-            if self.unhandled_joints.remove(&*key).is_some() {
+            if let Some(joint) = self.unhandled_joints.remove(&*key) {
                 warn!("purge unhandled unit = {}", key);
-                // remove all it's descendants
-                if let Some(v) = self.missing_parents.remove(&*key) {
-                    for child in v {
-                        if !stack.contains(&child.key) {
-                            stack.push(child.key);
-                        }
+                for parent in joint.raw_read().parents.iter() {
+                    // dec normal joint unhandled refs
+                    parent.raw_read().dec_unhandled_refs();
+                    // unregister self missing parent
+                    self.missing_parents
+                        .entry(parent.key.to_string())
+                        .and_modify(|v| v.retain(|x| x.key != key));
+                }
+            }
+
+            // remove all it's descendants
+            if let Some(v) = self.missing_parents.remove(&*key) {
+                for child in v {
+                    if !stack.contains(&child.key) {
+                        stack.push(child.key);
                     }
                 }
             }
@@ -322,12 +333,6 @@ impl SDagCacheInner {
                 .raw_read();
 
             let unit = &joint.unit.unit;
-
-            if !joint.children.is_empty() {
-                error!("detect purge free joint is not free, unit={}", unit);
-                continue;
-            }
-
             self.normal_joints.remove(unit);
 
             for parent in joint.parents.iter() {
@@ -371,6 +376,22 @@ impl SDagCacheInner {
 
                 if joint.unit.is_authored_by_witness() {
                     error!("detect purge temp bad witness unit={}", joint.unit.unit);
+                    return None;
+                }
+
+                if joint.has_unhandled_refs() {
+                    error!(
+                        "detect purge temp bad has unhandled refs, unit={}",
+                        joint.unit.unit
+                    );
+                    return None;
+                }
+
+                if !joint.children.is_empty() {
+                    error!(
+                        "detect purge free joint is not free, unit={}",
+                        joint.unit.unit
+                    );
                     return None;
                 }
 

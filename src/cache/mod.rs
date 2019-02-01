@@ -235,7 +235,7 @@ impl SDagCache {
     }
 
     /// purge a bad joint
-    pub fn purge_bad_joint(&self, key: &str, err: String) {
+    pub fn purge_bad_joint(&self, key: Arc<String>, err: String) {
         let mut g = self.joints.write().unwrap();
         // then we need to purge all the child that depends on it
         g.purge_bad_joint(key, err);
@@ -252,7 +252,7 @@ impl SDagCache {
 
         if let Err(e) = validation::basic_validate(&joint_data) {
             // need to record as known bad joint
-            self.purge_bad_joint(&key, e.to_string());
+            self.purge_bad_joint(key.0, e.to_string());
             let peer_id = peer_id.unwrap_or_else(|| Arc::new(String::from("unknown")));
             statistics::increase_stats(peer_id, true, false);
             bail!("base validation failed, err={}", e);
@@ -274,7 +274,7 @@ impl SDagCache {
         }
 
         if is_bad_parent {
-            self.purge_bad_joint(&key, String::from("bad parent"));
+            self.purge_bad_joint(key.0, String::from("bad parent"));
             bail!("joint parents contains known bad joint");
         }
 
@@ -296,6 +296,7 @@ impl SDagCache {
 
         // at this stage we construct the unhandled joint in cache
         for valid_parent in valid_parents {
+            valid_parent.read()?.inc_unhandled_refs();
             joint_data.add_parent(valid_parent);
         }
 

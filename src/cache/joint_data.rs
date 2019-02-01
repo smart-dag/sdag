@@ -135,6 +135,7 @@ pub struct JointData {
     pub children: Arc<AppendListExt<CachedJoint>>,
     best_parent: Arc<AppendList<CachedJoint>>,
     valid_parent_num: Arc<AtomicUsize>,
+    unhandled_refs: Arc<AtomicUsize>,
     joint: Joint,
     stable_flag: Arc<SyncFlag>,
     peer_id: Option<Arc<String>>,
@@ -335,6 +336,20 @@ impl JointData {
 
     pub fn add_child(&self, child: CachedJoint) {
         self.children.append(child);
+        // child remove from unhandled to normal
+        self.unhandled_refs.fetch_sub(1, Ordering::Release);
+    }
+
+    pub fn inc_unhandled_refs(&self) {
+        self.unhandled_refs.fetch_add(1, Ordering::Release);
+    }
+
+    pub fn dec_unhandled_refs(&self) {
+        self.unhandled_refs.fetch_sub(1, Ordering::Release);
+    }
+
+    pub fn has_unhandled_refs(&self) -> bool {
+        self.unhandled_refs.load(Ordering::Acquire) != 0
     }
 
     pub fn is_free(&self) -> bool {
@@ -487,6 +502,7 @@ impl JointData {
             children: self.children.clone(),
             best_parent: self.best_parent.clone(),
             valid_parent_num: self.valid_parent_num.clone(),
+            unhandled_refs: self.unhandled_refs.clone(),
             stable_flag: self.stable_flag.clone(),
             peer_id: self.peer_id.clone(),
             joint: self.joint.clone(),
@@ -520,6 +536,7 @@ impl JointData {
             children: Default::default(),
             props: Default::default(),
             valid_parent_num: Default::default(),
+            unhandled_refs: Default::default(),
             stable_flag: Arc::new(SyncFlag::new()),
             peer_id,
         }
@@ -553,7 +570,7 @@ impl LoadFromKv<String> for JointData {
             .read_joint_children(key)?
             .iter()
             .map(|key| SDAG_CACHE.get_joint_or_none(key))
-            .collect();
+            .collect::<AppendListExt<_>>();
 
         let props = KV_STORE.read_joint_property(key)?;
 
@@ -573,6 +590,7 @@ impl LoadFromKv<String> for JointData {
             stable_flag,
             props: Arc::new(RwLock::new(props)),
             valid_parent_num: Arc::new(AtomicUsize::new(valid_parent_num)),
+            unhandled_refs: Arc::new(AtomicUsize::new(0)),
             peer_id: None,
         })
     }

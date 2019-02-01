@@ -70,7 +70,7 @@ pub fn validate_ready_joint(joint: CachedJoint) -> Result<()> {
                 &joint_data.unit.unit,
                 e.to_string()
             );
-            SDAG_CACHE.purge_bad_joint(&joint_data.unit.unit, e.to_string());
+            SDAG_CACHE.purge_bad_joint(joint.key, e.to_string());
             statistics::increase_stats(peer_id, true, false);
             return Err(e);
         }
