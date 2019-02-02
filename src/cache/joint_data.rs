@@ -131,15 +131,16 @@ impl PartialEq for UnitProps {
 //---------------------------------------------------------------------------------------
 #[derive(Debug)]
 pub struct JointData {
-    pub parents: Arc<AppendList<CachedJoint>>,
-    pub children: Arc<AppendListExt<CachedJoint>>,
-    best_parent: Arc<AppendList<CachedJoint>>,
-    valid_parent_num: Arc<AtomicUsize>,
-    unhandled_refs: Arc<AtomicUsize>,
+    pub parents: AppendList<CachedJoint>,
+    pub children: AppendListExt<CachedJoint>,
+    best_parent: AppendList<CachedJoint>,
+    valid_parent_num: AtomicUsize,
+    unhandled_refs: AtomicUsize,
     joint: Joint,
-    stable_flag: Arc<SyncFlag>,
+    create_time: u64,
+    stable_flag: SyncFlag,
     peer_id: Option<Arc<String>>,
-    props: Arc<RwLock<JointProperty>>,
+    props: RwLock<JointProperty>,
 }
 
 // impl the property access
@@ -159,7 +160,7 @@ impl JointData {
     }
 
     pub fn get_all_props(&self) -> &RwLock<JointProperty> {
-        &*self.props
+        &self.props
     }
 
     pub fn get_level(&self) -> Level {
@@ -278,18 +279,14 @@ impl JointData {
             // genesis has no parents, so just return a fake one
             None => {
                 use rcu_cell::RcuCell;
-                let mut joint_data = self.make_copy();
-                // need to use it's own property, not the shared one
-                joint_data.props = Default::default();
 
+                let joint_data = Self::from_joint(self.joint.clone(), self.peer_id.clone());
                 joint_data.set_mci(Level::MINIMUM);
                 joint_data.set_limci(Level::MINIMUM);
                 joint_data.set_level(Level::MINIMUM);
                 joint_data.set_wl(Level::ZERO);
                 // trigger genesis increase min_wl_increased
                 joint_data.set_min_wl(Level::MINIMUM);
-                // clear all it's children to break visit loop
-                joint_data.children = Default::default();
 
                 CachedJoint {
                     key: Arc::new(self.unit.unit.to_owned()),
@@ -357,7 +354,7 @@ impl JointData {
     }
 
     pub fn get_create_time(&self) -> u64 {
-        self.props.read().unwrap().create_time
+        self.create_time
     }
 
     pub fn get_peer_id(&self) -> Option<Arc<String>> {
@@ -490,23 +487,11 @@ impl JointData {
         }
     }
 
-    #[inline]
-    pub fn update_joint(&mut self, joint: Joint) {
-        self.joint = joint
-    }
-
-    #[inline]
-    pub(super) fn make_copy(&self) -> Self {
-        JointData {
-            parents: self.parents.clone(),
-            children: self.children.clone(),
-            best_parent: self.best_parent.clone(),
-            valid_parent_num: self.valid_parent_num.clone(),
-            unhandled_refs: self.unhandled_refs.clone(),
-            stable_flag: self.stable_flag.clone(),
-            peer_id: self.peer_id.clone(),
-            joint: self.joint.clone(),
-            props: self.props.clone(),
+    pub fn update_joint(&self, joint: Joint) {
+        // FIXME: joint' should be rebuild from property
+        unsafe {
+            let joint_ptr = &self.joint as *const _ as *mut Joint;
+            joint_ptr.replace(joint);
         }
     }
 
@@ -536,8 +521,9 @@ impl JointData {
             children: Default::default(),
             props: Default::default(),
             valid_parent_num: Default::default(),
+            create_time: crate::time::now(),
             unhandled_refs: Default::default(),
-            stable_flag: Arc::new(SyncFlag::new()),
+            stable_flag: SyncFlag::new(),
             peer_id,
         }
     }
@@ -577,20 +563,21 @@ impl LoadFromKv<String> for JointData {
         let best_parent = AppendList::new();
         best_parent.append(SDAG_CACHE.get_joint_or_none(&props.best_parent_unit));
 
-        let stable_flag = Arc::new(SyncFlag::new());
+        let stable_flag = SyncFlag::new();
         if props.is_stable {
             stable_flag.fire();
         }
 
         Ok(JointData {
             joint,
-            parents: Arc::new(parents),
-            children: Arc::new(children),
-            best_parent: Arc::new(best_parent),
+            parents,
+            children,
+            best_parent,
             stable_flag,
-            props: Arc::new(RwLock::new(props)),
-            valid_parent_num: Arc::new(AtomicUsize::new(valid_parent_num)),
-            unhandled_refs: Arc::new(AtomicUsize::new(0)),
+            create_time: crate::time::now(),
+            props: RwLock::new(props),
+            valid_parent_num: AtomicUsize::new(valid_parent_num),
+            unhandled_refs: AtomicUsize::new(0),
             peer_id: None,
         })
     }

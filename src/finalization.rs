@@ -67,10 +67,8 @@ fn finalize_joint(cached_joint: CachedJoint) -> Result<()> {
         joint.unit.messages.clear();
     }
 
-    cached_joint.update_joint(joint)?;
+    joint_data.update_joint(joint);
 
-    //Reread the joint data after updating joint
-    let joint_data = cached_joint.read()?;
     joint_data.set_stable();
     if joint_data.is_on_main_chain() {
         ::main_chain::set_last_stable_joint(joint_data.clone());

@@ -126,8 +126,6 @@ impl<T> Drop for WsConnection<T> {
         if let Some(_h) = self.listener.take(Ordering::Relaxed) {
             // close the connection first
             self.ws.write().unwrap().ws.close(None).ok();
-            // unsafe { h.coroutine().cancel() };
-            // h.join().ok();
         }
     }
 }

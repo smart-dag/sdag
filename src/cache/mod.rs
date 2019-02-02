@@ -10,7 +10,6 @@ use error::Result;
 use hashbrown::{HashMap, HashSet};
 use joint::{Joint, Level};
 use kv_store::{LoadFromKv, KV_STORE};
-use may::coroutine;
 use may::sync::RwLock;
 use serde_json::Value;
 use smallvec::SmallVec;
@@ -30,23 +29,6 @@ lazy_static! {
 // CachedJoint
 //---------------------------------------------------------------------------------------
 pub type CachedJoint = CachedData<String, JointData>;
-
-impl CachedJoint {
-    /// update the whole joint data, some what heavy
-    pub fn update_joint(&self, joint: Joint) -> Result<()> {
-        let mut joint_data: JointData = (*self.read()?).make_copy();
-        joint_data.update_joint(joint);
-
-        loop {
-            match self.data.try_lock() {
-                None => coroutine::yield_now(), //coroutine::sleep(Duration::from_millis(1)),
-                Some(mut g) => break g.update(Some(joint_data)),
-            }
-        }
-
-        Ok(())
-    }
-}
 
 //---------------------------------------------------------------------------------------
 // SDagCache

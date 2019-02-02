@@ -162,7 +162,6 @@ pub struct JointProperty {
     pub sub_mci: Level,
     pub is_stable: bool,
     pub sequence: JointSequence,
-    pub create_time: u64,
     #[serde(skip)]
     pub prev_stable_self_unit: Option<String>,
     #[serde(skip)]
@@ -188,7 +187,6 @@ impl Default for JointProperty {
             is_min_wl_increased: false,
             sequence: JointSequence::TempBad,
             best_parent_unit: String::new(),
-            create_time: crate::time::now(),
             prev_stable_self_unit: None,
             related_units: Vec::new(),
             balance: 0,

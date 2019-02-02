@@ -373,6 +373,7 @@ fn is_stable_to_joints(
 ) -> Result<bool> {
     // if we can't find any end points, just return true
     // this could happen if we select very old parents
+    // FIXME: we still need to check the conditions
     if joints.is_empty() {
         return Ok(true);
     }
