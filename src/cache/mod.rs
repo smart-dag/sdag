@@ -123,7 +123,7 @@ impl SDagCache {
     }
 
     /// get all the free joints
-    pub fn get_all_free_joints(&self) -> Result<Vec<CachedJoint>> {
+    pub fn get_all_free_joints(&self) -> Vec<CachedJoint> {
         self.joints.read().unwrap().get_all_free_joints()
     }
 
@@ -137,22 +137,19 @@ impl SDagCache {
 
     pub fn get_temp_bad_joints(&self) -> Vec<String> {
         self.get_all_free_joints()
-            .map(|v| {
-                v.into_iter()
-                    .filter_map(|j| {
-                        if let Ok(joint) = j.read() {
-                            if joint.get_sequence().is_temp_bad() {
-                                Some(joint.unit.unit.clone())
-                            } else {
-                                None
-                            }
-                        } else {
-                            None
-                        }
-                    })
-                    .collect::<Vec<_>>()
+            .into_iter()
+            .filter_map(|j| {
+                if let Ok(joint) = j.read() {
+                    if joint.get_sequence().is_temp_bad() {
+                        Some(joint.unit.unit.clone())
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
             })
-            .unwrap_or_else(|_| Vec::new())
+            .collect::<Vec<_>>()
     }
 
     pub fn get_num_of_temp_bad_joints(&self) -> usize {
@@ -173,10 +170,8 @@ impl SDagCache {
         let mut visited = HashSet::new();
         let mut joints = Vec::new();
 
-        for joint in self.get_all_free_joints()? {
-            if visited.insert(joint.key.clone()) {
-                queue.push_back(joint);
-            }
+        for joint in self.get_all_free_joints() {
+            queue.push_back(joint);
         }
 
         while let Some(joint) = queue.pop_front() {

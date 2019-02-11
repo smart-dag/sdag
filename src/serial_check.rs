@@ -30,7 +30,7 @@ pub fn is_unstable_joint_non_serial(joint: CachedJoint) -> Result<bool> {
     let unstable_ancestors = get_unstable_ancestor_units(vec![joint.clone()], HashSet::new())?; // A2 (contain self)
 
     // A3 =  A1 - A2 ( the set of which P can't see) (not contain self)
-    let free_joints = SDAG_CACHE.get_all_free_joints()?;
+    let free_joints = SDAG_CACHE.get_all_free_joints();
     let no_see_units = get_unstable_ancestor_units(free_joints, unstable_ancestors)?;
 
     // A4 (the set of joints who can see P)

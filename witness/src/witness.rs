@@ -1,12 +1,12 @@
 extern crate sdag_wallet_base;
 
-use std::collections::{VecDeque};
+use std::collections::VecDeque;
 use std::sync::atomic::{AtomicIsize, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use may::sync::RwLock;
 use hashbrown::HashSet;
+use may::sync::RwLock;
 use rcu_cell::RcuReader;
 use sdag::business::BUSINESS_CACHE;
 use sdag::cache::{CachedJoint, JointData, SDAG_CACHE};
@@ -298,6 +298,8 @@ fn witness() -> Result<()> {
             Ok(_) => break,
             Err(e) => error!("compose witness joint failed, times {}, err = [{:?}]", i, e),
         }
+
+        may::coroutine::sleep(Duration::from_millis(10));
     }
 
     Ok(())

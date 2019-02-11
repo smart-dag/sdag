@@ -370,6 +370,7 @@ impl Server<HubData> for HubData {
             "get_missing_joints" => ws.on_get_missing_joints(params)?,
             "get_bad_joints" => ws.on_get_bad_joints(params)?,
             "get_temp_bad_joints" => ws.on_get_temp_bad_joints(params)?,
+            "get_joints_in_range" => ws.on_get_joints_in_range(params)?,
             "get_joint_by_unit_hash" => ws.on_get_joint_by_unit_hash(params)?,
             "get_children" => ws.on_get_children(params)?,
 
@@ -775,6 +776,24 @@ impl HubConn {
                     "property": &*j.get_all_props().read().unwrap()
                 }))
             })
+    }
+
+    fn on_get_joints_in_range(&self, param: Value) -> Result<Value> {
+        let min = param["min_level"]
+            .as_u64()
+            .ok_or_else(|| format_err!("min_level not in param"))?;
+        let max = param["max_level"]
+            .as_u64()
+            .ok_or_else(|| format_err!("max_level not in param"))?;
+
+        let min_level = ::std::cmp::min(min, max) as usize;
+        let max_level = ::std::cmp::max(min, max) as usize;
+
+        let units = ::explore::get_joints_in_range(min_level.into(), max_level.into())?;
+
+        let ret = serde_json::to_value(units)?;
+
+        Ok(ret)
     }
 
     fn on_get_bad_joints(&self, _param: Value) -> Result<Value> {

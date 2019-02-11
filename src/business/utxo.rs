@@ -2,12 +2,12 @@ use failure::ResultExt;
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
 
-use hashbrown::{hash_map::Entry, HashMap, HashSet};
 use business::SubBusiness;
 use cache::JointData;
 use cache::SDAG_CACHE;
 use config;
 use error::Result;
+use hashbrown::{hash_map::Entry, HashMap, HashSet};
 use joint::{JointSequence, Level};
 use object_hash;
 use spec::*;

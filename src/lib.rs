@@ -95,6 +95,7 @@ pub mod catchup;
 pub mod composer;
 pub mod config;
 pub mod error;
+pub mod explore;
 pub mod finalization;
 pub mod joint;
 pub mod kv_store;

@@ -330,7 +330,7 @@ fn update_stable_main_chain(mut unstable_mc_joints: Vec<RcuReader<JointData>>) -
 }
 
 fn calc_last_stable_joint() -> Result<RcuReader<JointData>> {
-    let free_joints = SDAG_CACHE.get_all_free_joints()?;
+    let free_joints = SDAG_CACHE.get_all_free_joints();
 
     if free_joints.is_empty() {
         bail!("calc_last_stable_joint free_joints empty");
