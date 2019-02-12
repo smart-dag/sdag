@@ -514,9 +514,14 @@ impl HubConn {
         self.set_subscribed();
         self.set_peer_id(peer_id);
         if let Some(ws) = WSS.get_connection(self.get_peer_id()) {
-            if !ws.is_inbound() {
+            let peer_addr = ws.get_peer_addr();
+            if peer_addr != self.get_peer_addr() {
                 // we already have an outbound connection with the same peer_id
-                bail!("peer_id={} already connected", peer_id);
+                bail!(
+                    "peer_id={} already connected, old_addr={}",
+                    peer_id,
+                    peer_addr,
+                );
             }
         }
 
