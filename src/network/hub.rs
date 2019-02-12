@@ -513,8 +513,11 @@ impl HubConn {
         );
         self.set_subscribed();
         self.set_peer_id(peer_id);
-        if WSS.get_connection(self.get_peer_id()).is_some() {
-            bail!("peer_id={} already connected", peer_id);
+        if let Some(ws) = WSS.get_connection(self.get_peer_id()) {
+            if !ws.is_inbound() {
+                // we already have an outbound connection with the same peer_id
+                bail!("peer_id={} already connected", peer_id);
+            }
         }
 
         // get listen address
