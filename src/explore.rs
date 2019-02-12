@@ -28,14 +28,14 @@ impl Author {
 /// if unit is on main chain, limci = mci
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DisplayUnit {
-    unit: String,
-    best_parent: String,
-    parents: Vec<String>,
-    is_on_mc: bool,
-    level: Level,
-    is_stable: bool,
-    author: Author,
-    sequence: JointSequence,
+    pub unit: String,
+    pub best_parent: String,
+    pub parents: Vec<String>,
+    pub is_on_mc: bool,
+    pub level: Level,
+    pub is_stable: bool,
+    pub author: Author,
+    pub sequence: JointSequence,
 }
 
 impl PartialEq for DisplayUnit {
@@ -111,19 +111,24 @@ impl ExploreBuilder {
 
     fn append_stable_units(&mut self) -> Result<()> {
         // loop until the nearby mc joints
-        let mut mci = self.max_level;
-        let stable_joint = loop {
+        let max_level = self.max_level + 10;
+        let mut mci = max_level;
+        let mut stable_joint = loop {
             match SDAG_CACHE.get_mc_unit_hash(mci)? {
                 None => {
-                    // this mci level is not available, try a less one
-                    mci -= 1;
+                    if mci == Level::ZERO {
+                        // there is no stable unit yet
+                        return Ok(());
+                    }
+                    // this mci level is not available, try from the last stable one
+                    mci = ::main_chain::get_last_stable_mci();
                     continue;
                 }
 
                 Some(unit) => {
                     let joint = SDAG_CACHE.get_joint(&unit)?;
 
-                    if joint.read()?.get_level() <= self.max_level {
+                    if joint.read()?.get_level() <= max_level {
                         // the first mc joint level less that less than max level
                         break joint;
                     }
@@ -132,10 +137,22 @@ impl ExploreBuilder {
 
             if mci == Level::ZERO {
                 // not find any
+                error!("not find stable units max_level={:?}", self.max_level);
                 return Ok(());
             }
             mci -= 1;
         };
+
+        // revert back one on mc if possible
+        // still we can't make sure that current mc joint include all
+        // joints whoes level is less than current mc joint level
+        for child in stable_joint.read()?.children.iter() {
+            let child_data = child.read()?;
+            if child_data.is_on_main_chain() {
+                stable_joint = (*child).clone();
+                break;
+            }
+        }
 
         let mut queue = VecDeque::new();
         let mut visited = HashSet::new();
@@ -152,7 +169,7 @@ impl ExploreBuilder {
             if level <= self.max_level {
                 let display_unit = DisplayUnit::from(&*joint_data);
                 let level_joints = &mut self.units[level - self.min_level];
-                if level_joints.contains(&display_unit) {
+                if !level_joints.contains(&display_unit) {
                     level_joints.push(display_unit)
                 }
             }
@@ -168,7 +185,7 @@ impl ExploreBuilder {
     }
 }
 
-pub fn get_joints_in_range(min_level: Level, max_level: Level) -> Result<Vec<Vec<DisplayUnit>>> {
+pub fn get_joints_by_level(min_level: Level, max_level: Level) -> Result<Vec<Vec<DisplayUnit>>> {
     let mut builder = ExploreBuilder::new(min_level, max_level);
     builder.append_unstable_units()?;
     builder.append_stable_units()?;

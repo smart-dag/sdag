@@ -199,6 +199,21 @@ impl WalletConn {
         Ok(joints)
     }
 
+    //returned joints by level
+    pub fn get_joints_by_level(&self, min_level: usize, max_level: usize) -> Result<Vec<String>> {
+        let response = self.send_request(
+            "get_joints_by_level",
+            &json!({"min_level": min_level, "max_level": max_level}),
+        )?;
+
+        let joints: Vec<Vec<::explore::DisplayUnit>> = serde_json::from_value(response)?;
+
+        Ok(joints
+            .into_iter()
+            .flat_map(|v| v.into_iter().map(|j| j.unit))
+            .collect())
+    }
+
     pub fn get_latest_history(
         &self,
         address: String,

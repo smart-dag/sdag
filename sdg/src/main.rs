@@ -628,21 +628,25 @@ fn handle_subcommand_unit(unit_args: &clap::ArgMatches, ws: &Arc<WalletConn>) ->
     // show all valid free joints
     if unit_args.values_of("free").is_some() {
         print_unit_hash_list(ws.get_free_joints()?, "free");
+        return Ok(());
     }
 
     // show the miss joints
     if unit_args.values_of("lost").is_some() {
         print_unit_hash_list(ws.get_missing_joints()?, "missing");
+        return Ok(());
     }
 
     // show the bad joints
     if unit_args.values_of("bad").is_some() {
         print_unit_hash_list(ws.get_bad_joints()?, "bad");
+        return Ok(());
     }
 
     // show the temp-bad joints
     if unit_args.values_of("temp-bad").is_some() {
         print_unit_hash_list(ws.get_temp_bad_joints()?, "temp-bad");
+        return Ok(());
     }
 
     // joints of a specified mci
@@ -654,6 +658,23 @@ fn handle_subcommand_unit(unit_args: &clap::ArgMatches, ws: &Arc<WalletConn>) ->
                 .collect::<Vec<_>>(),
             &format!("mci={}", mci),
         );
+        return Ok(());
+    }
+
+    // joints of a specified level
+    // let files: Vec<_> = unit_args.values_of("level").unwrap().collect();
+    if let Ok(level) = values_t!(unit_args.values_of("level"), usize) {
+        let min_level = level[0];
+        let max_level = if level.len() == 1 {
+            min_level
+        } else {
+            level[1]
+        };
+        print_unit_hash_list(
+            ws.get_joints_by_level(min_level, max_level)?,
+            &format!("min_level={} max_level={}", min_level, max_level),
+        );
+        return Ok(());
     }
 
     // overall statistics
@@ -672,6 +693,7 @@ fn handle_subcommand_unit(unit_args: &clap::ArgMatches, ws: &Arc<WalletConn>) ->
         println!("temp bad joints   : {}", temp_bad);
         println!("unhandled joints  : {}", unhandled);
         println!("last stable mci   : {:?}", last_stable_mci);
+        return Ok(());
     }
 
     // show joint and properties of a specified unit hash
@@ -680,12 +702,14 @@ fn handle_subcommand_unit(unit_args: &clap::ArgMatches, ws: &Arc<WalletConn>) ->
 
         println!("joint = {:#?}", resp.0);
         println!("property = {:#?}", resp.1);
+        return Ok(());
     }
 
     // show all children of a specified unit hash
     if let Some(hash) = unit_args.value_of("children") {
         print_unit_hash_list(ws.get_children(hash)?, &format!("{}'s children", hash));
+        return Ok(());
     }
 
-    Ok(())
+    bail!("invalid argument value")
 }

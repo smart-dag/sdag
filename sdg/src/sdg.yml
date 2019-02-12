@@ -123,7 +123,7 @@ subcommands:
             - lost:
                 help: list the missing joints
                 long: lost
-                short: l
+                short: o
             - bad:
                 help: list the bad joints
                 long: bad
@@ -137,24 +137,30 @@ subcommands:
                 long: mci
                 short: m
                 required: false
-                value_names:
-                    - NUM
+                value_name: NUM
+                takes_value: true
+                allow_hyphen_values: true
+            - level:
+                help: list all the units from <MIN_LEVEL> to [<MAX_LEVEL>]
+                long: level
+                short: l
+                required: false
+                value_name: LEVEL
+                min_values: 1
                 takes_value: true
             - show:
                 help: show the specified unit detail
                 long: show
                 short: s
                 required: false
-                value_names:
-                    - UNIT
+                value_name: UNIT
                 takes_value: true
             - children:
-                help: show all children of the specified unit
+                help: list all children of the specified unit
                 long: children
                 short: c
                 required: false
-                value_names:
-                    - UNIT
+                value_name: UNIT
                 takes_value: true
 
 

@@ -95,7 +95,7 @@ fn adjust_witnessing_speed() -> Result<()> {
     if self_level < 0 {
         time = (rng.gen_range(0.0, 1.0) * 2_000.0) as u64;
     } else {
-        let free_joints = SDAG_CACHE.get_all_free_joints()?;
+        let free_joints = SDAG_CACHE.get_all_free_joints();
         let free_joint_level = sdag::main_chain::find_best_joint(free_joints.iter())?
             .ok_or_else(|| format_err!("empty best joint among free joints"))?
             .get_level()
@@ -138,7 +138,7 @@ fn is_need_witnessing() -> Result<(bool)> {
         }
     };
 
-    let free_joints = SDAG_CACHE.get_all_free_joints()?;
+    let free_joints = SDAG_CACHE.get_all_free_joints();
 
     if free_joints.is_empty() {
         return Ok(false);
