@@ -186,6 +186,13 @@ impl ExploreBuilder {
 }
 
 pub fn get_joints_by_level(min_level: Level, max_level: Level) -> Result<Vec<Vec<DisplayUnit>>> {
+    if max_level - min_level > 300 {
+        bail!(
+            "get_joints_by_level range should be within 300, min={:?}, max={:?}",
+            min_level,
+            max_level
+        );
+    }
     let mut builder = ExploreBuilder::new(min_level, max_level);
     builder.append_unstable_units()?;
     builder.append_stable_units()?;
