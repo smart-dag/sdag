@@ -1,6 +1,6 @@
 // use std::io::Read;
 use std::marker::PhantomData;
-use std::net::ToSocketAddrs;
+use std::net::{IpAddr, Ipv4Addr, ToSocketAddrs};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -303,11 +303,12 @@ impl<T> WsServer<T> {
         F: Fn(Arc<WsConnection<T>>) + Send + 'static,
         T: Server<T> + Default + Send + Sync + 'static,
     {
-        let address = address
-            .to_socket_addrs()
-            .expect("invalid address")
-            .next()
-            .expect("can't resolve address");
+        let mut address = match address.to_socket_addrs()?.next() {
+            Some(addr) => addr,
+            None => bail!("can't resolve address"),
+        };
+        // IP 0.0.0.0 can accept all request, so need change hub server ip to 0.0.0.0 for docker test
+        address.set_ip(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)));
 
         let listener = match TcpListener::bind(address) {
             Ok(listener) => listener,
