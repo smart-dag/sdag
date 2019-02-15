@@ -89,7 +89,7 @@ pub fn check_and_witness() {
 fn adjust_witnessing_speed() -> Result<()> {
     use rand::{thread_rng, Rng};
     let mut rng = thread_rng();
-    let time;
+    let mut time;
     let self_level = SELF_LEVEL.load(Ordering::Relaxed);
     let mut distance: isize = -1;
     if self_level < 0 {
@@ -102,17 +102,27 @@ fn adjust_witnessing_speed() -> Result<()> {
             .value() as isize;
 
         // free_joint_level may less than self_level, so distance and SELF_LEVEL can not be usize
+        // for increasing main chain advance speed, will decrease the set of unstable joints,  so witness need post fast
+        // the cost is we will ignore witness concurrence and SNR (Signal Noise Ratio)
         distance = free_joint_level - self_level;
         if distance < THRESHOLD_DISTANCE {
             time = ((THRESHOLD_DISTANCE - distance) * 200) as u64;
-        } else if distance < 25 {
-            time = ((THRESHOLD_DISTANCE as f64 / distance as f64) * 200.0) as u64;
-        } else if distance < 100 {
-            time = (rng.gen_range(0.0, 1.0) * 200.0) as u64;
-        } else if distance < 1000 {
-            time = (rng.gen_range(0.0, 1.0) * 50.0) as u64;
         } else {
-            time = (rng.gen_range(0.0, 1.0) * 10.0) as u64;
+            time = ((THRESHOLD_DISTANCE as f64 / distance as f64) * 200.0) as u64;
+        }
+
+        // if the amount of unstable normal transaction joints is more than 500, witness compose joint right now
+        let (normal_tx, all) = get_unstable_normal_transaction_joints_amount(free_joints);
+        info!(
+            "unstable normal transaction joints is {}, all unstable joints is {}",
+            normal_tx, all
+        );
+        if normal_tx > 500 {
+            info!(
+                "unstable normal transaction joints is {}, more than 500, witnessing right now",
+                normal_tx
+            );
+            time = 0;
         }
     }
     info!(
@@ -129,7 +139,7 @@ fn adjust_witnessing_speed() -> Result<()> {
 /// 2) non witness joint mci > min retrievable mci, min retrievable is last_stable_joint's last_stable_unit mci
 /// 3) last self unstable joint support current main chain, that means current main chain include my last unstable joint (cancel)
 fn is_need_witnessing() -> Result<(bool)> {
-    info!("if need post witness joint?");
+    info!("witnessing: if need post witness joint?");
     let _g = match IS_WITNESSING.try_lock() {
         Some(g) => g,
         None => {
@@ -152,7 +162,7 @@ fn is_need_witnessing() -> Result<(bool)> {
     if !need_witness {
         return Ok(false);
     }
-    info!("more than 6 witness on path of best parents");
+    info!("witnessing: more than 6 witness on path of best parents");
 
     if has_normal_joint {
         return Ok(true);
@@ -264,12 +274,46 @@ fn get_min_retrievable_unit() -> Result<RcuReader<JointData>> {
     Ok(last_stable_joint)
 }
 
-#[derive(Serialize)]
-struct TimeStamp {
-    timestamp: u64,
+/// get amount of unstable normal transaction joints which not finalbad
+fn get_unstable_normal_transaction_joints_amount(free_joints: Vec<CachedJoint>) -> (u32, u32) {
+    let mut normal_transactions = 0;
+    let mut all = 0;
+
+    if free_joints.is_empty() {
+        return (normal_transactions, all);
+    }
+
+    let mut queue = VecDeque::new();
+    let mut visited = HashSet::new();
+    for joint in free_joints {
+        if visited.insert(joint.key.clone()) {
+            queue.push_back(joint.clone());
+        }
+    }
+
+    while let Some(joint) = queue.pop_front() {
+        let joint_data = joint.read().unwrap();
+        if joint_data.is_stable() {
+            continue;
+        }
+        all += 1;
+        if joint_data.get_sequence() != JointSequence::FinalBad
+            && !joint_data.unit.is_authored_by_witness()
+        {
+            normal_transactions += 1;
+        }
+
+        for p in joint_data.parents.iter() {
+            if visited.insert(p.key.clone()) {
+                queue.push_back(p.clone());
+            }
+        }
+    }
+
+    (normal_transactions, all)
 }
 
-/// compose witness joint and validate, save, post
+/// witness compose and post joint
 fn witness() -> Result<()> {
     // as we can not completely avoid the case that witness joints concurrency
     // so we will cancel the limit that witness cancel post a new joint when it's joint is free joint.
@@ -292,7 +336,7 @@ fn witness() -> Result<()> {
 
     // divide one output into two outputs, to increase witnessing concurrent performance
     // let amount = divide_money(&WALLET_INFO._00_address)?;
-    info!("will compose and post a witness joint");
+    info!("witnessing: will compose and post a witness joint");
     for i in 0..10 {
         match compose_and_normalize() {
             Ok(_) => break,
@@ -305,6 +349,12 @@ fn witness() -> Result<()> {
     Ok(())
 }
 
+#[derive(Serialize)]
+struct TimeStamp {
+    timestamp: u64,
+}
+
+/// compose, validation, normalize, post
 fn compose_and_normalize() -> Result<()> {
     let sdag::composer::ParentsAndLastBall {
         parents,
@@ -385,7 +435,7 @@ fn compose_and_normalize() -> Result<()> {
     }
     SELF_LEVEL.store(max_parent_level.value() as isize + 1, Ordering::Relaxed);
     info!(
-        "compose and validate success, will post [{}]",
+        "witnessing: compose and validate success, will post [{}]",
         joint_data.unit.unit
     );
     // we just post the joint to one hub
