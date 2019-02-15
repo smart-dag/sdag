@@ -48,6 +48,7 @@ pub struct InputsRequest {
     pub paid_address: String,
     pub total_amount: u64,
     pub is_spend_all: bool,
+    pub last_stable_unit: String,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -60,10 +61,15 @@ pub fn get_inputs_for_amount(input_request: InputsRequest) -> Result<InputsRespo
         paid_address,
         total_amount,
         is_spend_all,
+        last_stable_unit,
     } = input_request;
 
-    let (inputs, amount) =
-        BUSINESS_CACHE.get_inputs_for_amount(&paid_address, total_amount, is_spend_all)?;
+    let (inputs, amount) = BUSINESS_CACHE.get_inputs_for_amount(
+        &paid_address,
+        total_amount,
+        is_spend_all,
+        &last_stable_unit,
+    )?;
 
     Ok(InputsResponse { inputs, amount })
 }

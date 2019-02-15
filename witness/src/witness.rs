@@ -306,16 +306,19 @@ fn witness() -> Result<()> {
 }
 
 fn compose_and_normalize() -> Result<()> {
-    // get inputs first, get last ball second, for meeting the limit that input units must before last ball
-    // at most we need another 1000 sdg (usually 431 + 197)
-    let (inputs, amount) =
-        BUSINESS_CACHE.get_inputs_for_amount(&WALLET_INFO._00_address, 1_000 as u64, false)?;
-
     let sdag::composer::ParentsAndLastBall {
         parents,
         last_ball,
         last_ball_unit,
     } = sdag::composer::pick_parents_and_last_ball(&WALLET_INFO._00_address)?;
+
+    // at most we need another 1000 sdg (usually 431 + 197)
+    let (inputs, amount) = BUSINESS_CACHE.get_inputs_for_amount(
+        &WALLET_INFO._00_address,
+        1_000 as u64,
+        false,
+        &last_ball_unit,
+    )?;
 
     let light_props = sdag::light::LightProps {
         last_ball,
@@ -382,7 +385,7 @@ fn compose_and_normalize() -> Result<()> {
     }
     SELF_LEVEL.store(max_parent_level.value() as isize + 1, Ordering::Relaxed);
     info!(
-        "comose and validate success, will post [{}]",
+        "compose and validate success, will post [{}]",
         joint_data.unit.unit
     );
     // we just post the joint to one hub

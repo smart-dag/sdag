@@ -4,7 +4,7 @@ use rcu_cell::RcuCell;
 lazy_static! {
     // temp init bridge
     static ref INIT_WITNESSES: RcuCell<Vec<String>> = RcuCell::new(None);
-    // acutal witness data
+    // actual witness data
     pub static ref MY_WITNESSES: [String; config::COUNT_WITNESSES] = {
         let mut result: [String; config::COUNT_WITNESSES] = Default::default();
         let mut g = INIT_WITNESSES.try_lock().expect("failed to lock init witnesses");

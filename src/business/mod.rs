@@ -131,7 +131,7 @@ fn start_business_worker(rx: mpsc::Receiver<RcuReader<JointData>>) -> JoinHandle
                 }
             }
 
-            // FIXME: the joint may not exist due to purege temp-bad
+            // FIXME: the joint may not exist due to purge temp-bad
             let joint = t_c!(SDAG_CACHE.get_joint(&joint.unit.unit));
             t_c!(::finalization::FINALIZATION_WORKER.push_final_joint(joint));
         }
@@ -410,15 +410,18 @@ impl BusinessCache {
     }
 
     /// select unspent outputs from temp output
-    /// determine if units releated with selected outputs is stable
-    /// if no, caculate unstable outputs' amount
-    /// pick amount whose value equals that amount until tatal amount >= required_ament
+    /// determine if units related with selected outputs is stable
+    /// if no, calculate unstable outputs' amount
+    /// pick amount whose value equals that amount until total amount >= required_ament
     pub fn get_inputs_for_amount(
         &self,
         paying_address: &str,
         required_amount: u64,
         send_all: bool,
+        last_stable_unit: &str,
     ) -> Result<(Vec<Input>, u64)> {
+        let last_ball_joint = SDAG_CACHE.get_joint(last_stable_unit)?.read()?;
+
         let temp_state = self.temp_business_state.read().unwrap();
         let temp_outputs = temp_state.get_utxos_by_address(paying_address)?;
 
@@ -433,8 +436,18 @@ impl BusinessCache {
                 continue;
             }
 
-            total_amount += v.amount;
+            // input unit must before last ball
+            let input_joint = SDAG_CACHE.get_joint(&v.unit)?.read()?;
+            let is_include = *input_joint <= *last_ball_joint;
+            if !is_include {
+                warn!(
+                    "input unit {} is not ancestor of last stable unit {:?}",
+                    &v.unit, last_ball_joint.unit.unit
+                );
+                continue;
+            }
 
+            total_amount += v.amount;
             inputs.push(Input {
                 unit: Some(v.unit.clone()),
                 message_index: Some(v.message_index as u32),

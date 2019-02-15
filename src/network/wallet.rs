@@ -101,6 +101,7 @@ impl WalletConn {
         paid_address: &str,
         total_amount: u64,
         is_spend_all: bool,
+        last_stable_unit: &str,
     ) -> Result<light::InputsResponse> {
         let inputs_response = self.send_request(
             "light/inputs",
@@ -108,6 +109,7 @@ impl WalletConn {
                 paid_address: paid_address.to_owned(),
                 total_amount,
                 is_spend_all,
+                last_stable_unit: last_stable_unit.to_owned(),
             })?,
         )?;
 

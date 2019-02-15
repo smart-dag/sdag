@@ -341,6 +341,7 @@ fn send_payment(
         &wallet_info._00_address,
         total_amount + 1000, // we need another 1000 sdg (usually 431 + 197)
         false,               // is_spend_all
+        &light_props.last_ball_unit,
     )?;
 
     let compose_info = sdag::composer::ComposeInfo {

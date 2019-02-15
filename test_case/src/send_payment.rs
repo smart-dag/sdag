@@ -22,6 +22,8 @@ pub(super) fn send_payment(
     wallet_info: &WalletInfo,
     flag: &str,
 ) -> Result<()> {
+    let light_props = ws.get_light_props(&wallet_info._00_address)?;
+
     let outputs = address_amount
         .iter()
         .map(|(address, amount)| sdag::spec::Output {
@@ -36,9 +38,8 @@ pub(super) fn send_payment(
         &wallet_info._00_address,
         total_amount + 1000, // we need another 1000 sdg (usually 431 + 197)
         false,               // is_spend_all
+        &light_props.last_ball_unit,
     )?;
-
-    let light_props = ws.get_light_props(&wallet_info._00_address)?;
 
     let mut compose_info = sdag::composer::ComposeInfo {
         paid_address: wallet_info._00_address.clone(),
@@ -88,6 +89,7 @@ pub(super) fn send_payment(
                 &wallet_info._00_address,
                 total_amount + 1000, // we need another 1000 sdg (usually 431 + 197)
                 false,               // is_spend_all
+                &compose_info.light_props.last_ball_unit,
             )?;
 
             let joint = sdag::composer::compose_joint(compose_info, wallet_info)?;
@@ -126,7 +128,7 @@ pub(super) fn send_payment(
     Ok(())
 }
 
-// choose a wallet more than all trading wallets's index if max index equals test_wallets.len() -1
+// choose a wallet more than all trading wallets' index if max index equals test_wallets.len() -1
 // other case, choose from usize::min_value()
 pub fn choose_wallet(cur_wallet: usize, test_wallets: &[wallet::WalletInfo]) -> Result<usize> {
     if REGISTERED_WALLETS.is_poisoned() {

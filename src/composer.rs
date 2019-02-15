@@ -59,7 +59,7 @@ pub fn pick_parents_and_last_ball(_address: &str) -> Result<ParentsAndLastBall> 
 
     let best_min_wl = best_joint.get_min_wl();
 
-    // FIXME: last ball could retreat!
+    // FIXME: last ball could retreat! (if last ball retreat, we need consider adjust input unit to meet the limit that input must before last ball)
     // usually the last stable joint is stable to best_joint
     while best_min_wl < lsj_data.get_level() {
         // adjust the last stable unit
