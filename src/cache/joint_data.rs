@@ -583,16 +583,22 @@ impl LoadFromKv<String> for JointData {
     }
 
     fn save_to_kv<T: ::std::borrow::Borrow<String>>(&self, key: &T) -> Result<()> {
-        // self is the data, need to save to kv
         let key = key.borrow();
         KV_STORE.save_joint(key, &self.joint)?;
-        KV_STORE.save_joint_children(
-            key,
-            self.children
-                .iter()
-                .map(|c| c.key.as_ref().to_owned())
-                .collect::<Vec<_>>(),
-        )?;
+
+        // update parents' children
+        for parent in self.parents.iter() {
+            let parent = parent.read()?;
+            KV_STORE.save_joint_children(
+                key,
+                parent
+                    .children
+                    .iter()
+                    .map(|c| c.key.as_ref().to_owned())
+                    .collect::<Vec<_>>(),
+            )?;
+        }
+
         KV_STORE.save_joint_property(key, &self.props.read().unwrap())
     }
 }
