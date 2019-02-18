@@ -83,7 +83,7 @@ mod kv_store_sled {
     use cache::SDAG_CACHE;
     use error::Result;
     use failure::ResultExt;
-    use joint::{Joint, JointProperty};
+    use joint::{Joint, JointProperty, Level};
     use serde_json;
     use std::sync::Arc;
 
@@ -91,6 +91,7 @@ mod kv_store_sled {
         pub joints: Arc<Tree>,
         pub properties: Arc<Tree>,
         pub children: Arc<Tree>,
+        pub misc: Arc<Tree>,
     }
 
     impl Default for KvStore {
@@ -111,10 +112,15 @@ mod kv_store_sled {
             let children = db
                 .open_tree(b"children".to_vec())
                 .context("Failed to init children KvStore")?;
+            let misc = db
+                .open_tree(b"misc".to_vec())
+                .context("Failed to init misc KvStore")?;
+
             Ok(KvStore {
                 joints,
                 properties,
                 children,
+                misc,
             })
         }
 
@@ -171,12 +177,39 @@ mod kv_store_sled {
         }
 
         pub fn rebuild_from_kv(&self) -> Result<()> {
+            use main_chain::{self, MciStableEvent};
+            use may::sync::Semphore;
+            use std::time::Duration;
+            use utils::event::Event;
+
+            info!("Rebuild from KV start!");
+
             let mut iter = self.joints.iter();
+            let last_mci = self.read_last_mci().unwrap_or(Level::default());
+
+            let sem = Arc::new(Semphore::new(0));
+            if last_mci.is_valid() {
+                let post_sem = sem.clone();
+                MciStableEvent::add_handler(move |v| {
+                    if v.mci == last_mci {
+                        post_sem.post();
+                    }
+                });
+            }
+
             while let Some(item) = iter.next() {
                 let (_, value) = item.unwrap();
                 let joint: Joint = serde_json::from_str(::std::str::from_utf8(&value)?)?;
                 handle_kv_joint(joint)?
             }
+
+            if last_mci.is_valid() {
+                while !sem.wait_timeout(Duration::from_secs(1)) {
+                    info!("current mci={:?}", main_chain::get_last_stable_mci());
+                }
+            }
+
+            info!("Rebuild from KV done!");
 
             Ok(())
         }
@@ -188,7 +221,26 @@ mod kv_store_sled {
                 joint.save_to_db()?;
             }
 
+            // FIXME: now rebuild everything, will redesign the restore process later
+            self.save_last_mci(::main_chain::get_last_stable_mci())?;
+
             Ok(())
+        }
+
+        fn save_last_mci(&self, mci: Level) -> Result<()> {
+            self.misc
+                .set(b"last_mci", mci.value().to_string().into_bytes())?;
+            self.misc.flush()?;
+            Ok(())
+        }
+
+        fn read_last_mci(&self) -> Result<Level> {
+            let v = self
+                .misc
+                .get(b"last_mci")?
+                .ok_or_else(|| format_err!("read last mci from kv failed"))?;
+
+            Ok(Level::new(::std::str::from_utf8(&v)?.parse::<usize>()?))
         }
     }
 
