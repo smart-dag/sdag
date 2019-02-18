@@ -9,6 +9,7 @@ edition = "2018"
 [dependencies]
 sdag = { path = ".."}
 sdag_wallet_base = { path = "../wallet_base" }
+sdag_object_base = { path = "../object_base" }
 clap = {version = "2", features = ["yaml"]}
 
 may = "0.3"

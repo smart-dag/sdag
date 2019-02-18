@@ -1,5 +1,3 @@
-extern crate sdag_wallet_base;
-
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicIsize, Ordering};
 use std::sync::Arc;
@@ -15,14 +13,15 @@ use sdag::joint::JointSequence;
 use sdag::joint::Level;
 use sdag::my_witness::MY_WITNESSES;
 use sdag::utils::AtomicLock;
+use sdag::wallet_info::MY_WALLET;
+use sdag_object_base::object_hash;
 use sdag_wallet_base::Base64KeyExt;
 use serde_json;
-use WALLET_INFO;
 
 lazy_static! {
     static ref IS_WITNESSING: AtomicLock = AtomicLock::new();
     static ref EVENT_TIMER: Arc<RwLock<Option<Instant>>> = Arc::new(RwLock::new(None));
-    static ref WALLET_PUBK: String = WALLET_INFO._00_address_pubk.to_base64_key();
+    static ref WALLET_PUBK: String = MY_WALLET._00_address_pubk.to_base64_key();
     static ref SELF_LEVEL: AtomicIsize = AtomicIsize::new(-2);
 }
 
@@ -177,7 +176,7 @@ fn is_relative_stable(mut best_free_parent: RcuReader<JointData>) -> Result<(boo
     let mut diff_witnesses = HashSet::new();
     while !(best_free_parent.is_stable() || best_free_parent.unit.is_genesis_unit()) {
         for author in &best_free_parent.unit.authors {
-            if WALLET_INFO._00_address == author.address {
+            if MY_WALLET._00_address == author.address {
                 return Ok((false, has_normal_joints));
             }
 
@@ -204,7 +203,7 @@ fn is_successive_witnesses(best_joint: &CachedJoint) -> Result<bool> {
     let mut diff_witnesses = HashSet::new();
     while !(best_free_parent.is_stable() || best_free_parent.unit.is_genesis_unit()) {
         for author in &best_free_parent.unit.authors {
-            if WALLET_INFO._00_address == author.address {
+            if MY_WALLET._00_address == author.address {
                 return Ok(true);
             }
 
@@ -319,7 +318,7 @@ fn witness() -> Result<()> {
     // for joint in &free_joints {
     //     let joint_data = joint.read()?;
     //     for author in &joint_data.unit.authors {
-    //         if author.address == WALLET_INFO._00_address {
+    //         if author.address == MY_WALLET._00_address {
     //             warn!(
     //                 "my witness unit [{:?}] is free joint, post the block joint again, and cancel post a new joint",
     //                 joint_data.unit.unit
@@ -333,8 +332,8 @@ fn witness() -> Result<()> {
     // }
 
     // divide one output into two outputs, to increase witnessing concurrent performance
-    // let amount = divide_money(&WALLET_INFO._00_address)?;
-    info!("witnessing: will compose and post a witness joint");
+    // let amount = divide_money(&MY_WALLET._00_address)?;
+    info!("will compose and post a witness joint");
     for i in 0..10 {
         match compose_and_normalize() {
             Ok(_) => break,
@@ -358,11 +357,11 @@ fn compose_and_normalize() -> Result<()> {
         parents,
         last_ball,
         last_ball_unit,
-    } = sdag::composer::pick_parents_and_last_ball(&WALLET_INFO._00_address)?;
+    } = sdag::composer::pick_parents_and_last_ball(&MY_WALLET._00_address)?;
 
     // at most we need another 1000 sdg (usually 431 + 197)
     let (inputs, amount) = BUSINESS_CACHE.get_inputs_for_amount(
-        &WALLET_INFO._00_address,
+        &MY_WALLET._00_address,
         1_000 as u64,
         false,
         &last_ball_unit,
@@ -373,14 +372,12 @@ fn compose_and_normalize() -> Result<()> {
         last_ball_unit,
         parent_units: parents,
         witness_list_unit: sdag::config::get_genesis_unit(),
-        has_definition: SDAG_CACHE
-            .get_definition(&WALLET_INFO._00_address)
-            .is_some(),
+        has_definition: SDAG_CACHE.get_definition(&MY_WALLET._00_address).is_some(),
     };
 
     let mut compose_info = sdag::composer::ComposeInfo {
-        paid_address: WALLET_INFO._00_address.clone(),
-        change_address: WALLET_INFO._00_address.clone(),
+        paid_address: MY_WALLET._00_address.clone(),
+        change_address: MY_WALLET._00_address.clone(),
         outputs: Vec::new(),
         inputs: sdag::light::InputsResponse { inputs, amount },
         transaction_amount: 0,
@@ -396,7 +393,7 @@ fn compose_and_normalize() -> Result<()> {
         let data_feed_msg = sdag::spec::Message {
             app: "data_feed".to_string(),
             payload_location: "inline".to_string(),
-            payload_hash: sdag::object_hash::get_base64_hash(&time_stamp)?,
+            payload_hash: object_hash::get_base64_hash(&time_stamp)?,
             payload: Some(sdag::spec::Payload::Other(serde_json::to_value(
                 time_stamp,
             )?)),
@@ -408,7 +405,7 @@ fn compose_and_normalize() -> Result<()> {
         compose_info.text_message = Some(data_feed_msg);
     }
 
-    let joint = sdag::composer::compose_joint(compose_info, &*WALLET_INFO)?;
+    let joint = sdag::composer::compose_joint(compose_info, &*MY_WALLET)?;
 
     let cached_joint = SDAG_CACHE.add_new_joint(joint, None)?;
 

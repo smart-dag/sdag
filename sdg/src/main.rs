@@ -12,6 +12,7 @@ extern crate serde_derive;
 extern crate chrono;
 extern crate env_logger;
 extern crate sdag;
+extern crate sdag_object_base;
 extern crate sdag_wallet_base;
 extern crate serde;
 extern crate serde_json;
@@ -33,52 +34,9 @@ use sdag::network::wallet::WalletConn;
 use sdag::statistics::{LastConnStat, StatsPerPeriod};
 use sdag::try_go;
 use sdag::validation;
-use sdag_wallet_base::{Base64KeyExt, ExtendedPrivKey, ExtendedPubKey, Mnemonic};
-
-struct WalletInfo {
-    #[allow(dead_code)]
-    master_prvk: ExtendedPrivKey,
-    wallet_pubk: ExtendedPubKey,
-    device_address: String,
-    wallet_0_id: String,
-    _00_address: String,
-    _00_address_pubk: ExtendedPubKey,
-    _00_address_prvk: ExtendedPrivKey,
-}
-
-impl WalletInfo {
-    fn from_mnemonic(mnemonic: &str) -> Result<WalletInfo> {
-        let wallet = 0;
-        let mnemonic = Mnemonic::from(&mnemonic)?;
-        let master_prvk = sdag_wallet_base::master_private_key(&mnemonic, "")?;
-        let device_address = sdag_wallet_base::device_address(&master_prvk)?;
-        let wallet_pubk = sdag_wallet_base::wallet_pubkey(&master_prvk, wallet)?;
-        let wallet_0_id = sdag_wallet_base::wallet_id(&wallet_pubk);
-        let _00_address = sdag_wallet_base::wallet_address(&wallet_pubk, false, 0)?;
-        let _00_address_prvk = sdag_wallet_base::wallet_address_prvkey(&master_prvk, 0, false, 0)?;
-        let _00_address_pubk = sdag_wallet_base::wallet_address_pubkey(&wallet_pubk, false, 0)?;
-
-        Ok(WalletInfo {
-            master_prvk,
-            wallet_pubk,
-            device_address,
-            wallet_0_id,
-            _00_address,
-            _00_address_pubk,
-            _00_address_prvk,
-        })
-    }
-}
-
-impl sdag::signature::Signer for WalletInfo {
-    fn sign(&self, hash: &[u8], address: &str) -> Result<String> {
-        if address != self._00_address {
-            bail!("invalid address for wallet to sign");
-        }
-
-        sdag_wallet_base::sign(hash, &self._00_address_prvk)
-    }
-}
+use sdag::wallet_info::{WalletInfo, MY_WALLET};
+use sdag_object_base::object_hash;
+use sdag_wallet_base::Base64KeyExt;
 
 fn init_log(verbosity: u64) {
     let log_lvl = match verbosity {
@@ -490,12 +448,12 @@ fn main() -> Result<()> {
         unreachable!("must have a joint json file");
     }
 
-    let wallet_info = WalletInfo::from_mnemonic(&settings.mnemonic)?;
+    let wallet_info = &MY_WALLET;
 
     //info
     if let Some(info_args) = m.subcommand_matches("info") {
         let is_json = info_args.values_of("j").is_some();
-        return info(&ws, &wallet_info, is_json);
+        return info(&ws, wallet_info, is_json);
     }
 
     //net
@@ -540,7 +498,7 @@ fn main() -> Result<()> {
         if let Some(pay) = send.values_of("pay") {
             let v = pay.collect::<Vec<_>>();
             for arg in v.chunks(2) {
-                if !sdag::object_hash::is_chash_valid(arg[0]) {
+                if !object_hash::is_chash_valid(arg[0]) {
                     eprintln!("invalid address, please check");
                     return Ok(());
                 }
@@ -555,7 +513,7 @@ fn main() -> Result<()> {
 
         let text = send.value_of("text");
 
-        return send_payment(&ws, text, address_amount, &wallet_info);
+        return send_payment(&ws, text, address_amount, wallet_info);
     }
 
     //balance

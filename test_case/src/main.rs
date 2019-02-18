@@ -12,6 +12,7 @@ extern crate env_logger;
 extern crate hashbrown;
 extern crate may;
 extern crate sdag;
+extern crate sdag_object_base;
 extern crate sdag_wallet_base;
 extern crate serde;
 #[macro_use]
@@ -29,6 +30,7 @@ use failure::ResultExt;
 use hashbrown::HashSet;
 use may::*;
 
+use sdag_object_base::object_hash;
 use sdag_wallet_base::Base64KeyExt;
 
 mod config;
@@ -289,7 +291,7 @@ fn main() -> Result<()> {
 
         let mut address_amount = Vec::new();
         if let Some(address) = pay.value_of("ADDRESS") {
-            if !sdag::object_hash::is_chash_valid(address) {
+            if !object_hash::is_chash_valid(address) {
                 eprintln!("invalid address, please check");
                 return Ok(());
             }

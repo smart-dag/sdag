@@ -17,6 +17,7 @@ use tungstenite::client::client;
 use tungstenite::handshake::client::Request;
 use tungstenite::protocol::Role;
 use url::Url;
+use wallet_info::MY_WALLET;
 
 //---------------------------------------------------------------------------------------
 // WalletData
@@ -262,9 +263,7 @@ impl WalletConn {
 
     fn on_subscribe(&self, _param: Value) -> Result<Value> {
         self.get_data().trigger_init_done();
-        // TODO: use wallet address as the peer_id
-        let self_id = ::object_hash::gen_random_string(30);
-        Ok(json!({ "peer_id": self_id }))
+        Ok(json!({"peer_id": MY_WALLET._00_address}))
     }
 }
 

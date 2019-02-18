@@ -1,22 +1,24 @@
 [package]
 description = "sdag wallet basic rust implmentation"
-name = "sdag_wallet_base"
+name = "sdag_object_base"
 version = "0.1.0"
 authors = ["Xudong Huang <huangxu008@hotmail.com>"]
 license = "MIT"
 
 [dependencies]
-sdag_object_base = { path = "../object_base" }
-
 rand = "0.6"
 sha2 = "0.8"
 base64 = "0.10"
 bitcoin = "0.15"
 failure = "0.1"
 secp256k1 = "0.11"
-serde_json = "1"
 lazy_static = "1"
 wallet = { git = "https://github.com/smart-dag/rust-wallet.git" }
+serde = "1"
+serde_derive = "1"
+serde_json = "1"
+base32 = "0.4"
+bit-vec = "0.5"
+ripemd160 = "0.8"
 
 [dev-dependencies]
-

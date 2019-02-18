@@ -20,8 +20,8 @@ use main_chain;
 use may::coroutine;
 use may::net::TcpStream;
 use may::sync::RwLock;
-use object_hash;
 use rcu_cell::RcuReader;
+use sdag_object_base::object_hash;
 use serde_json::{self, Value};
 use statistics;
 use tungstenite::client::client;
@@ -30,6 +30,7 @@ use tungstenite::protocol::Role;
 use url::Url;
 use utils::{AtomicLock, FifoCache, MapLock};
 use validation;
+use wallet_info::MY_WALLET;
 
 //---------------------------------------------------------------------------------------
 // Global Data
@@ -43,7 +44,6 @@ lazy_static! {
     static ref UNIT_IN_WORK: MapLock<String> = MapLock::new();
     static ref JOINT_IN_REQ: MapLock<String> = MapLock::new();
     static ref IS_CATCHING_UP: AtomicLock = AtomicLock::new();
-    static ref SELF_HUB_ID: String = object_hash::gen_random_string(30);
     static ref SELF_LISTEN_ADDRESS: Option<String> = config::get_listen_address();
     static ref BAD_CONNECTION: FifoCache<String, ()> = FifoCache::with_capacity(10);
 }
@@ -126,7 +126,7 @@ impl WsConnections {
     // return all remote peer addresses
     fn get_peers_from_remote(&self) -> Vec<String> {
         let mut peers: Vec<String> = Vec::new();
-        let hub_id = Value::from(SELF_HUB_ID.as_str());
+        let hub_id = Value::from(MY_WALLET._00_address.as_str());
         let g = self.conns.read().unwrap();
 
         // only get peers from source connections
@@ -229,7 +229,7 @@ impl WsConnections {
         // include self listen address
         if let Some(ref addr) = *SELF_LISTEN_ADDRESS {
             peers.push(ConnState {
-                peer_id: SELF_HUB_ID.to_string(),
+                peer_id: MY_WALLET._00_address.clone(),
                 peer_addr: addr.to_owned(),
                 is_subscribed: true,
                 listen_addr: Some(addr.to_owned()),
@@ -501,7 +501,7 @@ impl HubConn {
         let peer_id = param["peer_id"]
             .as_str()
             .ok_or_else(|| format_err!("no peer_id"))?;
-        if peer_id == *SELF_HUB_ID {
+        if peer_id == MY_WALLET._00_address {
             self.close();
             bail!("self-connect");
         }
@@ -550,7 +550,7 @@ impl HubConn {
         });
 
         Ok(json!({
-            "peer_id": *SELF_HUB_ID,
+            "peer_id": MY_WALLET._00_address,
             "listen_addr": *SELF_LISTEN_ADDRESS
         }))
     }
@@ -1042,7 +1042,7 @@ impl HubConn {
 
         match self.send_request(
             "subscribe",
-            &json!({ "peer_id": *SELF_HUB_ID,
+            &json!({ "peer_id": MY_WALLET._00_address,
               "last_mci": last_mci.value(),
               "listen_addr": *SELF_LISTEN_ADDRESS,
             }),

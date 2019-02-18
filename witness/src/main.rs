@@ -17,69 +17,17 @@ extern crate hashbrown;
 extern crate may_signal;
 extern crate rand;
 extern crate rcu_cell;
+extern crate sdag_object_base;
 extern crate sdag_wallet_base;
 extern crate serde_json;
 
 mod timer;
 mod witness;
 
-use sdag::config;
 use sdag::error::Result;
 use sdag::kv_store;
 use sdag::network;
-use sdag_wallet_base::{ExtendedPrivKey, ExtendedPubKey, Mnemonic};
-
-lazy_static! {
-    pub static ref WALLET_INFO: WalletInfo = {
-        let mnemonic = config::get_mnemonic().expect("failed to read mnemonic form settings");
-        WalletInfo::from_mnemonic(&mnemonic).expect("failed to generate wallet info")
-    };
-}
-
-pub struct WalletInfo {
-    #[allow(dead_code)]
-    master_prvk: ExtendedPrivKey,
-    _wallet_pubk: ExtendedPubKey,
-    _device_address: String,
-    _wallet_0_id: String,
-    _00_address: String,
-    _00_address_pubk: ExtendedPubKey,
-    _00_address_prvk: ExtendedPrivKey,
-}
-
-impl WalletInfo {
-    fn from_mnemonic(mnemonic: &str) -> Result<WalletInfo> {
-        let wallet = 0;
-        let mnemonic = Mnemonic::from(&mnemonic)?;
-        let master_prvk = sdag_wallet_base::master_private_key(&mnemonic, "")?;
-        let _device_address = sdag_wallet_base::device_address(&master_prvk)?;
-        let _wallet_pubk = sdag_wallet_base::wallet_pubkey(&master_prvk, wallet)?;
-        let _wallet_0_id = sdag_wallet_base::wallet_id(&_wallet_pubk);
-        let _00_address = sdag_wallet_base::wallet_address(&_wallet_pubk, false, 0)?;
-        let _00_address_prvk = sdag_wallet_base::wallet_address_prvkey(&master_prvk, 0, false, 0)?;
-        let _00_address_pubk = sdag_wallet_base::wallet_address_pubkey(&_wallet_pubk, false, 0)?;
-
-        Ok(WalletInfo {
-            master_prvk,
-            _wallet_pubk,
-            _device_address,
-            _wallet_0_id,
-            _00_address,
-            _00_address_pubk,
-            _00_address_prvk,
-        })
-    }
-}
-
-impl sdag::signature::Signer for WalletInfo {
-    fn sign(&self, hash: &[u8], address: &str) -> Result<String> {
-        if address != self._00_address {
-            bail!("invalid address for wallet to sign");
-        }
-
-        sdag_wallet_base::sign(hash, &self._00_address_prvk)
-    }
-}
+use sdag::wallet_info::MY_WALLET;
 
 // register global event handlers
 fn register_event_handlers() {
@@ -160,7 +108,7 @@ fn main() -> Result<()> {
         }
     })?;
 
-    if !sdag::my_witness::MY_WITNESSES.contains(&WALLET_INFO._00_address) {
+    if !sdag::my_witness::MY_WITNESSES.contains(&MY_WALLET._00_address) {
         bail!("address {} is not witness");
     }
 

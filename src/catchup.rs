@@ -290,13 +290,15 @@ pub fn prepare_hash_tree(hash_tree_req: HashTreeReq) -> Result<Vec<BallProps>> {
 }
 
 pub fn process_hash_tree(balls: &[BallProps]) -> Result<()> {
+    use crate::sdag_object_base::object_hash;
+
     for ball_prop in balls {
         // skip the already known ones
         if SDAG_CACHE.get_joint(&ball_prop.unit).is_ok() {
             continue;
         }
 
-        let ball = ::object_hash::calc_ball_hash(
+        let ball = object_hash::calc_ball_hash(
             &ball_prop.unit,
             &ball_prop.parent_balls,
             &ball_prop.skiplist_balls,

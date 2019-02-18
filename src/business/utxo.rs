@@ -1,16 +1,15 @@
-use failure::ResultExt;
-use std::cmp::Ordering;
-use std::collections::BTreeMap;
-
 use business::SubBusiness;
 use cache::JointData;
 use cache::SDAG_CACHE;
 use config;
 use error::Result;
+use failure::ResultExt;
 use hashbrown::{hash_map::Entry, HashMap, HashSet};
 use joint::{JointSequence, Level};
-use object_hash;
+use sdag_object_base::object_hash;
 use spec::*;
+use std::cmp::Ordering;
+use std::collections::BTreeMap;
 
 //---------------------------------------------------------------------------------------
 // UtxoCache

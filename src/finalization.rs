@@ -80,7 +80,7 @@ fn finalize_joint(cached_joint: CachedJoint) -> Result<()> {
 }
 
 fn calc_ball(joint_data: &JointData, skiplist: &[String]) -> Result<(String)> {
-    use object_hash;
+    use sdag_object_base::object_hash;
     let unit = &joint_data.unit.unit;
 
     //Parent balls

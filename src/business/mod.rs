@@ -12,8 +12,8 @@ use hashbrown::HashMap;
 use joint::{JointSequence, Level};
 use may::coroutine::JoinHandle;
 use may::sync::{mpsc, RwLock};
-use object_hash;
 use rcu_cell::RcuReader;
+use sdag_object_base::object_hash;
 use spec::*;
 
 lazy_static! {

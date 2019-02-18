@@ -2,8 +2,7 @@ use std::collections::HashMap as StdHashMap;
 
 use config;
 use error::Result;
-use obj_ser;
-use object_hash::get_base64_hash;
+use sdag_object_base::{obj_ser, object_hash};
 use serde_json::Value;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -228,12 +227,13 @@ impl Unit {
     }
 
     pub fn get_unit_content_hash(&self) -> String {
-        get_base64_hash(&self.get_naked_unit()).expect("get_unit_content_hash failed")
+        object_hash::get_base64_hash(&self.get_naked_unit()).expect("get_unit_content_hash failed")
     }
 
     pub fn calc_unit_hash(&self) -> String {
         if self.content_hash.is_some() {
-            return get_base64_hash(&self.get_naked_unit()).expect("get_unit_hash naked failed");
+            return object_hash::get_base64_hash(&self.get_naked_unit())
+                .expect("get_unit_hash naked failed");
         }
 
         #[derive(Debug, Serialize)]
@@ -278,7 +278,7 @@ impl Unit {
             witness_list_unit: &self.witness_list_unit,
         };
 
-        get_base64_hash(&stripped_unit).expect("get_unit_hash failed")
+        object_hash::get_base64_hash(&stripped_unit).expect("get_unit_hash failed")
     }
 
     pub fn calc_unit_hash_to_sign(&self) -> Vec<u8> {

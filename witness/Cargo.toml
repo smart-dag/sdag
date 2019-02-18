@@ -8,6 +8,7 @@ license = "MIT"
 [dependencies]
 sdag = { path = "..", default-features = false }
 sdag_wallet_base = { path = "../wallet_base" }
+sdag_object_base = { path = "../object_base" }
 
 may = "0.3"
 log = "0.4"

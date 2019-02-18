@@ -8,7 +8,7 @@ extern crate lazy_static;
 extern crate base64;
 extern crate bitcoin;
 extern crate rand;
-extern crate sdag;
+extern crate sdag_object_base;
 extern crate secp256k1;
 extern crate sha2;
 extern crate wallet;
@@ -17,7 +17,7 @@ use bitcoin::network::constants::Network;
 use bitcoin::util::bip32::ChildNumber;
 use rand::rngs::OsRng;
 use rand::RngCore;
-use sdag::object_hash;
+use sdag_object_base::object_hash;
 use wallet::keyfactory::{KeyFactory, Seed};
 
 pub use bitcoin::util::bip32::{ExtendedPrivKey, ExtendedPubKey};

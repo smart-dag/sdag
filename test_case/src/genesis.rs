@@ -2,8 +2,8 @@ use super::wallet::WalletInfo;
 use std::collections::HashMap as StdHashMap;
 
 use sdag::error::Result;
-use sdag::object_hash;
 use sdag::{config, joint::Joint, spec::*};
+use sdag_object_base::object_hash;
 use sdag_wallet_base::Base64KeyExt;
 
 pub const GENESIS_FILE: &str = "genesis.json";

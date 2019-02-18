@@ -233,7 +233,7 @@ fn validate_witness_unit(
     definitions: &mut HashMap<String, Value>,
     require_definition_or_change: bool,
 ) -> Result<()> {
-    use object_hash;
+    use sdag_object_base::object_hash;
     use validation;
 
     let mut b_found = false;
