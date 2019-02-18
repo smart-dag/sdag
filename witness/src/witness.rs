@@ -44,9 +44,7 @@ pub fn witness_timer_check() -> Result<Duration> {
 fn set_timeout(sleep_time_ms: u64) {
     let next_expire = Instant::now() + Duration::from_millis(sleep_time_ms);
     let mut g = EVENT_TIMER.write().unwrap();
-    if Some(next_expire) > *g {
-        *g = Some(next_expire);
-    }
+    *g = Some(next_expire);
 }
 
 // when check_timeout return None means we need to take action
@@ -113,14 +111,10 @@ fn adjust_witnessing_speed() -> Result<()> {
 
         // if the amount of unstable normal transaction joints is more than 500, witness compose joint right now
         let (normal_tx, all) = get_unstable_normal_transaction_joints_amount(free_joints);
-        info!(
-            "unstable normal transaction joints is {}, all unstable joints is {}",
-            normal_tx, all
-        );
-        if normal_tx > 500 {
+        if normal_tx > 200 {
             info!(
-                "unstable normal transaction joints is {}, more than 500, witnessing right now",
-                normal_tx
+                "unstable normal transaction joints is {}, more than 200, witnessing right now, all unstable joints is {}",
+                normal_tx,all
             );
             time = 0;
         }
@@ -229,7 +223,7 @@ fn is_successive_witnesses(best_joint: &CachedJoint) -> Result<bool> {
     Ok(false)
 }
 
-/// return true if non witness joint behind min retrievable mci, it is very heavy!!!
+/// return true if good normal transaction joints behind min retrievable mci, it is very heavy!!!
 fn is_normal_joint_behind_min_retrievable(free_joints: &[CachedJoint]) -> Result<bool> {
     let min_retrievable_mci = get_min_retrievable_unit()?.get_mci();
     let mut queue = VecDeque::new();
@@ -246,9 +240,13 @@ fn is_normal_joint_behind_min_retrievable(free_joints: &[CachedJoint]) -> Result
         if mci <= min_retrievable_mci {
             continue;
         }
+
+        // only good normal transaction joints need be witnessed;
+        // non serial is not consensus between diff hubs or witnesses, example: a joint is good in hub, but non serial in witness, witness will witnessing forever until the non serial joint is not free;
+        // finalbad is not need.
         for author in &joint_data.unit.authors {
             if !MY_WITNESSES.contains(&author.address)
-                && joint_data.get_sequence() != JointSequence::FinalBad
+                && joint_data.get_sequence() == JointSequence::Good
             {
                 return Ok(true);
             }
