@@ -86,8 +86,8 @@ fn main() -> Result<()> {
     };
     may::config()
         .set_stack_size(stack_size)
-        .set_io_workers(num_cpus::get())
-        .set_workers(2);
+        .set_io_workers(num_cpus::get_physical())
+        .set_workers(num_cpus::get_physical());
 
     log_init();
     config::show_config();

@@ -409,7 +409,7 @@ fn main() -> Result<()> {
     } else {
         0x2000
     };
-    may::config().set_stack_size(stack_size).set_workers(2);
+    may::config().set_stack_size(stack_size).set_workers(4);
 
     let yml = load_yaml!("sdg.yml");
     let m = App::from_yaml(yml).get_matches();

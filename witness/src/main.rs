@@ -15,6 +15,7 @@ extern crate chrono;
 extern crate env_logger;
 extern crate hashbrown;
 extern crate may_signal;
+extern crate num_cpus;
 extern crate rand;
 extern crate rcu_cell;
 extern crate sdag_object_base;
@@ -59,7 +60,10 @@ fn init() -> Result<()> {
     } else {
         0x2000
     };
-    may::config().set_stack_size(stack_size);
+    may::config()
+        .set_stack_size(stack_size)
+        .set_io_workers(num_cpus::get_physical())
+        .set_workers(num_cpus::get_physical());;
 
     init_log();
 
