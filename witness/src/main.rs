@@ -25,6 +25,7 @@ mod witness;
 
 use sdag::config;
 use sdag::error::Result;
+use sdag::kv_store;
 use sdag::network;
 use sdag_wallet_base::{ExtendedPrivKey, ExtendedPubKey, Mnemonic};
 
@@ -114,6 +115,8 @@ fn init() -> Result<()> {
 
     init_log();
 
+    kv_store::KV_STORE.rebuild_from_kv()?;
+
     Ok(())
 }
 
@@ -163,6 +166,9 @@ fn main() -> Result<()> {
 
     // wait user input a ctrl_c to exit
     may_signal::ctrl_c().recv().unwrap();
+
+    kv_store::KV_STORE.save_unstable_joints()?;
+
     network_cleanup();
     info!("bye from main!\n\n");
     Ok(())

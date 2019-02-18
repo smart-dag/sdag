@@ -6,7 +6,7 @@ authors = ["Xudong Huang <huangxu008@hotmail.com>"]
 license = "MIT"
 
 [dependencies]
-sdag = { path = ".."}
+sdag = { path = "..", default-features = false}
 
 rand = "0.6"
 sha2 = "0.8"
