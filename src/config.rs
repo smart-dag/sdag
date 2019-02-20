@@ -38,7 +38,7 @@ pub const MAX_PAYLOAD_SIZE: u32 = 16384; //16k
 
 const SETTINGS_FILE: &str = "settings.json";
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Settings {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub log_level: Option<String>, // ["OFF", "ERROR", "WARN", "INFO", "DEBUG", "TRACE"];
@@ -47,7 +47,7 @@ pub struct Settings {
     pub hub_url: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub listen_address: Option<String>,
-    pub mnemonic: Option<String>,
+    mnemonic: Option<String>,
     pub genesis_unit: Option<String>,
 }
 
@@ -77,6 +77,13 @@ fn open_settings() -> Result<Settings> {
 }
 
 impl Settings {
+    pub fn show_config(&self) {
+        use std::io::stdout;
+        println!("settings:");
+        serde_json::to_writer_pretty(stdout(), self).unwrap();
+        println!("\n");
+    }
+
     fn save_settings(&self) -> Result<()> {
         let mut settings_path = ::std::env::current_dir()?;
         settings_path.push(SETTINGS_FILE);
@@ -86,7 +93,7 @@ impl Settings {
         Ok(())
     }
 
-    pub fn update_mnemonic(&mut self, mnemonic: &str) -> Result<()> {
+    fn update_mnemonic(&mut self, mnemonic: &str) -> Result<()> {
         let mnemonic = Some(Mnemonic::from(mnemonic)?.to_string());
         if self.mnemonic != mnemonic {
             info!("will update mnemonic to: {:?}", mnemonic);
@@ -94,6 +101,21 @@ impl Settings {
             self.save_settings()?;
         }
         Ok(())
+    }
+
+    pub fn get_mnemonic(&self) -> String {
+        if let Some(ref v) = self.mnemonic {
+            v.clone()
+        } else {
+            warn!("no mnemonic in settings, will generate one");
+            let mnemonic = mnemonic("")
+                .expect("failed to generate mnemonic")
+                .to_string();
+            let mut settings = self.clone();
+            settings.mnemonic = Some(mnemonic);
+            settings.save_settings().ok();
+            settings.mnemonic.unwrap()
+        }
     }
 }
 
@@ -164,16 +186,6 @@ pub fn get_worker_thread_num() -> usize {
 }
 
 pub fn get_mnemonic() -> String {
-    let mut settings = get_settings();
-    match settings.mnemonic {
-        Some(v) => v,
-        None => {
-            warn!("no mnemonic in settings, will generate one");
-            let mnemonic = mnemonic("")
-                .expect("failed to generate mnemonic")
-                .to_string();
-            settings.update_mnemonic(&mnemonic).ok();
-            mnemonic
-        }
-    }
+    let settings = get_settings();
+    settings.get_mnemonic()
 }

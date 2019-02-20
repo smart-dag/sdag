@@ -286,7 +286,7 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
-    let wallet_info = WalletInfo::from_mnemonic(&settings.mnemonic)?;
+    let wallet_info = WalletInfo::from_mnemonic(&settings.get_mnemonic())?;
     //transfer
     if let Some(send) = m.subcommand_matches("send") {
         send_payment::distrubite_coins_and_cocurrency(&ws, &send, &wallet_info, &witnesses)?;
@@ -357,7 +357,7 @@ fn main() -> Result<()> {
     }
 
     let mut wallets_info = wallet::get_wallets()?;
-    wallets_info.push(WalletInfo::from_mnemonic(&settings.mnemonic)?);
+    wallets_info.push(WalletInfo::from_mnemonic(&settings.get_mnemonic())?);
 
     //info
     if let Some(arg) = m.subcommand_matches("info") {
