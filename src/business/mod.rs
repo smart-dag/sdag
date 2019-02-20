@@ -510,7 +510,7 @@ impl BusinessCache {
                 // joint is not include author joint
                 let included = joint > &*author_joint;
                 if !included {
-                    bail!("joint not include last stable self unit");
+                    bail!("joint not include last stable self unit {}", unit);
                 }
             }
         }

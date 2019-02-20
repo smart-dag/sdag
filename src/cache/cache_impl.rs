@@ -336,6 +336,9 @@ impl SDagCacheInner {
             let unit = &joint.unit.unit;
             self.normal_joints.remove(unit);
 
+            //FIXME: should it conform with cache_data api?
+            let _ = joint.delete_from_kv(&joint.unit.unit);
+
             for parent in joint.parents.iter() {
                 // remove the child for the parent
                 // if the parent becomes free just add back to free list

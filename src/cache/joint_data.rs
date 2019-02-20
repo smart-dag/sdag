@@ -510,6 +510,16 @@ impl JointData {
 
         self.unit.unit < other.unit.unit
     }
+
+    pub fn delete_from_kv<T: ::std::borrow::Borrow<String>>(&self, key: &T) -> Result<()> {
+        let key = key.borrow();
+        KV_STORE.delete_joint(key)?;
+        KV_STORE.delete_joint_property(key)?;
+
+        //TODO: we need to handle the children list of the parents
+
+        Ok(())
+    }
 }
 
 impl JointData {

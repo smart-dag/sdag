@@ -22,7 +22,7 @@ pub trait LoadFromKv<K: ?Sized>: Sized {
 #[cfg(feature = "kv_store_none")]
 mod kv_store_none {
     use error::Result;
-    use joint::{Joint, JointProperty};
+    use joint::{Joint, JointProperty, Level};
 
     pub struct KvStore {}
 
@@ -71,6 +71,18 @@ mod kv_store_none {
 
         pub fn save_unstable_joints(&self) -> Result<()> {
             Ok(())
+        }
+
+        pub fn save_last_mci(&self, _mci: Level) -> Result<()> {
+            Ok(())
+        }
+
+        pub fn delete_joint(&self, key: &str) -> Result<()> {
+            bail!("joint {} not exist in KV", key)
+        }
+
+        pub fn delete_joint_property(&self, key: &str) -> Result<()> {
+            bail!("joint {} not exist in KV", key)
         }
     }
 }
@@ -152,7 +164,6 @@ mod kv_store_sled {
             bail!("joint property {} not exist in KV", key)
         }
 
-        // TODO: save a joint
         pub fn save_joint(&self, key: &str, joint: &Joint) -> Result<()> {
             self.joints
                 .set(key, serde_json::to_string(joint)?.into_bytes())?;
@@ -227,7 +238,21 @@ mod kv_store_sled {
             Ok(())
         }
 
-        fn save_last_mci(&self, mci: Level) -> Result<()> {
+        pub fn delete_joint(&self, key: &str) -> Result<()> {
+            self.joints.del(key)?;
+            self.joints.flush()?;
+
+            Ok(())
+        }
+
+        pub fn delete_joint_property(&self, key: &str) -> Result<()> {
+            self.properties.del(key)?;
+            self.properties.flush()?;
+
+            Ok(())
+        }
+
+        pub fn save_last_mci(&self, mci: Level) -> Result<()> {
             self.misc
                 .set(b"last_mci", mci.value().to_string().into_bytes())?;
             self.misc.flush()?;
@@ -369,6 +394,28 @@ mod kv_store_sled {
         let read_children = KV_STORE.read_joint_children(&key)?;
 
         assert_eq!(children, read_children);
+
+        Ok(())
+    }
+
+    #[test]
+    fn kv_store_delete_test() -> Result<()> {
+        use super::*;
+
+        let key = "MHBF65OZbRHOEVyicHo7DUfUjxt41ILtQ7f7QAwBPGc=";
+        let property: JointProperty = JointProperty::default();
+
+        KV_STORE.save_joint_property(&key, &property)?;
+        let read_property = KV_STORE.read_joint_property(&key)?;
+
+        assert_eq!(
+            serde_json::to_string(&property)?,
+            serde_json::to_string(&read_property)?
+        );
+
+        KV_STORE.delete_joint_property(&key)?;
+
+        assert_eq!(KV_STORE.read_joint_property(&key).is_err(), true);
 
         Ok(())
     }

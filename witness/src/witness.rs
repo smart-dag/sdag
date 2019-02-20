@@ -333,7 +333,7 @@ fn witness() -> Result<()> {
 
     // divide one output into two outputs, to increase witnessing concurrent performance
     // let amount = divide_money(&MY_WALLET._00_address)?;
-    info!("will compose and post a witness joint");
+    info!("witnessing: will compose and post a witness joint");
     for i in 0..10 {
         match compose_and_normalize() {
             Ok(_) => break,
