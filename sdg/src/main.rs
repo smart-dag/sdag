@@ -17,8 +17,6 @@ extern crate sdag_wallet_base;
 extern crate serde;
 extern crate serde_json;
 
-mod config;
-
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -59,7 +57,10 @@ fn init(verbosity: u64) -> Result<()> {
     } else {
         0x2000
     };
-    may::config().set_stack_size(stack_size);
+    let workers = sdag::config::get_worker_thread_num();
+    may::config()
+        .set_stack_size(stack_size)
+        .set_workers(workers);
 
     init_log(verbosity);
 
@@ -420,17 +421,17 @@ fn main() -> Result<()> {
     // init command
     if let Some(init_arg) = m.subcommand_matches("init") {
         if let Some(mnemonic) = init_arg.value_of("MNEMONIC") {
-            config::update_mnemonic(mnemonic)?;
+            sdag::config::update_mnemonic(mnemonic)?;
         }
         // create settings
-        let settings = config::get_settings();
+        let settings = sdag::config::get_settings();
         settings.show_config();
         // every init would remove the local database
-        ::std::fs::remove_file(sdag::config::get_database_path(true)).ok();
+        // ::std::fs::remove_file(sdag::config::get_database_path(true)).ok();
         return Ok(());
     }
 
-    let settings = config::get_settings();
+    let settings = sdag::config::get_settings();
     let ws = connect_to_remote(&settings.hub_url)?;
 
     //raw_post

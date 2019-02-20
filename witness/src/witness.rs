@@ -14,9 +14,7 @@ use sdag::joint::Level;
 use sdag::my_witness::MY_WITNESSES;
 use sdag::utils::AtomicLock;
 use sdag::wallet_info::MY_WALLET;
-use sdag_object_base::object_hash;
 use sdag_wallet_base::Base64KeyExt;
-use serde_json;
 
 lazy_static! {
     static ref IS_WITNESSING: AtomicLock = AtomicLock::new();
@@ -346,10 +344,10 @@ fn witness() -> Result<()> {
     Ok(())
 }
 
-#[derive(Serialize)]
-struct TimeStamp {
-    timestamp: u64,
-}
+// #[derive(Serialize)]
+// struct TimeStamp {
+//     timestamp: u64,
+// }
 
 /// compose, validation, normalize, post
 fn compose_and_normalize() -> Result<()> {
@@ -371,11 +369,11 @@ fn compose_and_normalize() -> Result<()> {
         last_ball,
         last_ball_unit,
         parent_units: parents,
-        witness_list_unit: sdag::config::get_genesis_unit(),
+        witness_list_unit: sdag::spec::GENESIS_UNIT.to_string(),
         has_definition: SDAG_CACHE.get_definition(&MY_WALLET._00_address).is_some(),
     };
 
-    let mut compose_info = sdag::composer::ComposeInfo {
+    let compose_info = sdag::composer::ComposeInfo {
         paid_address: MY_WALLET._00_address.clone(),
         change_address: MY_WALLET._00_address.clone(),
         outputs: Vec::new(),
@@ -386,24 +384,24 @@ fn compose_and_normalize() -> Result<()> {
         pubk: WALLET_PUBK.clone(),
     };
 
-    if sdag::config::get_need_post_timestamp() {
-        let time_stamp = TimeStamp {
-            timestamp: sdag::time::now() / 1_000,
-        };
-        let data_feed_msg = sdag::spec::Message {
-            app: "data_feed".to_string(),
-            payload_location: "inline".to_string(),
-            payload_hash: object_hash::get_base64_hash(&time_stamp)?,
-            payload: Some(sdag::spec::Payload::Other(serde_json::to_value(
-                time_stamp,
-            )?)),
-            payload_uri: None,
-            payload_uri_hash: None,
-            spend_proofs: Vec::new(),
-        };
+    // if sdag::config::get_need_post_timestamp() {
+    //     let time_stamp = TimeStamp {
+    //         timestamp: sdag::time::now() / 1_000,
+    //     };
+    //     let data_feed_msg = sdag::spec::Message {
+    //         app: "data_feed".to_string(),
+    //         payload_location: "inline".to_string(),
+    //         payload_hash: object_hash::get_base64_hash(&time_stamp)?,
+    //         payload: Some(sdag::spec::Payload::Other(serde_json::to_value(
+    //             time_stamp,
+    //         )?)),
+    //         payload_uri: None,
+    //         payload_uri_hash: None,
+    //         spend_proofs: Vec::new(),
+    //     };
 
-        compose_info.text_message = Some(data_feed_msg);
-    }
+    //     compose_info.text_message = Some(data_feed_msg);
+    // }
 
     let joint = sdag::composer::compose_joint(compose_info, &*MY_WALLET)?;
 

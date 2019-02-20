@@ -20,6 +20,7 @@ extern crate serde_json;
 #[macro_use]
 extern crate lazy_static;
 
+use std::fs::File;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 use std::sync::RwLock;
@@ -28,12 +29,11 @@ use chrono::{Local, TimeZone};
 use clap::App;
 use failure::ResultExt;
 use hashbrown::HashSet;
-use may::*;
+use serde::ser::Serialize;
 
 use sdag_object_base::object_hash;
 use sdag_wallet_base::Base64KeyExt;
 
-mod config;
 mod genesis;
 mod send_payment;
 mod wallet;
@@ -46,6 +46,22 @@ use self::wallet::WalletInfo;
 lazy_static! {
     pub static ref TRANSANTION_NUM: AtomicUsize = AtomicUsize::new(1);
     pub static ref REGISTERED_WALLETS: RwLock<HashSet<usize>> = RwLock::new(HashSet::new());
+}
+
+const WALLET_ADDRESSES: &str = "wallets.json";
+
+fn save_results<T>(result: &T, path: &str) -> Result<()>
+where
+    T: Serialize + ?Sized,
+{
+    let mut results_path = ::std::env::current_dir()?;
+    results_path.push(path);
+
+    let file = ::std::fs::File::create(results_path)?;
+
+    serde_json::to_writer_pretty(file, result)?;
+
+    Ok(())
 }
 
 fn init_log(verbosity: u64) {
@@ -167,8 +183,8 @@ fn genesis_init() -> Result<()> {
 
     let genesis_joint = genesis::gen_genesis_joint(&wallets, total, msg)?;
 
-    config::save_results(&genesis_joint, genesis::GENESIS_FILE)?;
-    config::save_results(
+    save_results(&genesis_joint, genesis::GENESIS_FILE)?;
+    save_results(
         &genesis::gen_first_payment(&wallets.sdag_org, 20, &genesis_joint)?,
         genesis::FIRST_PAYMENT,
     )?;
@@ -189,7 +205,7 @@ fn genesis_init() -> Result<()> {
         sdag_org: &wallets.sdag_org.mnemonic,
     };
 
-    config::save_results(&result, genesis::INIT_MNEMONIC)?;
+    save_results(&result, genesis::INIT_MNEMONIC)?;
 
     use sdag::joint::Joint;
     #[derive(Serialize)]
@@ -209,7 +225,7 @@ fn genesis_init() -> Result<()> {
         first_payment: genesis::gen_first_payment(&wallets.sdag_org, 20, &genesis_joint)?,
         genesis_joint,
     };
-    config::save_results(&result, "result.json")
+    save_results(&result, "result.json")
 }
 
 fn main() -> Result<()> {
@@ -218,20 +234,19 @@ fn main() -> Result<()> {
     let verbosity = m.occurrences_of("verbose");
     init(verbosity)?;
 
-    let settings = config::get_settings();
+    let settings = sdag::config::get_settings();
     let ws = connect_to_remote(&settings.hub_url).context("sdfsd")?;
     let witnesses = ws.get_witnesses()?;
 
     // init command
     if let Some(init_arg) = m.subcommand_matches("init") {
         if let Some(mnemonic) = init_arg.value_of("MNEMONIC") {
-            config::update_mnemonic(mnemonic)?;
+            sdag::config::update_mnemonic(mnemonic)?;
         }
         // create settings
-        let settings = config::get_settings();
+        let settings = sdag::config::get_settings();
         settings.show_config();
-        // every init would remove the local database
-        ::std::fs::remove_file(sdag::config::get_database_path(true)).ok();
+
         return Ok(());
     }
 
@@ -243,13 +258,13 @@ fn main() -> Result<()> {
     //raw_post
     if let Some(raw_post) = m.subcommand_matches("raw_post") {
         if raw_post.values_of("genesis").is_some() {
-            let genesis_file = config::open_file(genesis::GENESIS_FILE)?;
+            let genesis_file = File::open(genesis::GENESIS_FILE)?;
             ws.post_joint(&serde_json::from_reader(genesis_file)?)?;
             return Ok(());
         }
 
         if raw_post.values_of("first_pay").is_some() {
-            let first_paid_file = config::open_file(genesis::FIRST_PAYMENT)?;
+            let first_paid_file = File::open(genesis::FIRST_PAYMENT)?;
             ws.post_joint(&serde_json::from_reader(first_paid_file)?)?;
             return Ok(());
         }
@@ -263,7 +278,7 @@ fn main() -> Result<()> {
                     .iter()
                     .map(|v| (v.mnemonic.clone(), v._00_address.clone()))
                     .collect::<Vec<_>>();
-                config::save_results(&wallets, config::WALLET_ADDRESSES)?;
+                save_results(&wallets, WALLET_ADDRESSES)?;
             }
 
             Err(e) => e.exit(),

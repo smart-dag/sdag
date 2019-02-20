@@ -18,6 +18,7 @@ extern crate may_waiter;
 extern crate rand;
 extern crate rcu_cell;
 extern crate sdag_object_base;
+extern crate sdag_wallet_base;
 extern crate secp256k1;
 extern crate serde;
 extern crate sha2;

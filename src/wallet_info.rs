@@ -6,7 +6,7 @@ use error::Result;
 
 lazy_static! {
     pub static ref MY_WALLET: WalletInfo = {
-        let mnemonic = config::get_mnemonic().expect("failed to read mnemonic form settings");
+        let mnemonic = config::get_mnemonic();
         WalletInfo::from_mnemonic(&mnemonic).expect("failed to generate wallet info")
     };
 }

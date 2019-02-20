@@ -1,7 +1,9 @@
-extern crate config;
+use std::fs::File;
 
-use self::config::*;
-use may::sync::RwLock;
+use error::Result;
+use log;
+use sdag_wallet_base::{mnemonic, Mnemonic};
+use serde_json;
 
 pub const HASH_LENGTH: usize = 44;
 pub const PUBKEY_LENGTH: usize = 44;
@@ -34,61 +36,144 @@ pub const HEADERS_COMMISSION_INPUT_SIZE: u32 = 18;
 pub const WITNESSING_INPUT_SIZE: u32 = 26;
 pub const MAX_PAYLOAD_SIZE: u32 = 16384; //16k
 
-lazy_static! {
-    static ref CONFIG: RwLock<Config> = RwLock::new({
-        let mut settings = Config::default();
-        settings
-            .merge(File::with_name("settings.json"))
-            .expect("failed to load config");
-        settings
-    });
+const SETTINGS_FILE: &str = "settings.json";
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Settings {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub log_level: Option<String>, // ["OFF", "ERROR", "WARN", "INFO", "DEBUG", "TRACE"];
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub worker_thread_num: Option<usize>, // may set_workers()
+    pub hub_url: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub listen_address: Option<String>,
+    pub mnemonic: Option<String>,
+    pub genesis_unit: Option<String>,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Settings {
+            log_level: Some(String::from("WARN")),
+            worker_thread_num: Some(4),
+            listen_address: Some(String::from("127.0.0.1:6615")),
+            hub_url: vec![String::from("127.0.0.1:6615")],
+            genesis_unit: Some(String::from("9AXarZlxv7/CgumgfLEmd1tQjyEnyW9JYPXFZUBWrJg=")),
+            mnemonic: Some(
+                mnemonic("")
+                    .expect("failed to generate mnemonic")
+                    .to_string(),
+            ),
+        }
+    }
+}
+
+fn open_settings() -> Result<Settings> {
+    let mut settings_path = ::std::env::current_dir()?;
+    settings_path.push(SETTINGS_FILE);
+    let file = File::open(settings_path)?;
+    let settings = serde_json::from_reader(file)?;
+    Ok(settings)
+}
+
+impl Settings {
+    fn save_settings(&self) -> Result<()> {
+        let mut settings_path = ::std::env::current_dir()?;
+        settings_path.push(SETTINGS_FILE);
+
+        let file = File::create(settings_path)?;
+        serde_json::to_writer_pretty(file, self)?;
+        Ok(())
+    }
+
+    pub fn update_mnemonic(&mut self, mnemonic: &str) -> Result<()> {
+        let mnemonic = Some(Mnemonic::from(mnemonic)?.to_string());
+        if self.mnemonic != mnemonic {
+            info!("will update mnemonic to: {:?}", mnemonic);
+            self.mnemonic = mnemonic;
+            self.save_settings()?;
+        }
+        Ok(())
+    }
+}
+
+pub fn update_mnemonic(mnemonic: &str) -> Result<()> {
+    let mut settings = get_settings();
+    settings.update_mnemonic(mnemonic)
+}
+
+pub fn get_settings() -> Settings {
+    match open_settings() {
+        Ok(s) => s,
+        Err(_) => {
+            warn!("can't open settings.json, will use default settings");
+            let settings = Settings::default();
+            settings.save_settings().ok();
+            settings
+        }
+    }
 }
 
 pub fn show_config() {
+    let cfg = get_settings();
     println!("\nconfig:");
-    println!("\thub_url = {:?}", get_remote_hub_url());
-    println!("\tlisten_address = {:?}", get_listen_address());
-    println!("\tdatabase_path = {:?}", get_database_path(false));
+    println!("\thub_url = {:?}", cfg.hub_url);
+    println!("\tlisten_address = {:?}", cfg.listen_address);
+    println!("\tlog_level = {:?}", cfg.log_level);
+    println!(
+        "\tworker_thread_num = {:?}",
+        cfg.worker_thread_num.unwrap_or(4)
+    );
     println!("\n");
 }
 
 pub fn get_genesis_unit() -> String {
-    let cfg = CONFIG.read().unwrap();
-    cfg.get::<String>("genesis_unit").unwrap_or_else(|e| {
-        error!("can't read genesis unit, will use default value, err={}", e);
-        String::from("V/NuDxzT7VFa/AqfBsAZ8suG4uj3u+l0kXOLE+nP+dU=")
-    })
+    let mut settings = get_settings();
+    match settings.genesis_unit {
+        Some(v) => v,
+        None => {
+            let genesis_unit = String::from("9AXarZlxv7/CgumgfLEmd1tQjyEnyW9JYPXFZUBWrJg=");
+            settings.genesis_unit = Some(genesis_unit);
+            settings.save_settings().ok();
+            settings.genesis_unit.unwrap()
+        }
+    }
 }
 
 pub fn get_remote_hub_url() -> Vec<String> {
-    let cfg = CONFIG.read().unwrap();
-    cfg.get::<Vec<String>>("hub_url")
-        .unwrap_or_else(|_| vec!["127.0.0.1:6655".to_string()])
+    get_settings().hub_url
 }
 
 pub fn get_listen_address() -> Option<String> {
-    let cfg = CONFIG.read().unwrap();
-    cfg.get::<String>("listen_address").ok()
+    get_settings().listen_address
 }
 
-pub fn get_database_path(is_light: bool) -> ::std::path::PathBuf {
-    // use current working directory
-    let mut db_path = ::std::env::current_dir().expect("call current_dir failed");
-    if is_light {
-        db_path.push("sdag_light.sqlite");
+pub fn get_log_level() -> log::LevelFilter {
+    use std::str::FromStr;
+    if let Some(v) = get_settings().log_level {
+        log::LevelFilter::from_str(&v).unwrap_or(log::LevelFilter::Warn)
+    } else if cfg!(debug_assertions) {
+        log::LevelFilter::Debug
     } else {
-        db_path.push("sdag.sqlite");
+        log::LevelFilter::Warn
     }
-    db_path
 }
 
-pub fn get_mnemonic() -> Result<String, ConfigError> {
-    let cfg = CONFIG.read().unwrap();
-    cfg.get::<String>("mnemonic")
+pub fn get_worker_thread_num() -> usize {
+    get_settings().worker_thread_num.unwrap_or(4)
 }
 
-// witness would use this to control datafeed message
-pub fn get_need_post_timestamp() -> bool {
-    let cfg = CONFIG.read().unwrap();
-    cfg.get::<bool>("need_timestamp").unwrap_or(false)
+pub fn get_mnemonic() -> String {
+    let mut settings = get_settings();
+    match settings.mnemonic {
+        Some(v) => v,
+        None => {
+            warn!("no mnemonic in settings, will generate one");
+            let mnemonic = mnemonic("")
+                .expect("failed to generate mnemonic")
+                .to_string();
+            settings.update_mnemonic(&mnemonic).ok();
+            mnemonic
+        }
+    }
 }

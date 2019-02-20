@@ -15,7 +15,7 @@ lazy_static! {
         match calc_last_stable_joint() {
             Ok(joint) => RcuCell::new(Some(joint)),
             Err(e) => {
-                error!("init LAST_STABLE_JOINT, err={}", e);
+                warn!("init LAST_STABLE_JOINT, err={}", e);
                 RcuCell::new(None)
             }
         }

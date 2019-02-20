@@ -1,7 +1,7 @@
 use sdag_wallet_base::{ExtendedPrivKey, ExtendedPubKey, Mnemonic};
 use std::fs::File;
 
-use super::config;
+use super::WALLET_ADDRESSES;
 use sdag::error::Result;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -67,7 +67,7 @@ pub fn gen_wallets(num: u64) -> Result<Vec<WalletInfo>> {
 
 pub fn get_wallets() -> Result<Vec<WalletInfo>> {
     let mut settings_path = ::std::env::current_dir()?;
-    settings_path.push(config::WALLET_ADDRESSES);
+    settings_path.push(WALLET_ADDRESSES);
     let file = File::open(settings_path)?;
     let wallets: Vec<(String, String)> = serde_json::from_reader(file)?;
     let mut wallets_info: Vec<WalletInfo> = vec![];

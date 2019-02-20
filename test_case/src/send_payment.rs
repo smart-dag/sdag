@@ -11,9 +11,9 @@ use sdag::network::wallet::WalletConn;
 use sdag_wallet_base::Base64KeyExt;
 
 use super::{
-    config,
+    save_results,
     wallet::{self, WalletInfo},
-    REGISTERED_WALLETS, TRANSANTION_NUM,
+    REGISTERED_WALLETS, TRANSANTION_NUM, WALLET_ADDRESSES,
 };
 
 pub(super) fn send_payment(
@@ -202,7 +202,7 @@ pub fn distrubite_coins_and_cocurrency(
                 .iter()
                 .map(|v| (v.mnemonic.clone(), v._00_address.clone()))
                 .collect::<Vec<_>>();
-            config::save_results(&wallets, config::WALLET_ADDRESSES)?;
+            save_results(&wallets, WALLET_ADDRESSES)?;
             Arc::new(wallets_info)
         }
     };

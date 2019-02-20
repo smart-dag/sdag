@@ -16,12 +16,7 @@ use sdag::*;
 
 fn log_init() {
     // TODO: need to implement async logs
-    let log_lvl = if cfg!(debug_assertions) {
-        log::LevelFilter::Debug
-    } else {
-        log::LevelFilter::Warn
-    };
-
+    let log_lvl = sdag::config::get_log_level();
     let mut builder = env_logger::Builder::from_default_env();
     builder.filter(None, log_lvl).init();
 
@@ -84,10 +79,12 @@ fn main() -> Result<()> {
     } else {
         0x2000
     };
+
+    let workers = sdag::config::get_worker_thread_num();
     may::config()
-        .set_stack_size(stack_size)
         .set_io_workers(num_cpus::get_physical())
-        .set_workers(num_cpus::get_physical());
+        .set_stack_size(stack_size)
+        .set_workers(workers);
 
     log_init();
     config::show_config();

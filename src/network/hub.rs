@@ -486,7 +486,7 @@ impl HubConn {
             last_ball,
             last_ball_unit,
             parent_units: parents,
-            witness_list_unit: config::get_genesis_unit(),
+            witness_list_unit: ::spec::GENESIS_UNIT.to_string(),
             has_definition: SDAG_CACHE.get_definition(&address).is_some(),
         };
 
