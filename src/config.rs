@@ -4,6 +4,7 @@ use error::Result;
 use log;
 use sdag_wallet_base::{mnemonic, Mnemonic};
 use serde_json;
+use wallet_info::MY_WALLET;
 
 pub const HASH_LENGTH: usize = 44;
 pub const PUBKEY_LENGTH: usize = 44;
@@ -139,6 +140,7 @@ pub fn get_settings() -> Settings {
 pub fn show_config() {
     let cfg = get_settings();
     println!("\nconfig:");
+    println!("\tpeer_id = {:?}", MY_WALLET._00_address);
     println!("\thub_url = {:?}", cfg.hub_url);
     println!("\tlisten_address = {:?}", cfg.listen_address);
     println!("\tlog_level = {:?}", cfg.log_level);

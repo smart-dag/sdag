@@ -58,6 +58,7 @@ fn init() -> Result<()> {
         .set_workers(num_cpus::get_physical());;
 
     log_init();
+    sdag::config::show_config();
 
     kv_store::KV_STORE.rebuild_from_kv()?;
 
