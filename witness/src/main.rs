@@ -36,14 +36,9 @@ fn register_event_handlers() {
     NewJointEvent::add_handler(move |_v| witness::check_and_witness());
 }
 
-fn init_log() {
+fn log_init() {
     // TODO: need to implement async logs
-    let log_lvl = if cfg!(debug_assertions) {
-        log::LevelFilter::Debug
-    } else {
-        log::LevelFilter::Warn
-    };
-
+    let log_lvl = sdag::config::get_log_level();
     let mut builder = env_logger::Builder::from_default_env();
     builder.filter(None, log_lvl).init();
 
