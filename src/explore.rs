@@ -167,10 +167,27 @@ impl ExploreBuilder {
             }
 
             if level <= self.max_level {
-                let display_unit = DisplayUnit::from(&*joint_data);
-                let level_joints = &mut self.units[level - self.min_level];
-                if !level_joints.contains(&display_unit) {
-                    level_joints.push(display_unit)
+                {
+                    let display_unit = DisplayUnit::from(&*joint_data);
+                    let level_joints = &mut self.units[level - self.min_level];
+                    if !level_joints.contains(&display_unit) {
+                        level_joints.push(display_unit)
+                    }
+                }
+
+                // find the missing ones
+                for child in joint_data.children.iter() {
+                    if !visited.contains(&child.key) {
+                        let child_data = child.read()?;
+                        let display_unit = DisplayUnit::from(&*child_data);
+                        let level = child_data.get_level();
+                        if level <= self.max_level {
+                            let level_joints = &mut self.units[level - self.min_level];
+                            if !level_joints.contains(&display_unit) {
+                                level_joints.push(display_unit)
+                            }
+                        }
+                    }
                 }
             }
 
