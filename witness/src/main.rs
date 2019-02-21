@@ -57,7 +57,7 @@ fn init() -> Result<()> {
         .set_io_workers(num_cpus::get_physical())
         .set_workers(num_cpus::get_physical());;
 
-    init_log();
+    log_init();
 
     kv_store::KV_STORE.rebuild_from_kv()?;
 
