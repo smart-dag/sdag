@@ -142,7 +142,8 @@ fn calc_max_alt_level(last_ball: &JointData, end: &RcuReader<JointData>) -> Resu
 
     let end_level = end.get_level();
     let mut alt_candidates = Vec::new();
-    let mut max_alt_level_possible = stable_point_level;
+    let mut max_alt_level = stable_point_level;
+    let mut min_alt_level = end_level;
 
     //Go down to collect best children
     //Best children should never intersect, no need to check revisit
@@ -155,8 +156,11 @@ fn calc_max_alt_level(last_ball: &JointData, end: &RcuReader<JointData>) -> Resu
         if joint_data.is_wl_increased() {
             alt_candidates.push(joint_data.clone());
             let level = joint_data.get_level();
-            if level > max_alt_level_possible {
-                max_alt_level_possible = level;
+            if level > max_alt_level {
+                max_alt_level = level;
+            }
+            if level < min_alt_level {
+                min_alt_level = level;
             }
         }
 
@@ -173,14 +177,19 @@ fn calc_max_alt_level(last_ball: &JointData, end: &RcuReader<JointData>) -> Resu
     // this max_alt_level_possible is not the real max_alt_level
     // but it's fine to return since it can't affect the stable result
     let min_wl = end.get_min_wl();
-    if min_wl > max_alt_level_possible {
-        return Ok(max_alt_level_possible);
+    if min_wl > max_alt_level {
+        return Ok(max_alt_level);
     }
 
     // Limit the max_alt_level to the history in end joint's perspective
     let mut joints = VecDeque::new();
     let mut visited = HashSet::new();
-    let min_wl = end.get_min_wl();
+    let min_wl = if min_wl < min_alt_level {
+        min_alt_level
+    } else {
+        min_wl
+    };
+
     joints.push_back(end.clone());
     while let Some(joint) = joints.pop_front() {
         let joint_level = joint.get_level();
@@ -364,20 +373,86 @@ fn calc_last_stable_joint() -> Result<RcuReader<JointData>> {
     }
 }
 
-// if any joint in joints that is relative stable to stable_joint
+// check if the last stable is best ancestor and on main chain
+fn is_best_ancestor(
+    last_ball: &RcuReader<JointData>,
+    joint: &RcuReader<JointData>,
+) -> Result<bool> {
+    let stable_point = get_last_stable_joint();
+    let stable_point_level = stable_point.get_level();
+    let last_ball_level = last_ball.get_level();
+
+    // last_ball joint is on main chain and before the stable point
+    if last_ball_level <= stable_point_level {
+        // last_ball joint must be stable if it on main chain
+        if !last_ball.is_on_main_chain() {
+            // last_ball joint must not no main chain
+            error!(
+                "is_stable_to_joint return false, last_ball {} is not on main chain and before stable point",
+                last_ball.unit.unit
+            );
+            return Ok(false);
+        }
+
+        // last_ball unit must be ancestor of joint
+        let mut is_ancestor = false;
+        let mut best_parent = joint.clone();
+        while best_parent.get_level() >= last_ball_level {
+            if best_parent.is_on_main_chain() {
+                is_ancestor = true;
+                break;
+            }
+            best_parent = best_parent.get_best_parent().read()?;
+        }
+
+        if !is_ancestor {
+            error!(
+                "is_stable_to_joint return false, unit={}, last_ball_unit={} can't lead to last stable unit",
+                joint.unit.unit, last_ball.unit.unit
+            );
+            return Ok(false);
+        }
+    } else {
+        // last ball joint is after stable point
+        let mut best_parent = last_ball.clone();
+        while best_parent.get_level() > stable_point_level {
+            best_parent = best_parent.get_best_parent().read()?;
+        }
+
+        if stable_point != best_parent {
+            error!(
+                "is_stable_to_joint return false, last_ball {} is not on main chain, can't pass to stable point {}",
+                last_ball.unit.unit,
+                stable_point.unit.unit
+            );
+            return Ok(false);
+        }
+
+        // last_ball unit must be ancestor of joint
+        let mut best_parent = joint.clone();
+        while best_parent.get_level() > last_ball_level {
+            best_parent = best_parent.get_best_parent().read()?;
+        }
+
+        if *last_ball != best_parent {
+            error!(
+                "is_stable_to_joint return false, unit={}, last_ball_unit={} can't lead to last ball unit",
+                joint.unit.unit, last_ball.unit.unit
+            );
+            return Ok(false);
+        }
+    }
+
+    Ok(true)
+}
+
+// if any joint along main chain that is relative stable to stable_joint
 // this is somewhat like calc_max_alt_level
 // but avoid calc alt branch multiple times
 fn is_stable_to_joints(
     last_ball: &RcuReader<JointData>,
-    joints: Vec<(Level, RcuReader<JointData>)>,
+    joint: &RcuReader<JointData>,
 ) -> Result<bool> {
-    // if we can't find any end points, just return true
-    // this could happen if we select very old parents
-    // FIXME: we still need to check the conditions
-    if joints.is_empty() {
-        return Ok(true);
-    }
-
     let stable_point = last_ball.get_best_parent().read()?;
     let stable_point_level = stable_point.get_level();
 
@@ -395,9 +470,10 @@ fn is_stable_to_joints(
         }
     }
 
-    let end_level = joints[0].1.get_level();
+    let end_level = joint.get_level();
     let mut alt_candidates = Vec::new();
-    let mut max_alt_level_possible = stable_point_level;
+    let mut max_alt_level = stable_point_level;
+    let mut min_alt_level = end_level;
 
     //Go down to collect best children
     //Best children should never intersect, no need to check revisit
@@ -410,8 +486,11 @@ fn is_stable_to_joints(
         if joint_data.is_wl_increased() {
             alt_candidates.push(joint_data.clone());
             let level = joint_data.get_level();
-            if level > max_alt_level_possible {
-                max_alt_level_possible = level;
+            if level > max_alt_level {
+                max_alt_level = level;
+            }
+            if level < min_alt_level {
+                min_alt_level = level;
             }
         }
 
@@ -424,22 +503,36 @@ fn is_stable_to_joints(
         }
     }
 
-    if joints[0].0 > max_alt_level_possible {
+    if joint.get_min_wl() > max_alt_level {
         return Ok(true);
     }
 
-    // Fast return if min_wl is already greater than max_alt_level_possible
-    // this max_alt_level_possible is not the real max_alt_level
-    // but it's fine to return since it can't affect the stable result
-    for (min_wl, end_joint) in joints {
-        if is_stable_to_end_joint(min_wl, end_joint, &alt_candidates)? {
-            return Ok(true);
+    // search along the best parent path
+    // test those unit whoes min_wl increased
+    let mut end_joint = joint.clone();
+    loop {
+        let min_wl = end_joint.get_min_wl();
+        if min_wl <= stable_point_level {
+            break;
         }
+
+        if end_joint.is_min_wl_increased() {
+            let to_min_level = if min_wl < min_alt_level {
+                min_alt_level
+            } else {
+                min_wl
+            };
+            if is_stable_to_end_joint(to_min_level, &end_joint, &alt_candidates)? {
+                return Ok(true);
+            }
+        }
+
+        end_joint = end_joint.get_best_parent().read()?;
     }
 
     fn is_stable_to_end_joint(
-        min_wl: Level,
-        end_joint: RcuReader<JointData>,
+        to_min_level: Level,
+        end_joint: &RcuReader<JointData>,
         alt_candidates: &[RcuReader<JointData>],
     ) -> Result<bool> {
         // Limit the max_alt_level to the history in end joint's perspective
@@ -449,11 +542,11 @@ fn is_stable_to_joints(
         joints.push_back(end_joint.clone());
         while let Some(joint) = joints.pop_front() {
             let joint_level = joint.get_level();
-            if joint_level < min_wl {
+            if joint_level < to_min_level {
                 continue;
             }
 
-            // find a candidate level that is bigger than min_wl
+            // find a candidate level that is bigger than to_min_level
             // continue to check with the next end joint
             if alt_candidates.contains(&joint) {
                 return Ok(false);
@@ -471,6 +564,7 @@ fn is_stable_to_joints(
         Ok(true)
     }
 
+    error!("not stable exhausted!!");
     Ok(false)
 }
 
@@ -502,104 +596,28 @@ pub fn find_best_joint<'a, I: IntoIterator<Item = &'a CachedJoint>>(
 
 /// judge if earlier_joint is relative stable to later_joint
 pub fn is_stable_to_joint(
-    earlier_joint: &RcuReader<JointData>,
+    last_ball: &RcuReader<JointData>,
     joint: &RcuReader<JointData>,
 ) -> Result<bool> {
-    if earlier_joint.unit.is_genesis_unit() {
+    if last_ball.unit.is_genesis_unit() {
         return Ok(true);
     }
 
     let min_wl = joint.get_min_wl();
-    let earlier_joint_level = earlier_joint.get_level();
-    if min_wl < earlier_joint_level {
+    let last_ball_level = last_ball.get_level();
+    if min_wl < last_ball_level {
         error!(
-            "is_stable_to_joint return false, min_wl={:?}, earlier_joint_level={:?}",
-            min_wl, earlier_joint.unit.unit
+            "is_stable_to_joint return false, min_wl={:?}, last_ball_level={:?}",
+            min_wl, last_ball_level
         );
         return Ok(false);
     }
 
-    let stable_point = get_last_stable_joint();
-    let stable_point_level = stable_point.get_level();
-
-    // find valid end points in order
-    let mut end_joints = Vec::new();
-
-    // earlier joint is on main chain and before the stable point
-    if earlier_joint_level <= stable_point_level {
-        // earlier joint must be stable if it on main chain
-        if !earlier_joint.is_on_main_chain() {
-            // earlier joint must not no main chain
-            error!(
-                "is_stable_to_joint return false, earlier_joint {} is not on main chain and before stable point",
-                earlier_joint.unit.unit
-            );
-            return Ok(false);
-        }
-
-        // earlier unit must be ancestor of joint
-        let mut is_ancestor = false;
-        let mut best_parent = joint.clone();
-        while best_parent.get_level() >= earlier_joint_level {
-            if best_parent.is_min_wl_increased() {
-                let min_wl = best_parent.get_min_wl();
-                if min_wl >= earlier_joint_level {
-                    end_joints.push((min_wl, best_parent.clone()));
-                }
-            }
-
-            if best_parent.is_on_main_chain() {
-                is_ancestor = true;
-                break;
-            }
-            best_parent = best_parent.get_best_parent().read()?;
-        }
-
-        if !is_ancestor {
-            error!(
-                "is_stable_to_joint return false, unit={}, last_ball_unit={} can't lead to last stable unit",
-                joint.unit.unit, earlier_joint.unit.unit
-            );
-            return Ok(false);
-        }
-    } else {
-        // earlier joint is after stable point
-        let mut best_parent = earlier_joint.clone();
-        while best_parent.get_level() > stable_point_level {
-            best_parent = best_parent.get_best_parent().read()?;
-        }
-
-        if stable_point != best_parent {
-            error!(
-                "is_stable_to_joint return false, earlier_joint {} is not on main chain, can't pass to stable point {}",
-                earlier_joint.unit.unit,
-                stable_point.unit.unit
-            );
-            return Ok(false);
-        }
-
-        // earlier unit must be ancestor of joint
-        let mut best_parent = joint.clone();
-        while best_parent.get_level() > earlier_joint_level {
-            if best_parent.is_min_wl_increased() {
-                let min_wl = best_parent.get_min_wl();
-                if min_wl >= earlier_joint_level {
-                    end_joints.push((min_wl, best_parent.clone()));
-                }
-            }
-            best_parent = best_parent.get_best_parent().read()?;
-        }
-
-        if *earlier_joint != best_parent {
-            error!(
-                "is_stable_to_joint return false, unit={}, last_ball_unit={} can't lead to last ball unit",
-                joint.unit.unit, earlier_joint.unit.unit
-            );
-            return Ok(false);
-        }
+    if !is_best_ancestor(last_ball, joint)? {
+        return Ok(false);
     }
 
-    is_stable_to_joints(earlier_joint, end_joints)
+    is_stable_to_joints(last_ball, joint)
 }
 
 /// Returns current unstable main chain from the best free joint
