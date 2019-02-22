@@ -78,6 +78,27 @@ impl ExploreBuilder {
         }
     }
 
+    fn adjust_mc_unit_position(&mut self) {
+        fn find_mc_unit(units: &[DisplayUnit]) -> Option<usize> {
+            for (index, unit) in units.iter().enumerate() {
+                if unit.is_on_mc {
+                    return Some(index);
+                }
+            }
+
+            None
+        };
+
+        for units in self.units.iter_mut() {
+            let index = find_mc_unit(units);
+
+            if let Some(i) = index {
+                let center_index = units.len() / 2;
+                units.swap(i, center_index);
+            }
+        }
+    }
+
     fn append_unstable_units(&mut self) -> Result<()> {
         let mut queue = VecDeque::new();
         let mut visited = HashSet::new();
@@ -213,6 +234,6 @@ pub fn get_joints_by_level(min_level: Level, max_level: Level) -> Result<Vec<Vec
     let mut builder = ExploreBuilder::new(min_level, max_level);
     builder.append_unstable_units()?;
     builder.append_stable_units()?;
-
+    builder.adjust_mc_unit_position();
     Ok(builder.units)
 }
