@@ -40,6 +40,8 @@ fn log_init() {
     // TODO: need to implement async logs
     let log_lvl = sdag::config::get_log_level();
     let mut builder = env_logger::Builder::from_default_env();
+
+    builder.filter_module("pagecache", log::LevelFilter::Error);
     builder.filter(None, log_lvl).init();
 
     info!("log init done!");

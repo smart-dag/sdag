@@ -97,7 +97,13 @@ mod kv_store_sled {
     use failure::ResultExt;
     use joint::{Joint, JointProperty, Level};
     use serde_json;
+    use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
+
+    //FIXME: A temporary hack to avoid overwriting when rebuilding everything from kv
+    lazy_static! {
+        pub static ref IS_REBUILDING_FROM_KV: AtomicBool = AtomicBool::new(true);
+    }
 
     pub struct KvStore {
         pub joints: Arc<Tree>,
@@ -165,24 +171,30 @@ mod kv_store_sled {
         }
 
         pub fn save_joint(&self, key: &str, joint: &Joint) -> Result<()> {
-            self.joints
-                .set(key, serde_json::to_string(joint)?.into_bytes())?;
-            self.joints.flush()?;
+            if !IS_REBUILDING_FROM_KV.load(Ordering::Relaxed) {
+                self.joints
+                    .set(key, serde_json::to_string(joint)?.into_bytes())?;
+                self.joints.flush()?;
+            }
 
             Ok(())
         }
 
         pub fn save_joint_children(&self, key: &str, children: Vec<String>) -> Result<()> {
-            self.children
-                .set(key, serde_json::to_string(&children)?.into_bytes())?;
-            self.children.flush()?;
+            if !IS_REBUILDING_FROM_KV.load(Ordering::Relaxed) {
+                self.children
+                    .set(key, serde_json::to_string(&children)?.into_bytes())?;
+                self.children.flush()?;
+            }
             Ok(())
         }
 
         pub fn save_joint_property(&self, key: &str, property: &JointProperty) -> Result<()> {
-            self.properties
-                .set(key, serde_json::to_string(property)?.into_bytes())?;
-            self.properties.flush()?;
+            if !IS_REBUILDING_FROM_KV.load(Ordering::Relaxed) {
+                self.properties
+                    .set(key, serde_json::to_string(property)?.into_bytes())?;
+                self.properties.flush()?;
+            }
 
             Ok(())
         }
@@ -221,6 +233,7 @@ mod kv_store_sled {
             }
 
             info!("Rebuild from KV done!");
+            IS_REBUILDING_FROM_KV.store(false, Ordering::Relaxed);
 
             Ok(())
         }
@@ -253,9 +266,11 @@ mod kv_store_sled {
         }
 
         pub fn save_last_mci(&self, mci: Level) -> Result<()> {
-            self.misc
-                .set(b"last_mci", mci.value().to_string().into_bytes())?;
-            self.misc.flush()?;
+            if !IS_REBUILDING_FROM_KV.load(Ordering::Relaxed) {
+                self.misc
+                    .set(b"last_mci", mci.value().to_string().into_bytes())?;
+                self.misc.flush()?;
+            }
             Ok(())
         }
 
