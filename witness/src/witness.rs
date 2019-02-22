@@ -1,5 +1,5 @@
 use std::collections::VecDeque;
-use std::sync::atomic::{AtomicIsize, Ordering};
+use std::sync::atomic::{AtomicIsize, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -21,6 +21,7 @@ lazy_static! {
     static ref EVENT_TIMER: Arc<RwLock<Option<Instant>>> = Arc::new(RwLock::new(None));
     static ref WALLET_PUBK: String = MY_WALLET._00_address_pubk.to_base64_key();
     static ref SELF_LEVEL: AtomicIsize = AtomicIsize::new(-2);
+    static ref SELF_TIME: AtomicUsize = AtomicUsize::new(0);
 }
 
 const THRESHOLD_DISTANCE: isize = sdag::config::COUNT_WITNESSES as isize * 2 / 3;
@@ -106,18 +107,14 @@ fn adjust_witnessing_speed() -> Result<()> {
             time = ((THRESHOLD_DISTANCE as f64 / distance as f64) * 200.0) as u64;
         }
 
-        // if the amount of unstable normal transaction joints is more than 500, witness compose joint right now
-        let (normal_tx, all) = get_unstable_normal_transaction_joints_amount(free_joints);
-        if normal_tx > 200 {
-            info!(
-                "unstable normal transaction joints is {}, more than 200, witnessing right now, all unstable joints is {}",
-                normal_tx,all
-            );
+        // delay time not more than 2s
+        if sdag::time::now() as usize - SELF_TIME.load(Ordering::Relaxed) >= 2_000 {
             time = 0;
         }
     }
+
     info!(
-        "will post a witness joint after {} ms unless a new joint arrives, the distance from max_mc_level to max_my_level is {}.",
+        "witnessing: will post after {} ms unless a new joint arrives, the distance from max_mc_level to max_my_level is {}.",
         time, distance
     );
     set_timeout(time);
@@ -159,11 +156,25 @@ fn is_need_witnessing() -> Result<(bool)> {
         return Ok(true);
     }
 
-    // if is_successive_witnesses(&best_joint)? {
-    //     return Ok(false);
-    // }
+    // distance from max_level_free to SELF_LEVEL should more than 6
+    if !is_more_than_six_to_last_self(&free_joints)? {
+        return Ok(false);
+    }
 
     is_unstable_has_normal_joint(&free_joints)
+}
+
+/// return true if more than six joints from free joints to last_self
+fn is_more_than_six_to_last_self(free_joints: &[CachedJoint]) -> Result<(bool)> {
+    let self_level = SELF_LEVEL.load(Ordering::Relaxed);
+    for unit in free_joints {
+        let level = unit.read()?.get_level();
+        if level.value() as isize - self_level >= sdag::config::MAJORITY_OF_WITNESSES as isize - 1 {
+            return Ok(true);
+        }
+    }
+
+    Ok(false)
 }
 
 /// return true if more than 6 different other witnesses from best free joints until stable
@@ -266,45 +277,6 @@ fn get_min_retrievable_unit() -> Result<RcuReader<JointData>> {
     }
     // only genesis has no last ball unit
     Ok(last_stable_joint)
-}
-
-/// get amount of unstable normal transaction joints which not finalbad
-fn get_unstable_normal_transaction_joints_amount(free_joints: Vec<CachedJoint>) -> (u32, u32) {
-    let mut normal_transactions = 0;
-    let mut all = 0;
-
-    if free_joints.is_empty() {
-        return (normal_transactions, all);
-    }
-
-    let mut queue = VecDeque::new();
-    let mut visited = HashSet::new();
-    for joint in free_joints {
-        if visited.insert(joint.key.clone()) {
-            queue.push_back(joint.clone());
-        }
-    }
-
-    while let Some(joint) = queue.pop_front() {
-        let joint_data = joint.read().unwrap();
-        if joint_data.is_stable() {
-            continue;
-        }
-        all += 1;
-        if joint_data.get_sequence() != JointSequence::FinalBad
-            && !joint_data.unit.is_authored_by_witness()
-        {
-            normal_transactions += 1;
-        }
-
-        for p in joint_data.parents.iter() {
-            if visited.insert(p.key.clone()) {
-                queue.push_back(p.clone());
-            }
-        }
-    }
-
-    (normal_transactions, all)
 }
 
 /// witness compose and post joint
@@ -430,6 +402,8 @@ fn compose_and_normalize() -> Result<()> {
         "witnessing: compose and validate success, will post [{}]",
         joint_data.unit.unit
     );
+
+    SELF_TIME.store(sdag::time::now() as usize, Ordering::Relaxed);
     // we just post the joint to one hub
     if let Some(ws) = sdag::network::hub::WSS.get_next_peer() {
         ws.post_joint(&joint_data)?;
