@@ -184,7 +184,7 @@ fn calc_max_alt_level(last_ball: &JointData, end: &RcuReader<JointData>) -> Resu
     // Limit the max_alt_level to the history in end joint's perspective
     let mut joints = VecDeque::new();
     let mut visited = HashSet::new();
-    let min_wl = if min_wl < min_alt_level {
+    let to_min_wl = if min_wl < min_alt_level {
         min_alt_level
     } else {
         min_wl
@@ -193,7 +193,7 @@ fn calc_max_alt_level(last_ball: &JointData, end: &RcuReader<JointData>) -> Resu
     joints.push_back(end.clone());
     while let Some(joint) = joints.pop_front() {
         let joint_level = joint.get_level();
-        if joint_level < min_wl {
+        if joint_level < to_min_wl {
             continue;
         }
 

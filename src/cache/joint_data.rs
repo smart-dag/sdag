@@ -497,15 +497,25 @@ impl JointData {
 
     /// return true if self is more precedence than other
     pub fn is_precedence_than(&self, other: &Self) -> bool {
-        let self_prop = self.props.read().unwrap();
-        let other_prop = other.props.read().unwrap();
+        {
+            let self_prop = self.props.read().unwrap();
+            let other_prop = other.props.read().unwrap();
 
-        if self_prop.wl != other_prop.wl {
-            return self_prop.wl > other_prop.wl;
+            if self_prop.wl != other_prop.wl {
+                return self_prop.wl > other_prop.wl;
+            }
+
+            if self_prop.level != other_prop.level {
+                return self_prop.level < other_prop.level;
+            }
         }
 
-        if self_prop.level != other_prop.level {
-            return self_prop.level > other_prop.level;
+        // we select witness unit is more weighted
+        let self_wit = self.unit.is_authored_by_witness();
+        let other_wit = other.unit.is_authored_by_witness();
+
+        if self_wit != other_wit {
+            return self_wit;
         }
 
         self.unit.unit < other.unit.unit
