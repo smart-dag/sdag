@@ -163,7 +163,7 @@ fn is_need_witnessing() -> Result<(bool)> {
     //     return Ok(false);
     // }
 
-    is_normal_joint_behind_min_retrievable(&free_joints)
+    is_unstable_has_normal_joint(&free_joints)
 }
 
 /// return true if more than 6 different other witnesses from best free joints until stable
@@ -220,9 +220,8 @@ fn is_successive_witnesses(best_joint: &CachedJoint) -> Result<bool> {
     Ok(false)
 }
 
-/// return true if good normal transaction joints behind min retrievable mci, it is very heavy!!!
-fn is_normal_joint_behind_min_retrievable(free_joints: &[CachedJoint]) -> Result<bool> {
-    let min_retrievable_mci = get_min_retrievable_unit()?.get_mci();
+/// return true if unstable joints have normal joint, it is very heavy!!!
+fn is_unstable_has_normal_joint(free_joints: &[CachedJoint]) -> Result<bool> {
     let mut queue = VecDeque::new();
     let mut visited = HashSet::new();
     for joint in free_joints {
@@ -233,8 +232,7 @@ fn is_normal_joint_behind_min_retrievable(free_joints: &[CachedJoint]) -> Result
 
     while let Some(joint) = queue.pop_front() {
         let joint_data = joint.read()?;
-        let mci = joint_data.get_mci();
-        if mci <= min_retrievable_mci {
+        if joint_data.is_stable() {
             continue;
         }
 
@@ -259,6 +257,7 @@ fn is_normal_joint_behind_min_retrievable(free_joints: &[CachedJoint]) -> Result
 }
 
 /// get min retrievable unit: last stable unit's last stable unit
+#[allow(dead_code)]
 fn get_min_retrievable_unit() -> Result<RcuReader<JointData>> {
     // we can unwrap here because free joints is not empty
     let last_stable_joint = sdag::main_chain::get_last_stable_joint();

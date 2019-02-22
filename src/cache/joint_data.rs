@@ -505,7 +505,7 @@ impl JointData {
         }
 
         if self_prop.level != other_prop.level {
-            return self_prop.level < other_prop.level;
+            return self_prop.level > other_prop.level;
         }
 
         self.unit.unit < other.unit.unit
