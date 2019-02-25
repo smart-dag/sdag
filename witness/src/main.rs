@@ -27,14 +27,6 @@ use sdag::kv_store;
 use sdag::network;
 use sdag::wallet_info::MY_WALLET;
 
-// register global event handlers
-fn register_event_handlers() {
-    use sdag::utils::event::Event;
-    use sdag::validation::NewJointEvent;
-
-    // hook the actual handler here
-    NewJointEvent::add_handler(move |_v| witness::check_and_witness());
-}
 
 fn log_init() {
     // TODO: need to implement async logs
@@ -54,10 +46,12 @@ fn init() -> Result<()> {
     } else {
         0x2000
     };
+
+    let workers = sdag::config::get_worker_thread_num();
     may::config()
         .set_stack_size(stack_size)
         .set_io_workers(num_cpus::get_physical())
-        .set_workers(num_cpus::get_physical());;
+        .set_workers(workers);;
 
     log_init();
     sdag::config::show_config();
@@ -89,7 +83,6 @@ fn connect_to_remote() -> Result<()> {
         }
     }
 
-    witness::check_and_witness();
     Ok(())
 }
 
@@ -99,7 +92,6 @@ fn network_cleanup() {
 
 // the hub server logic that run in coroutine context
 fn run_hub_server() -> Result<()> {
-    register_event_handlers();
     start_ws_server();
     connect_to_remote()?;
     timer::start_global_timers();

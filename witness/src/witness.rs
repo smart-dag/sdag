@@ -1,10 +1,8 @@
 use std::collections::VecDeque;
-use std::sync::atomic::{AtomicIsize, AtomicUsize, Ordering};
-use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::sync::atomic::{AtomicIsize, Ordering};
+use std::time::Duration;
 
 use hashbrown::HashSet;
-use may::sync::RwLock;
 use rcu_cell::RcuReader;
 use sdag::business::BUSINESS_CACHE;
 use sdag::cache::{CachedJoint, JointData, SDAG_CACHE};
@@ -12,114 +10,25 @@ use sdag::error::Result;
 use sdag::joint::JointSequence;
 use sdag::joint::Level;
 use sdag::my_witness::MY_WITNESSES;
-use sdag::utils::AtomicLock;
 use sdag::wallet_info::MY_WALLET;
 use sdag_wallet_base::Base64KeyExt;
 
 lazy_static! {
-    static ref IS_WITNESSING: AtomicLock = AtomicLock::new();
-    static ref EVENT_TIMER: Arc<RwLock<Option<Instant>>> = Arc::new(RwLock::new(None));
     static ref WALLET_PUBK: String = MY_WALLET._00_address_pubk.to_base64_key();
     static ref SELF_LEVEL: AtomicIsize = AtomicIsize::new(-2);
-    static ref SELF_TIME: AtomicUsize = AtomicUsize::new(0);
 }
-
-const THRESHOLD_DISTANCE: isize = sdag::config::COUNT_WITNESSES as isize * 2 / 3;
 
 pub fn witness_timer_check() -> Result<Duration> {
-    match check_timeout() {
-        None => {
-            if is_need_witnessing()? {
-                witness()?;
-            }
-            *EVENT_TIMER.write().unwrap() = None;
-            Ok(Duration::from_secs(1))
-        }
-        Some(dur) => Ok(dur),
+    if is_need_witnessing()? {
+        witness()?;
     }
-}
 
-fn set_timeout(sleep_time_ms: u64) {
-    let next_expire = Instant::now() + Duration::from_millis(sleep_time_ms);
-    let mut g = EVENT_TIMER.write().unwrap();
-    *g = Some(next_expire);
-}
-
-// when check_timeout return None means we need to take action
-// when return Some(duration) means we need to sleep duration for next check
-#[inline]
-fn check_timeout() -> Option<Duration> {
-    let g = EVENT_TIMER.read().unwrap();
-
-    match *g {
-        None => Some(Duration::from_secs(1)),
-
-        Some(time) => {
-            let now = Instant::now();
-
-            if now >= time {
-                None
-            } else {
-                Some(time - now)
-            }
-        }
-    }
-}
-
-pub fn check_and_witness() {
-    info!("check and witness");
-    let _g = match IS_WITNESSING.try_lock() {
-        Some(g) => g,
-        None => {
-            info!("witnessing under way");
-            return;
-        }
-    };
-
-    if adjust_witnessing_speed().is_err() {
-        error!("adjust_witnessing_speed failed");
-    };
-}
-
-/// adjust witnessing speed
-fn adjust_witnessing_speed() -> Result<()> {
     use rand::{thread_rng, Rng};
     let mut rng = thread_rng();
-    let mut time;
-    let self_level = SELF_LEVEL.load(Ordering::Relaxed);
-    let mut distance: isize = -1;
-    if self_level < 0 {
-        time = (rng.gen_range(0.0, 1.0) * 2_000.0) as u64;
-    } else {
-        let free_joints = SDAG_CACHE.get_all_free_joints();
-        let free_joint_level = sdag::main_chain::find_best_joint(free_joints.iter())?
-            .ok_or_else(|| format_err!("empty best joint among free joints"))?
-            .get_level()
-            .value() as isize;
+    let time = rng.gen_range(200, 1000);
 
-        // free_joint_level may less than self_level, so distance and SELF_LEVEL can not be usize
-        // for increasing main chain advance speed, will decrease the set of unstable joints,  so witness need post fast
-        // the cost is we will ignore witness concurrence and SNR (Signal Noise Ratio)
-        distance = free_joint_level - self_level;
-        if distance < THRESHOLD_DISTANCE {
-            time = ((THRESHOLD_DISTANCE - distance) * 200) as u64;
-        } else {
-            time = ((THRESHOLD_DISTANCE as f64 / distance as f64) * 200.0) as u64;
-        }
-
-        // delay time not more than 2s
-        if sdag::time::now() as usize - SELF_TIME.load(Ordering::Relaxed) >= 2_000 {
-            time = 0;
-        }
-    }
-
-    info!(
-        "witnessing: will post after {} ms unless a new joint arrives, the distance from max_mc_level to max_my_level is {}.",
-        time, distance
-    );
-    set_timeout(time);
-
-    Ok(())
+    // random delay between 0.5 ~ 2
+    Ok(Duration::from_millis(time))
 }
 
 /// witnessing condition:
@@ -128,14 +37,6 @@ fn adjust_witnessing_speed() -> Result<()> {
 /// 3) last self unstable joint support current main chain, that means current main chain include my last unstable joint (cancel)
 fn is_need_witnessing() -> Result<(bool)> {
     info!("witnessing: if need post witness joint?");
-    let _g = match IS_WITNESSING.try_lock() {
-        Some(g) => g,
-        None => {
-            info!("witness_before_threshold under way");
-            return Ok(false);
-        }
-    };
-
     let free_joints = SDAG_CACHE.get_all_free_joints();
 
     if free_joints.is_empty() {
@@ -205,32 +106,6 @@ fn is_relative_stable(mut best_free_parent: RcuReader<JointData>) -> Result<(boo
     Ok((true, has_normal_joints))
 }
 
-/// return true if successive witnessing (contains no normal joint)
-#[allow(dead_code)]
-fn is_successive_witnesses(best_joint: &CachedJoint) -> Result<bool> {
-    let mut best_free_parent = best_joint.read()?;
-    let mut diff_witnesses = HashSet::new();
-    while !(best_free_parent.is_stable() || best_free_parent.unit.is_genesis_unit()) {
-        for author in &best_free_parent.unit.authors {
-            if MY_WALLET._00_address == author.address {
-                return Ok(true);
-            }
-
-            if MY_WITNESSES.contains(&author.address) {
-                diff_witnesses.insert(author.address.clone());
-            } else {
-                return Ok(false);
-            }
-        }
-        // need at least half other witnesses
-        if diff_witnesses.len() >= sdag::config::COUNT_WITNESSES - 3 {
-            break;
-        }
-        best_free_parent = best_free_parent.get_best_parent().read()?;
-    }
-    Ok(false)
-}
-
 /// return true if unstable joints have normal joint, it is very heavy!!!
 fn is_unstable_has_normal_joint(free_joints: &[CachedJoint]) -> Result<bool> {
     let mut queue = VecDeque::new();
@@ -267,41 +142,8 @@ fn is_unstable_has_normal_joint(free_joints: &[CachedJoint]) -> Result<bool> {
     Ok(false)
 }
 
-/// get min retrievable unit: last stable unit's last stable unit
-#[allow(dead_code)]
-fn get_min_retrievable_unit() -> Result<RcuReader<JointData>> {
-    // we can unwrap here because free joints is not empty
-    let last_stable_joint = sdag::main_chain::get_last_stable_joint();
-    if let Some(ref unit) = last_stable_joint.unit.last_ball_unit {
-        return SDAG_CACHE.get_joint(unit)?.read();
-    }
-    // only genesis has no last ball unit
-    Ok(last_stable_joint)
-}
-
 /// witness compose and post joint
 fn witness() -> Result<()> {
-    // as we can not completely avoid the case that witness joints concurrency
-    // so we will cancel the limit that witness cancel post a new joint when it's joint is free joint.
-    // let free_joints = SDAG_CACHE.get_all_free_joints()?;
-    // for joint in &free_joints {
-    //     let joint_data = joint.read()?;
-    //     for author in &joint_data.unit.authors {
-    //         if author.address == MY_WALLET._00_address {
-    //             warn!(
-    //                 "my witness unit [{:?}] is free joint, post the block joint again, and cancel post a new joint",
-    //                 joint_data.unit.unit
-    //             );
-
-    //             if let Some(ws) = sdag::network::hub::WSS.get_next_peer() {
-    //                 return ws.post_joint(&joint_data);
-    //             }
-    //         }
-    //     }
-    // }
-
-    // divide one output into two outputs, to increase witnessing concurrent performance
-    // let amount = divide_money(&MY_WALLET._00_address)?;
     info!("witnessing: will compose and post a witness joint");
     for i in 0..10 {
         match compose_and_normalize() {
@@ -314,11 +156,6 @@ fn witness() -> Result<()> {
 
     Ok(())
 }
-
-// #[derive(Serialize)]
-// struct TimeStamp {
-//     timestamp: u64,
-// }
 
 /// compose, validation, normalize, post
 fn compose_and_normalize() -> Result<()> {
@@ -403,7 +240,6 @@ fn compose_and_normalize() -> Result<()> {
         joint_data.unit.unit
     );
 
-    SELF_TIME.store(sdag::time::now() as usize, Ordering::Relaxed);
     // we just post the joint to one hub
     if let Some(ws) = sdag::network::hub::WSS.get_next_peer() {
         ws.post_joint(&joint_data)?;
