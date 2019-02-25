@@ -1,3 +1,5 @@
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use error::Result;
 
 #[cfg(feature = "kv_store_none")]
@@ -8,6 +10,13 @@ use self::kv_store_sled::KvStore;
 
 lazy_static! {
     pub static ref KV_STORE: KvStore = KvStore::default();
+
+    // avoid overwriting when rebuilding everything from kv
+    static ref IS_REBUILDING_FROM_KV: AtomicBool = AtomicBool::new(true);
+}
+
+pub fn is_rebuilding_from_kv() -> bool {
+    IS_REBUILDING_FROM_KV.load(Ordering::Relaxed)
 }
 
 //---------------------------------------------------------------------------------------
@@ -90,20 +99,15 @@ mod kv_store_none {
 #[cfg(feature = "kv_store_sled")]
 mod kv_store_sled {
     extern crate sled;
-
     use self::sled::{Db, Tree};
+
+    use super::*;
+    use bincode;
     use cache::SDAG_CACHE;
     use error::Result;
     use failure::ResultExt;
     use joint::{Joint, JointProperty, Level};
-    use serde_json;
-    use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
-
-    //FIXME: A temporary hack to avoid overwriting when rebuilding everything from kv
-    lazy_static! {
-        pub static ref IS_REBUILDING_FROM_KV: AtomicBool = AtomicBool::new(true);
-    }
 
     pub struct KvStore {
         pub joints: Arc<Tree>,
@@ -148,15 +152,15 @@ mod kv_store_sled {
 
         pub fn read_joint(&self, key: &str) -> Result<Joint> {
             if let Some(value) = self.joints.get(key)? {
-                return Ok(serde_json::from_str(::std::str::from_utf8(&value)?)?);
+                return Ok(bincode::deserialize(&value)?);
             }
 
             bail!("joint {} not exist in KV", key)
         }
 
         pub fn read_joint_children(&self, key: &str) -> Result<Vec<String>> {
-            if let Some(v) = self.children.get(key)? {
-                return Ok(serde_json::from_str(::std::str::from_utf8(&v)?)?);
+            if let Some(value) = self.children.get(key)? {
+                return Ok(bincode::deserialize(&value)?);
             }
 
             bail!("joint property {} not exist in KV", key)
@@ -164,38 +168,24 @@ mod kv_store_sled {
 
         pub fn read_joint_property(&self, key: &str) -> Result<JointProperty> {
             if let Some(value) = self.properties.get(key)? {
-                return Ok(serde_json::from_str(::std::str::from_utf8(&value)?)?);
+                return Ok(bincode::deserialize(&value)?);
             }
 
             bail!("joint property {} not exist in KV", key)
         }
 
         pub fn save_joint(&self, key: &str, joint: &Joint) -> Result<()> {
-            if !IS_REBUILDING_FROM_KV.load(Ordering::Relaxed) {
-                self.joints
-                    .set(key, serde_json::to_string(joint)?.into_bytes())?;
-                self.joints.flush()?;
-            }
-
+            self.joints.set(key, bincode::serialize(joint)?)?;
             Ok(())
         }
 
         pub fn save_joint_children(&self, key: &str, children: Vec<String>) -> Result<()> {
-            if !IS_REBUILDING_FROM_KV.load(Ordering::Relaxed) {
-                self.children
-                    .set(key, serde_json::to_string(&children)?.into_bytes())?;
-                self.children.flush()?;
-            }
+            self.children.set(key, bincode::serialize(&children)?)?;
             Ok(())
         }
 
         pub fn save_joint_property(&self, key: &str, property: &JointProperty) -> Result<()> {
-            if !IS_REBUILDING_FROM_KV.load(Ordering::Relaxed) {
-                self.properties
-                    .set(key, serde_json::to_string(property)?.into_bytes())?;
-                self.properties.flush()?;
-            }
-
+            self.properties.set(key, bincode::serialize(property)?)?;
             Ok(())
         }
 
@@ -207,8 +197,7 @@ mod kv_store_sled {
 
             info!("Rebuild from KV start!");
 
-            let mut iter = self.joints.iter();
-            let last_mci = self.read_last_mci().unwrap_or(Level::default());
+            let last_mci = self.read_last_mci().unwrap_or(Level::INVALID);
 
             let sem = Arc::new(Semphore::new(0));
             if last_mci.is_valid() {
@@ -220,9 +209,9 @@ mod kv_store_sled {
                 });
             }
 
-            while let Some(item) = iter.next() {
+            for item in self.joints.iter() {
                 let (_, value) = item.unwrap();
-                let joint: Joint = serde_json::from_str(::std::str::from_utf8(&value)?)?;
+                let joint: Joint = bincode::deserialize(&value)?;
                 handle_kv_joint(joint)?
             }
 
@@ -253,24 +242,16 @@ mod kv_store_sled {
 
         pub fn delete_joint(&self, key: &str) -> Result<()> {
             self.joints.del(key)?;
-            self.joints.flush()?;
-
             Ok(())
         }
 
         pub fn delete_joint_property(&self, key: &str) -> Result<()> {
             self.properties.del(key)?;
-            self.properties.flush()?;
-
             Ok(())
         }
 
         pub fn save_last_mci(&self, mci: Level) -> Result<()> {
-            if !IS_REBUILDING_FROM_KV.load(Ordering::Relaxed) {
-                self.misc
-                    .set(b"last_mci", mci.value().to_string().into_bytes())?;
-                self.misc.flush()?;
-            }
+            self.misc.set(b"last_mci", bincode::serialize(&mci)?)?;
             Ok(())
         }
 
@@ -280,7 +261,7 @@ mod kv_store_sled {
                 .get(b"last_mci")?
                 .ok_or_else(|| format_err!("read last mci from kv failed"))?;
 
-            Ok(Level::new(::std::str::from_utf8(&v)?.parse::<usize>()?))
+            Ok(bincode::deserialize(&v)?)
         }
     }
 

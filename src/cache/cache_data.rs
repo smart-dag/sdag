@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use error::Result;
-use kv_store::LoadFromKv;
+use kv_store::{is_rebuilding_from_kv, LoadFromKv};
 use may::coroutine;
 use rcu_cell::{RcuCell, RcuReader};
 
@@ -133,6 +133,11 @@ impl<K, V: LoadFromKv<K>> CachedData<K, V> {
 
     // save the value to database and clear the data memory
     pub fn save_to_db(&self) -> Result<()> {
+        if is_rebuilding_from_kv() {
+            #[cold]
+            return Ok(());
+        }
+
         loop {
             if let Some(g) = self.data.try_lock() {
                 match g.as_ref() {
