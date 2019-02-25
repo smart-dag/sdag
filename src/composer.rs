@@ -32,7 +32,8 @@ pub struct ComposeInfo {
 /// we should pick last stable ball firstly.
 /// if we pick parents firstly, last ball we picked may not be last ball in the view of parents
 /// the last ball belong to the newer unit coming on main chain after parents
-pub fn pick_parents_and_last_ball(_address: &str) -> Result<ParentsAndLastBall> {
+
+pub fn pick_parents_and_last_ball(address: &str) -> Result<ParentsAndLastBall> {
     let mut lsj_data = ::main_chain::get_last_stable_joint();
     let mut free_joints = SDAG_CACHE.get_good_free_joints()?;
 
@@ -58,17 +59,18 @@ pub fn pick_parents_and_last_ball(_address: &str) -> Result<ParentsAndLastBall> 
         .ok_or_else(|| format_err!("free joints is empty now"))?;
 
     let best_min_wl = best_joint.get_min_wl();
+    let lsj_level = lsj_data.get_level();
 
-    // FIXME: last ball could retreat! (if last ball retreat, we need consider adjust input unit to meet the limit that input must before last ball)
-    // usually the last stable joint is stable to best_joint
-    while best_min_wl < lsj_data.get_level() {
-        // adjust the last stable unit
-        error!("adjust last stable joint when compose unit");
-        lsj_data = lsj_data.get_best_parent().read()?;
+    // adjust the last ball unit
+    if best_min_wl < lsj_level {
+        warn!("adjust last stable joint when compose unit");
+        lsj_data = best_joint.get_last_ball_joint()?;
     }
 
     // pick other joints freely
     let mut parents = vec![best_joint.unit.unit.clone()];
+
+    // author of best parent
     let mut authors: Vec<String> = best_joint
         .unit
         .authors
@@ -76,11 +78,13 @@ pub fn pick_parents_and_last_ball(_address: &str) -> Result<ParentsAndLastBall> 
         .map(|v| v.address.clone())
         .collect();
 
+    // we must include last self composed unit
     if free_joints.len() > config::MAX_PARENT_PER_UNIT {
         // get the free joint which include last my unstable joint first
-        if let Some(unit) = get_include_self_free_joint(&free_joints, _address)? {
+        if let Some(unit) = get_include_self_free_joint(&free_joints, address)? {
             if !parents.contains(&unit) {
                 let joint = SDAG_CACHE.get_joint(&unit)?.read()?;
+                // author of last unstable joint of address
                 for author in joint.unit.authors.iter() {
                     if authors.contains(&author.address) {
                         bail!("detect same author in parents");
@@ -93,20 +97,31 @@ pub fn pick_parents_and_last_ball(_address: &str) -> Result<ParentsAndLastBall> 
     }
 
     'outer: for joint in free_joints {
+        if parents.len() >= config::MAX_PARENT_PER_UNIT {
+            break;
+        }
+
         if parents.contains(&*joint.key) {
             continue;
         }
 
-        for author in joint.read()?.unit.authors.iter() {
+        let joint_data = joint.read()?;
+
+        for author in joint_data.unit.authors.iter() {
             if authors.contains(&author.address) {
                 continue 'outer;
             }
-            authors.push(author.address.clone());
         }
 
-        parents.push(joint.key.to_string());
-        if parents.len() >= config::MAX_PARENT_PER_UNIT {
-            break;
+        if let Some(ref last_ball_unit) = joint_data.unit.last_ball_unit {
+            let last_ball = SDAG_CACHE.get_joint(last_ball_unit)?.read()?;
+            if last_ball.get_level() <= lsj_level {
+                parents.push(joint.key.to_string());
+                authors.push(joint_data.unit.authors[0].address.clone());
+            }
+        } else {
+            // this is the genisis unit
+            parents.push(joint.key.to_string());
         }
     }
 
