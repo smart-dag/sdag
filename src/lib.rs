@@ -12,7 +12,6 @@ extern crate serde_json;
 extern crate serde_derive;
 
 extern crate base64;
-extern crate bincode;
 extern crate crossbeam;
 extern crate hashbrown;
 extern crate may_waiter;

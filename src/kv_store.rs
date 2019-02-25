@@ -102,11 +102,11 @@ mod kv_store_sled {
     use self::sled::{Db, Tree};
 
     use super::*;
-    use bincode;
     use cache::SDAG_CACHE;
     use error::Result;
     use failure::ResultExt;
     use joint::{Joint, JointProperty, Level};
+    use serde_json;
     use std::sync::Arc;
 
     pub struct KvStore {
@@ -152,7 +152,7 @@ mod kv_store_sled {
 
         pub fn read_joint(&self, key: &str) -> Result<Joint> {
             if let Some(value) = self.joints.get(key)? {
-                return Ok(bincode::deserialize(&value)?);
+                return Ok(serde_json::from_slice(&value)?);
             }
 
             bail!("joint {} not exist in KV", key)
@@ -160,7 +160,7 @@ mod kv_store_sled {
 
         pub fn read_joint_children(&self, key: &str) -> Result<Vec<String>> {
             if let Some(value) = self.children.get(key)? {
-                return Ok(bincode::deserialize(&value)?);
+                return Ok(serde_json::from_slice(&value)?);
             }
 
             bail!("joint property {} not exist in KV", key)
@@ -168,24 +168,24 @@ mod kv_store_sled {
 
         pub fn read_joint_property(&self, key: &str) -> Result<JointProperty> {
             if let Some(value) = self.properties.get(key)? {
-                return Ok(bincode::deserialize(&value)?);
+                return Ok(serde_json::from_slice(&value)?);
             }
 
             bail!("joint property {} not exist in KV", key)
         }
 
         pub fn save_joint(&self, key: &str, joint: &Joint) -> Result<()> {
-            self.joints.set(key, bincode::serialize(joint)?)?;
+            self.joints.set(key, serde_json::to_vec(joint)?)?;
             Ok(())
         }
 
         pub fn save_joint_children(&self, key: &str, children: Vec<String>) -> Result<()> {
-            self.children.set(key, bincode::serialize(&children)?)?;
+            self.children.set(key, serde_json::to_vec(&children)?)?;
             Ok(())
         }
 
         pub fn save_joint_property(&self, key: &str, property: &JointProperty) -> Result<()> {
-            self.properties.set(key, bincode::serialize(property)?)?;
+            self.properties.set(key, serde_json::to_vec(property)?)?;
             Ok(())
         }
 
@@ -211,7 +211,7 @@ mod kv_store_sled {
 
             for item in self.joints.iter() {
                 let (_, value) = item.unwrap();
-                let joint: Joint = bincode::deserialize(&value)?;
+                let joint: Joint = serde_json::from_slice(&value)?;
                 handle_kv_joint(joint)?
             }
 
@@ -251,7 +251,7 @@ mod kv_store_sled {
         }
 
         pub fn save_last_mci(&self, mci: Level) -> Result<()> {
-            self.misc.set(b"last_mci", bincode::serialize(&mci)?)?;
+            self.misc.set(b"last_mci", serde_json::to_vec(&mci)?)?;
             Ok(())
         }
 
@@ -261,7 +261,7 @@ mod kv_store_sled {
                 .get(b"last_mci")?
                 .ok_or_else(|| format_err!("read last mci from kv failed"))?;
 
-            Ok(bincode::deserialize(&v)?)
+            Ok(serde_json::from_slice(&v)?)
         }
     }
 
