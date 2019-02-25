@@ -46,7 +46,7 @@ fn is_need_witnessing() -> Result<(bool)> {
     let best_joint = sdag::main_chain::find_best_joint(free_joints.iter())?
         .ok_or_else(|| format_err!("empty best joint among free joints"))?;
 
-    let (need_witness, has_normal_joint) = is_relative_stable(best_joint.clone())?;
+    let (need_witness, has_normal_joint) = is_relative_stable(best_joint)?;
 
     if !need_witness {
         return Ok(false);
@@ -62,15 +62,7 @@ fn is_need_witnessing() -> Result<(bool)> {
         return Ok(false);
     }
 
-    if let Some(normal_joint) = get_unstable_normal_joint(&free_joints)? {
-        // this is somewhat slow, the main chain may grow too slow
-        // so we need to check the head data directly
-        if !sdag::main_chain::is_stable_to_joint(&normal_joint, &best_joint)? {
-            return Ok(true);
-        }
-    }
-
-    Ok(false)
+    is_unstable_has_normal_joint(&free_joints)
 }
 
 /// return true if more than six joints from free joints to last_self
@@ -114,8 +106,8 @@ fn is_relative_stable(mut best_free_parent: RcuReader<JointData>) -> Result<(boo
     Ok((true, has_normal_joints))
 }
 
-/// return the first unstable normal joints we found
-fn get_unstable_normal_joint(free_joints: &[CachedJoint]) -> Result<Option<RcuReader<JointData>>> {
+/// return true if unstable joints have normal joint, it is very heavy!!!
+fn is_unstable_has_normal_joint(free_joints: &[CachedJoint]) -> Result<bool> {
     let mut queue = VecDeque::new();
     let mut visited = HashSet::new();
     for joint in free_joints {
@@ -137,7 +129,7 @@ fn get_unstable_normal_joint(free_joints: &[CachedJoint]) -> Result<Option<RcuRe
             if !MY_WITNESSES.contains(&author.address)
                 && joint_data.get_sequence() == JointSequence::Good
             {
-                return Ok(Some(joint_data.clone()));
+                return Ok(true);
             }
         }
         for p in joint_data.parents.iter() {
@@ -147,7 +139,7 @@ fn get_unstable_normal_joint(free_joints: &[CachedJoint]) -> Result<Option<RcuRe
         }
     }
 
-    Ok(None)
+    Ok(false)
 }
 
 /// witness compose and post joint
