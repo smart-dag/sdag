@@ -36,7 +36,7 @@ sled = {version = "0.17", optional = true}
 
 [profile.release]
 lto = true
-codegen-units = 1
+# codegen-units = 1
 # panic = "abort"
 
 [features]
