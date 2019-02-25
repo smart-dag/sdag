@@ -59,7 +59,7 @@ pub fn validate_ready_joint(joint: CachedJoint) -> Result<()> {
 
     match normal_validate(joint.clone()) {
         Ok(_) => {
-            joint.save_to_db()?;
+            joint.save_to_db_async()?;
             // save the unhandled joint to normal
             SDAG_CACHE.normalize_joint(joint);
             statistics::increase_stats(peer_id, true, true);

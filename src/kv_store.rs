@@ -30,6 +30,7 @@ pub trait LoadFromKv<K: ?Sized>: Sized {
 
 #[cfg(feature = "kv_store_none")]
 mod kv_store_none {
+    use cache::CachedJoint;
     use error::Result;
     use joint::{Joint, JointProperty, Level};
 
@@ -93,6 +94,14 @@ mod kv_store_none {
         pub fn delete_joint_property(&self, key: &str) -> Result<()> {
             bail!("joint {} not exist in KV", key)
         }
+
+        pub fn save_cache_async(&self, data: CachedJoint) -> Result<()> {
+            Ok(())
+        }
+
+        pub fn finish(self) -> Result<()> {
+            Ok(())
+        }
     }
 }
 
@@ -102,18 +111,22 @@ mod kv_store_sled {
     use self::sled::{Db, Tree};
 
     use super::*;
-    use cache::SDAG_CACHE;
+    use cache::{CachedJoint, SDAG_CACHE};
+    use crossbeam::crossbeam_channel::{unbounded, Receiver, Sender};
     use error::Result;
     use failure::ResultExt;
     use joint::{Joint, JointProperty, Level};
     use serde_json;
     use std::sync::Arc;
+    use std::thread::JoinHandle;
 
     pub struct KvStore {
         pub joints: Arc<Tree>,
         pub properties: Arc<Tree>,
         pub children: Arc<Tree>,
         pub misc: Arc<Tree>,
+        sender: Sender<CachedJoint>,
+        _handlers: Vec<JoinHandle<()>>,
     }
 
     impl Default for KvStore {
@@ -138,11 +151,29 @@ mod kv_store_sled {
                 .open_tree(b"misc".to_vec())
                 .context("Failed to init misc KvStore")?;
 
+            let (sender, receiver): (Sender<CachedJoint>, Receiver<CachedJoint>) = unbounded();
+            let mut handlers = Vec::new();
+
+            for i in 1..9 {
+                let rx = receiver.clone();
+                handlers.push(std::thread::spawn(move || {
+                    while let Ok(cached_joint) = rx.recv() {
+                        info!(
+                            "Thread{}: Saving cached joint with key {}",
+                            i, cached_joint.key
+                        );
+                        t_c!(cached_joint.save_to_db());
+                    }
+                }));
+            }
+
             Ok(KvStore {
                 joints,
                 properties,
                 children,
                 misc,
+                sender,
+                _handlers: handlers,
             })
         }
 
@@ -262,6 +293,22 @@ mod kv_store_sled {
                 .ok_or_else(|| format_err!("read last mci from kv failed"))?;
 
             Ok(serde_json::from_slice(&v)?)
+        }
+
+        pub fn save_cache_async(&self, data: CachedJoint) -> Result<()> {
+            self.sender.send(data)?;
+            Ok(())
+        }
+
+        pub fn finish(&self) -> Result<()> {
+            self.joints.flush()?;
+            self.children.flush()?;
+            self.properties.flush()?;
+            self.misc.flush()?;
+
+            info!("kv store finished");
+
+            Ok(())
         }
     }
 

@@ -122,7 +122,7 @@ fn main() -> Result<()> {
     // wait user input a ctrl_c to exit
     may_signal::ctrl_c().recv().unwrap();
 
-    kv_store::KV_STORE.save_unstable_joints()?;
+    kv_store::KV_STORE.finish()?;
 
     network_cleanup();
     info!("bye from main!\n\n");
