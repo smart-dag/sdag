@@ -67,6 +67,19 @@ fn init() -> Result<()> {
     Ok(())
 }
 
+fn start_ws_server() {
+    use network::hub::WSS;
+    use network::WsServer;
+
+    if let Some(addr) = sdag::config::get_listen_address() {
+        let _server = WsServer::start(&addr, |c| {
+            t!(WSS.add_p2p_conn(c, true));
+        })
+        .ok();
+        println!("Websocket server running on ws://{}", addr);
+    }
+}
+
 fn connect_to_remote() -> Result<()> {
     let peers = sdag::config::get_remote_hub_url();
 
@@ -84,15 +97,18 @@ fn network_cleanup() {
     network::hub::WSS.close_all();
 }
 
+// the hub server logic that run in coroutine context
+fn run_hub_server() -> Result<()> {
+    register_event_handlers();
+    start_ws_server();
+    connect_to_remote()?;
+    timer::start_global_timers();
+    Ok(())
+}
+
 fn main() -> Result<()> {
     init()?;
-
-    connect_to_remote()?;
-
-    timer::start_global_timers();
-
-    // add new_joint event
-    register_event_handlers();
+    run_hub_server()?;
 
     // at least wait for genesis got stable
     sdag::utils::wait_cond(None, || {
