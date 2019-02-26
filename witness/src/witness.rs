@@ -42,6 +42,11 @@ fn is_need_witnessing() -> Result<(bool)> {
         return Ok(false);
     }
 
+    // distance from max_level_free to SELF_LEVEL should more than 6
+    if !is_more_than_six_to_last_self(&free_joints)? {
+        return Ok(false);
+    }
+
     let best_joint = sdag::main_chain::find_best_joint(free_joints.iter())?
         .ok_or_else(|| format_err!("empty best joint among free joints"))?;
 
@@ -54,11 +59,6 @@ fn is_need_witnessing() -> Result<(bool)> {
 
     if has_normal_joint {
         return Ok(true);
-    }
-
-    // distance from max_level_free to SELF_LEVEL should more than 6
-    if !is_more_than_six_to_last_self(&free_joints)? {
-        return Ok(false);
     }
 
     is_need_witness_normal_joint(&free_joints, best_joint)
