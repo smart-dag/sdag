@@ -95,11 +95,11 @@ mod kv_store_none {
             bail!("joint {} not exist in KV", key)
         }
 
-        pub fn save_cache_async(&self, data: CachedJoint) -> Result<()> {
+        pub fn save_cache_async(&self, _data: CachedJoint) -> Result<()> {
             Ok(())
         }
 
-        pub fn finish(self) -> Result<()> {
+        pub fn finish(&self) -> Result<()> {
             Ok(())
         }
     }

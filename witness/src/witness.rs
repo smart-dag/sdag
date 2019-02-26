@@ -125,13 +125,12 @@ fn is_unstable_has_normal_joint(free_joints: &[CachedJoint]) -> Result<bool> {
         // only good normal transaction joints need be witnessed;
         // non serial is not consensus between diff hubs or witnesses, example: a joint is good in hub, but non serial in witness, witness will witnessing forever until the non serial joint is not free;
         // finalbad is not need.
-        for author in &joint_data.unit.authors {
-            if !MY_WITNESSES.contains(&author.address)
-                && joint_data.get_sequence() == JointSequence::Good
-            {
-                return Ok(true);
-            }
+        if !joint_data.unit.is_authored_by_witness()
+            && joint_data.get_sequence() == JointSequence::Good
+        {
+            return Ok(true);
         }
+
         for p in joint_data.parents.iter() {
             if visited.insert(p.key.clone()) {
                 queue.push_back(p.clone());
