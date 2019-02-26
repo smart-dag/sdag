@@ -2,7 +2,7 @@ use cache::{CachedJoint, JointData, SDAG_CACHE};
 use config;
 use error::Result;
 use hashbrown::{HashMap, HashSet};
-use joint::Joint;
+use joint::{Joint, Level};
 use light::*;
 use rcu_cell::RcuReader;
 use sdag_object_base::object_hash;
@@ -59,12 +59,13 @@ pub fn pick_parents_and_last_ball(address: &str) -> Result<ParentsAndLastBall> {
         .ok_or_else(|| format_err!("free joints is empty now"))?;
 
     let best_min_wl = best_joint.get_min_wl();
-    let lsj_level = lsj_data.get_level();
+    let mut lsj_level = lsj_data.get_level();
 
     // adjust the last ball unit
     if best_min_wl < lsj_level {
         warn!("adjust last stable joint when compose unit");
         lsj_data = best_joint.get_last_ball_joint()?;
+        lsj_level = lsj_data.get_level();
     }
 
     // pick other joints freely
@@ -81,7 +82,8 @@ pub fn pick_parents_and_last_ball(address: &str) -> Result<ParentsAndLastBall> {
     // we must include last self composed unit
     if free_joints.len() > config::MAX_PARENT_PER_UNIT {
         // get the free joint which include last my unstable joint first
-        if let Some(unit) = get_include_self_free_joint(&free_joints, address)? {
+        // the free joint's last ball must be ancestor of picked last ball joint
+        if let Some(unit) = get_include_self_free_joint(&free_joints, address, lsj_level)? {
             if !parents.contains(&unit) {
                 let joint = SDAG_CACHE.get_joint(&unit)?.read()?;
                 // author of last unstable joint of address
@@ -120,7 +122,7 @@ pub fn pick_parents_and_last_ball(address: &str) -> Result<ParentsAndLastBall> {
                 authors.push(joint_data.unit.authors[0].address.clone());
             }
         } else {
-            // this is the genisis unit
+            // this is the genesis unit
             parents.push(joint.key.to_string());
         }
     }
@@ -135,18 +137,25 @@ pub fn pick_parents_and_last_ball(address: &str) -> Result<ParentsAndLastBall> {
 }
 
 /// if my joint is unstable, get the free joint which is the descendant of my unstable joint
+/// the free joint's last ball must be ancestor of picked last ball joint
 fn get_include_self_free_joint(
     free_joints: &[CachedJoint],
     address: &str,
+    last_ball_level: Level,
 ) -> Result<Option<String>> {
     if let Some(joint) = get_last_my_unstable_joint(free_joints, address)? {
-        let mut first_child = joint;
-        while !first_child.is_free() {
-            if let Some(child) = first_child.children.iter().nth(0) {
-                first_child = child.read()?;
+        for free in free_joints {
+            let free_joint = free.read()?;
+            if let Some(ref unit) = free_joint.unit.last_ball_unit {
+                if SDAG_CACHE.get_joint(unit)?.read()?.get_level() <= last_ball_level {
+                    let is_include = *joint <= *free_joint;
+                    if is_include {
+                        return Ok(Some(free_joint.unit.unit.clone()));
+                    }
+                }
             }
         }
-        return Ok(Some(first_child.unit.unit.clone()));
+        bail!("no free joints which include my last unstable joint and last ball joint is ancestor of picked last ball");
     }
 
     Ok(None)

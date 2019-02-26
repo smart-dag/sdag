@@ -207,7 +207,7 @@ fn witness() -> Result<()> {
             Err(e) => error!("compose witness joint failed, times {}, err = [{:?}]", i, e),
         }
 
-        may::coroutine::sleep(Duration::from_millis(10));
+        may::coroutine::sleep(Duration::from_millis(100));
     }
 
     Ok(())
@@ -275,6 +275,7 @@ fn compose_and_normalize() -> Result<()> {
     sdag::validation::validate_ready_joint(cached_joint)?;
     let sequence = joint_data.get_sequence();
     if sequence != JointSequence::Good {
+        // TODO: purge the bad composed joint
         bail!(
             "only good joint is allowed to post for witness, unit={}, sequence={:?}",
             joint_data.unit.unit,

@@ -55,7 +55,7 @@ pub fn is_unstable_joint_non_serial(joint: CachedJoint) -> Result<bool> {
         if is_authored_by_any_addr(&j_data, &addresses)
             && j_data.get_sequence() != JointSequence::FinalBad
         {
-            info!(
+            warn!(
                 "joint [{}] detect non serial with unit [{}]",
                 joint_data.unit.unit, j_data.unit.unit
             );

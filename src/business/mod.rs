@@ -440,10 +440,10 @@ impl BusinessCache {
             let input_joint = SDAG_CACHE.get_joint(&v.unit)?.read()?;
             let is_include = *input_joint <= *last_ball_joint;
             if !is_include {
-                warn!(
-                    "input unit {} is not ancestor of last stable unit {:?}",
-                    &v.unit, last_ball_joint.unit.unit
-                );
+                // info!(
+                //     "input unit {} is not ancestor of last stable unit {:?}",
+                //     &v.unit, last_ball_joint.unit.unit
+                // );
                 continue;
             }
 
