@@ -1,4 +1,3 @@
-use std::collections::VecDeque;
 use std::sync::atomic::{AtomicIsize, Ordering};
 use std::time::Duration;
 
@@ -46,7 +45,7 @@ fn is_need_witnessing() -> Result<(bool)> {
     let best_joint = sdag::main_chain::find_best_joint(free_joints.iter())?
         .ok_or_else(|| format_err!("empty best joint among free joints"))?;
 
-    let (need_witness, has_normal_joint) = is_relative_stable(best_joint)?;
+    let (need_witness, has_normal_joint) = is_relative_stable(best_joint.clone())?;
 
     if !need_witness {
         return Ok(false);
@@ -62,7 +61,7 @@ fn is_need_witnessing() -> Result<(bool)> {
         return Ok(false);
     }
 
-    is_unstable_has_normal_joint(&free_joints)
+    is_need_witness_normal_joint(&free_joints, best_joint)
 }
 
 /// return true if more than six joints from free joints to last_self
@@ -106,18 +105,37 @@ fn is_relative_stable(mut best_free_parent: RcuReader<JointData>) -> Result<(boo
     Ok((true, has_normal_joints))
 }
 
-/// return true if unstable joints have normal joint, it is very heavy!!!
-fn is_unstable_has_normal_joint(free_joints: &[CachedJoint]) -> Result<bool> {
-    let mut queue = VecDeque::new();
-    let mut visited = HashSet::new();
-    for joint in free_joints {
-        if visited.insert(joint.key.clone()) {
-            queue.push_back(joint.clone());
+/// return lastest unstable normal joint ordered by level
+fn get_unstable_latest_normal_joint(
+    free_joints: &[CachedJoint],
+) -> Result<Option<RcuReader<JointData>>> {
+    use std::cmp;
+    use std::collections::BinaryHeap;
+    #[derive(PartialOrd, PartialEq)]
+    struct OrdJoint(RcuReader<JointData>);
+    impl cmp::Eq for OrdJoint {}
+    impl cmp::Ord for OrdJoint {
+        fn cmp(&self, other: &OrdJoint) -> cmp::Ordering {
+            self.0.get_level().value().cmp(&other.0.get_level().value())
         }
     }
 
-    while let Some(joint) = queue.pop_front() {
-        let joint_data = joint.read()?;
+    impl From<RcuReader<JointData>> for OrdJoint {
+        fn from(joint: RcuReader<JointData>) -> Self {
+            OrdJoint(joint)
+        }
+    }
+
+    let mut queue = BinaryHeap::<OrdJoint>::new();
+    let mut visited = HashSet::new();
+    for joint in free_joints {
+        if visited.insert(joint.key.clone()) {
+            queue.push(joint.read()?.into());
+        }
+    }
+
+    while let Some(joint) = queue.pop() {
+        let joint_data = joint.0;
         if joint_data.is_stable() {
             continue;
         }
@@ -128,16 +146,55 @@ fn is_unstable_has_normal_joint(free_joints: &[CachedJoint]) -> Result<bool> {
         if !joint_data.unit.is_authored_by_witness()
             && joint_data.get_sequence() == JointSequence::Good
         {
-            return Ok(true);
+            return Ok(Some(joint_data));
         }
 
         for p in joint_data.parents.iter() {
             if visited.insert(p.key.clone()) {
-                queue.push_back(p.clone());
+                queue.push(p.read()?.into());
             }
         }
     }
 
+    Ok(None)
+}
+
+/// find the oldest mc joint that include the normal joint
+fn find_best_include_mc_joint(
+    mut best_joint: RcuReader<JointData>,
+    normal_joint: RcuReader<JointData>,
+) -> Result<Option<RcuReader<JointData>>> {
+    let mut stack = Vec::new();
+    let normal_level = normal_joint.get_level();
+    while best_joint.get_level() >= normal_level {
+        let next_best_joint = best_joint.get_best_parent().read()?;
+        stack.push(best_joint);
+        best_joint = next_best_joint;
+    }
+
+    while let Some(joint) = stack.pop() {
+        let is_include = joint >= normal_joint;
+        if is_include {
+            return Ok(Some(joint));
+        }
+    }
+
+    Ok(None)
+}
+
+/// return true if we need to witness the normal joint
+fn is_need_witness_normal_joint(
+    free_joints: &[CachedJoint],
+    best_joint: RcuReader<JointData>,
+) -> Result<bool> {
+    if let Some(joint) = get_unstable_latest_normal_joint(free_joints)? {
+        if let Some(joint) = find_best_include_mc_joint(best_joint.clone(), joint)? {
+            if sdag::main_chain::is_stable_to_joint(&joint, &best_joint)? {
+                return Ok(false);
+            }
+        }
+        return Ok(true);
+    }
     Ok(false)
 }
 
