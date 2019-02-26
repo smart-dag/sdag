@@ -70,7 +70,7 @@ impl UnitProps {
                 Some(cmp::Ordering::Equal) => return Ok(true),
                 Some(cmp::Ordering::Greater) => return Ok(true),
                 Some(cmp::Ordering::Less) => {
-                    warn!("is_ancestor detect self as descendant!");
+                    // warn!("is_ancestor detect self as descendant!");
                     continue;
                 }
                 None => {}
@@ -244,11 +244,21 @@ impl JointData {
     pub fn wait_stable(&self, waiter: &str) {
         use std::time::Duration;
 
+        let mut retry = 0;
         while !self.stable_flag.wait_timeout(Duration::from_secs(1)) {
             error!(
                 "wait stable timeout! unit={}, waiter={}",
                 self.unit.unit, waiter
             );
+            retry += 1;
+            if retry > 60 {
+                error!(
+                    "main chain stop forwarding! wait stable unit={}, waiter={}",
+                    self.unit.unit, waiter
+                );
+                ::kv_store::KV_STORE.finish().ok();
+                ::std::process::abort();
+            }
         }
     }
 
