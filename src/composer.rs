@@ -60,11 +60,14 @@ pub fn pick_parents_and_last_ball(address: &str) -> Result<ParentsAndLastBall> {
 
     let best_min_wl = best_joint.get_min_wl();
     let mut lsj_level = lsj_data.get_level();
+    let best_parent_last_ball = best_joint.get_last_ball_joint()?;
 
     // adjust the last ball unit
-    if best_min_wl < lsj_level {
+    // self advance main chain may be slow than other server
+    // so need adjust last ball when self picked last ball before best free joint's last ball.
+    if best_min_wl < lsj_level || lsj_level < best_parent_last_ball.get_level() {
         warn!("adjust last stable joint when compose unit");
-        lsj_data = best_joint.get_last_ball_joint()?;
+        lsj_data = best_parent_last_ball;
         lsj_level = lsj_data.get_level();
     }
 
@@ -115,15 +118,10 @@ pub fn pick_parents_and_last_ball(address: &str) -> Result<ParentsAndLastBall> {
             }
         }
 
-        if let Some(ref last_ball_unit) = joint_data.unit.last_ball_unit {
-            let last_ball = SDAG_CACHE.get_joint(last_ball_unit)?.read()?;
-            if last_ball.get_level() <= lsj_level {
-                parents.push(joint.key.to_string());
-                authors.push(joint_data.unit.authors[0].address.clone());
-            }
-        } else {
-            // this is the genesis unit
+        let free_last_ball = joint_data.get_last_ball_joint()?;
+        if free_last_ball.get_level() <= lsj_level {
             parents.push(joint.key.to_string());
+            authors.push(joint_data.unit.authors[0].address.clone());
         }
     }
 
