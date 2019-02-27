@@ -21,7 +21,7 @@ pub(super) fn send_payment(
     address_amount: Vec<(String, f64)>,
     wallet_info: &WalletInfo,
     flag: &str,
-) -> Result<()> {
+) -> Result<String> {
     let light_props = ws.get_light_props(&wallet_info._00_address)?;
 
     let outputs = address_amount
@@ -52,9 +52,9 @@ pub(super) fn send_payment(
         pubk: wallet_info._00_address_pubk.to_base64_key(),
     };
 
-    let joint = sdag::composer::compose_joint(compose_info.clone(), wallet_info)?;
+    let normal_joint = sdag::composer::compose_joint(compose_info.clone(), wallet_info)?;
 
-    if let Err(e) = ws.post_joint(&joint) {
+    if let Err(e) = ws.post_joint(&normal_joint) {
         eprintln!("post_joint err={}", e);
         return Err(e);
     }
@@ -70,7 +70,7 @@ pub(super) fn send_payment(
             break;
         }
     }
-    println!("UNIT  : {}", joint.unit.unit);
+    println!("UNIT  : {}", normal_joint.unit.unit);
 
     println!(
         "DATE  : {}",
@@ -81,9 +81,8 @@ pub(super) fn send_payment(
     println!("Total :{}", TRANSANTION_NUM.fetch_add(1, Ordering::SeqCst));
 
     //println!("\n the original joint: \n [{:#?}] \n", joint);
-
     match flag {
-        "good" => return Ok(()),
+        "good" => {}
         "nonserial" => {
             compose_info.inputs = ws.get_inputs_from_hub(
                 &wallet_info._00_address,
@@ -102,7 +101,7 @@ pub(super) fn send_payment(
             println!("\n non serial joint: \n [{:#?}] \n", joint);
         }
         "doublespend" => {
-            compose_info.light_props.parent_units = vec![joint.unit.unit];
+            compose_info.light_props.parent_units = vec![normal_joint.unit.unit.clone()];
             let joint = sdag::composer::compose_joint(compose_info, wallet_info)?;
 
             if let Err(e) = ws.post_joint(&joint) {
@@ -125,7 +124,7 @@ pub(super) fn send_payment(
         _ => bail!("flag is invalid"),
     }
 
-    Ok(())
+    Ok(normal_joint.unit.unit)
 }
 
 // choose a wallet more than all trading wallets' index if max index equals test_wallets.len() -1
@@ -270,14 +269,21 @@ pub fn distrubite_coins_and_cocurrency(
         // so MAX_OUTPUTS_PER_PAYMENT_MESSAGE has to sub 1
         for _ in 0..cycle_index.unwrap_or(1) {
             for chunk in address_amount.chunks(sdag::config::MAX_OUTPUTS_PER_PAYMENT_MESSAGE - 1) {
-                while let Err(e) = send_payment(&ws, chunk.to_vec(), &wallet_info, "good") {
-                    coroutine::sleep(Duration::from_secs(10));
-                    eprintln!("{}", e);
+                if let Ok(hash) = send_payment(&ws, chunk.to_vec(), &wallet_info, "good") {
+                    wait_stable(ws, &hash);
                 }
-                coroutine::sleep(Duration::from_secs(7));
             }
         }
     }
 
     Ok(())
+}
+
+fn wait_stable(ws: &Arc<WalletConn>, unit: &str) {
+    while let Ok(resp) = ws.get_joint_by_unit_hash(&unit) {
+        if resp.1.is_stable {
+            break;
+        }
+        coroutine::sleep(Duration::from_millis(500));
+    }
 }
