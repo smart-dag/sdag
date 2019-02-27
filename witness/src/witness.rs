@@ -14,7 +14,7 @@ use sdag_wallet_base::Base64KeyExt;
 
 lazy_static! {
     static ref WALLET_PUBK: String = MY_WALLET._00_address_pubk.to_base64_key();
-    static ref SELF_LEVEL: AtomicIsize = AtomicIsize::new(-2);
+    static ref SELF_LEVEL: AtomicIsize = AtomicIsize::new(-6); // set -6 to meet from free level to self level more than 6 when start chain
 }
 
 pub fn witness_timer_check() -> Result<Duration> {
@@ -275,7 +275,8 @@ fn compose_and_normalize() -> Result<()> {
     sdag::validation::validate_ready_joint(cached_joint)?;
     let sequence = joint_data.get_sequence();
     if sequence != JointSequence::Good {
-        // TODO: purge the bad composed joint
+        // purge the bad composed joint
+        SDAG_CACHE.purge_free_joint(&joint_data.unit.unit)?;
         bail!(
             "only good joint is allowed to post for witness, unit={}, sequence={:?}",
             joint_data.unit.unit,

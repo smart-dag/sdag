@@ -321,7 +321,7 @@ impl SDagCacheInner {
     // remove the free joint from normal joints
     // remove the free joint from free joints
     // add it's parent back to free joints if possible
-    fn purge_free_joint(&mut self, joint: &str) -> Result<()> {
+    pub fn purge_free_joint(&mut self, joint: &str) -> Result<()> {
         let mut stack = vec![joint.to_owned()];
 
         while let Some(ref joint) = stack.pop() {
