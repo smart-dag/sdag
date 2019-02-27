@@ -194,6 +194,10 @@ fn is_need_witness_normal_joint(
 ) -> Result<bool> {
     if let Some(joint) = get_unstable_latest_normal_joint(free_joints)? {
         if let Some(joint) = find_best_include_mc_joint(best_joint.clone(), joint)? {
+            if joint.is_stable() {
+                return Ok(false);
+            }
+
             if sdag::main_chain::is_stable_to_joint(&joint, &best_joint)? {
                 return Ok(false);
             }
