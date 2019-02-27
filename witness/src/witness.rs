@@ -14,7 +14,8 @@ use sdag_wallet_base::Base64KeyExt;
 
 lazy_static! {
     static ref WALLET_PUBK: String = MY_WALLET._00_address_pubk.to_base64_key();
-    static ref SELF_LEVEL: AtomicIsize = AtomicIsize::new(-6); // set -6 to meet from free level to self level more than 6 when start chain
+     // set -6 to meet from free level to self level more than 6 when start chain
+    static ref SELF_LEVEL: AtomicIsize = AtomicIsize::new(1 - sdag::config::MAJORITY_OF_WITNESSES as isize);
 }
 
 pub fn witness_timer_check() -> Result<Duration> {
@@ -164,6 +165,10 @@ fn find_best_include_mc_joint(
     mut best_joint: RcuReader<JointData>,
     normal_joint: RcuReader<JointData>,
 ) -> Result<Option<RcuReader<JointData>>> {
+    if normal_joint.is_free() {
+        return Ok(None);
+    }
+
     let mut stack = Vec::new();
     let normal_level = normal_joint.get_level();
     while best_joint.get_level() >= normal_level {

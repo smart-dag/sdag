@@ -146,12 +146,11 @@ fn get_include_self_free_joint(
     if let Some(joint) = get_last_my_unstable_joint(free_joints, address)? {
         for free in free_joints {
             let free_joint = free.read()?;
-            if let Some(ref unit) = free_joint.unit.last_ball_unit {
-                if SDAG_CACHE.get_joint(unit)?.read()?.get_level() <= last_ball_level {
-                    let is_include = *joint <= *free_joint;
-                    if is_include {
-                        return Ok(Some(free_joint.unit.unit.clone()));
-                    }
+            let last_ball = free_joint.get_last_ball_joint()?;
+            if last_ball.get_level() <= last_ball_level {
+                let is_include = joint <= free_joint;
+                if is_include {
+                    return Ok(Some(free_joint.unit.unit.clone()));
                 }
             }
         }
