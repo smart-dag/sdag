@@ -27,7 +27,6 @@ use sdag::kv_store;
 use sdag::network;
 use sdag::wallet_info::MY_WALLET;
 
-
 fn log_init() {
     // TODO: need to implement async logs
     let log_lvl = sdag::config::get_log_level();

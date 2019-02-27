@@ -70,16 +70,7 @@ fn start_main_chain_worker(rx: mpsc::Receiver<RcuReader<JointData>>) -> JoinHand
             last_stable_level
         );
 
-        let mut best_joint: Option<RcuReader<JointData>> = None;
-
         while let Ok(joint) = rx.recv() {
-            if let Some(old_joint) = best_joint.take() {
-                if !joint.is_precedence_than(&old_joint) {
-                    continue;
-                }
-            }
-            best_joint = Some(joint.clone());
-
             if joint.get_min_wl() > last_stable_level {
                 info!(
                     "main chain worker get a valid joint, unit={}",
