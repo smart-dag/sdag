@@ -1,22 +1,25 @@
+use std::sync::{Condvar, Mutex};
+
 use config;
-use rcu_cell::RcuCell;
 
 lazy_static! {
     // temp init bridge
-    static ref INIT_WITNESSES: RcuCell<Vec<String>> = RcuCell::new(None);
+    static ref INIT_WITNESSES: Mutex<Vec<String>> = Mutex::new(Vec::new());
+    static ref COND_VAR: Condvar = Condvar::new();
     // actual witness data
     pub static ref MY_WITNESSES: [String; config::COUNT_WITNESSES] = {
         let mut result: [String; config::COUNT_WITNESSES] = Default::default();
-        let mut g = INIT_WITNESSES.try_lock().expect("failed to lock init witnesses");
-        {
-            if let Some(witnesses) = g.as_ref() {
-                result.clone_from_slice(witnesses);
-            } else {
-                error!("witnesses not init yet!");
-                ::std::process::abort();
-            }
+        let mut g = INIT_WITNESSES.lock().unwrap();
+        while g.is_empty() {
+            g = COND_VAR.wait(g).unwrap();
         }
-        g.update(None);
+
+        if g.len() == config::COUNT_WITNESSES {
+            result.clone_from_slice(&g);
+        } else {
+            error!("witnesses not init yet!");
+            ::std::process::exit(1);
+        }
         result
     };
 }
@@ -24,10 +27,9 @@ lazy_static! {
 /// set my witnesses
 pub fn init_my_witnesses(witnesses: &[String]) {
     {
-        let mut g = INIT_WITNESSES
-            .try_lock()
-            .expect("failed to lock init witnesses");
-        g.update(Some(witnesses.to_vec()));
+        let mut g = INIT_WITNESSES.lock().unwrap();
+        *g = witnesses.to_vec();
+        COND_VAR.notify_all();
     }
     assert_eq!(MY_WITNESSES.len(), config::COUNT_WITNESSES);
 }
