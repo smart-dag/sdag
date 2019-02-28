@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicIsize, Ordering};
+use std::sync::atomic::{AtomicIsize, AtomicUsize, Ordering};
 use std::time::Duration;
 
 use hashbrown::HashSet;
@@ -16,6 +16,7 @@ lazy_static! {
     static ref WALLET_PUBK: String = MY_WALLET._00_address_pubk.to_base64_key();
      // set -6 to meet from free level to self level more than 6 when start chain
     static ref SELF_LEVEL: AtomicIsize = AtomicIsize::new(1 - sdag::config::MAJORITY_OF_WITNESSES as isize);
+    static ref SELF_TIME: AtomicUsize = AtomicUsize::new(0);
 }
 
 pub fn witness_timer_check() -> Result<Duration> {
@@ -195,8 +196,10 @@ fn is_need_witness_normal_joint(
             if joint.is_stable() {
                 return Ok(false);
             }
-
-            if sdag::main_chain::is_stable_to_joint(&joint, &best_joint)? {
+            // if self stop post joint more than 10s, and joint is not stable, should post a new joint
+            if SELF_TIME.load(Ordering::Relaxed) + 10_000 > sdag::time::now() as usize
+                && sdag::main_chain::is_stable_to_joint(&joint, &best_joint)?
+            {
                 return Ok(false);
             }
         }
@@ -299,7 +302,10 @@ fn compose_and_normalize() -> Result<()> {
             max_parent_level = level;
         }
     }
+
     SELF_LEVEL.store(max_parent_level.value() as isize + 1, Ordering::Relaxed);
+    SELF_TIME.store(sdag::time::now() as usize, Ordering::Relaxed);
+
     info!(
         "witnessing: compose and validate success, will post [{}]",
         joint_data.unit.unit
