@@ -127,10 +127,17 @@ impl WsConnections {
     fn get_peers_from_remote(&self) -> Vec<String> {
         let mut peers: Vec<String> = Vec::new();
         let hub_id = Value::from(MY_WALLET._00_address.as_str());
-        let g = self.conns.read().unwrap();
 
         // only get peers from source connections
-        let conns = g.values().filter(|c| c.get_listen_addr().is_some());
+        let conns = {
+            // need to drop the connection earlier
+            let g = self.conns.read().unwrap();
+            g.values()
+                .filter(|c| c.get_listen_addr().is_some())
+                .cloned()
+                .collect::<Vec<_>>()
+        };
+
         for conn in conns {
             if let Ok(value) = conn.send_request("get_peers", &hub_id) {
                 if let Ok(mut tmp) = serde_json::from_value(value) {
@@ -184,9 +191,7 @@ impl WsConnections {
     }
 
     pub fn request_free_joints_from_all_peers(&self) -> Result<()> {
-        let g = self.conns.read().unwrap();
-        let conns = g.values().cloned();
-        for conn in conns {
+        for conn in self.conns.read().unwrap().values().cloned() {
             if conn.get_listen_addr().is_some() {
                 try_go!(move || conn.send_just_saying("refresh", Value::Null));
             }

@@ -36,7 +36,6 @@ pub fn witness_timer_check() -> Result<Duration> {
 /// 2) non witness joint mci > min retrievable mci, min retrievable is last_stable_joint's last_stable_unit mci
 /// 3) last self unstable joint support current main chain, that means current main chain include my last unstable joint (cancel)
 fn is_need_witnessing() -> Result<(bool)> {
-    info!("witnessing: if need post witness joint?");
     let free_joints = SDAG_CACHE.get_all_free_joints();
 
     if free_joints.is_empty() {
@@ -56,7 +55,6 @@ fn is_need_witnessing() -> Result<(bool)> {
     if !need_witness {
         return Ok(false);
     }
-    info!("witnessing: more than 6 witness on path of best parents");
 
     if has_normal_joint {
         return Ok(true);
