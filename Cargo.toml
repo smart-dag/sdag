@@ -33,6 +33,7 @@ base64 = "0.10"
 secp256k1 = "0.11"
 
 sled = {version = "0.18", optional = true}
+rocksdb = {version = "0.11", optional = true}
 
 [profile.release]
 lto = true
@@ -43,6 +44,7 @@ lto = true
 default = ["kv_store_none"]
 kv_store_none = []
 kv_store_sled = ["sled"]
+kv_store_rocksdb = ["rocksdb"]
 
 [workspace]
 members = [

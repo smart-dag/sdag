@@ -27,4 +27,5 @@ may_signal = {git = "https://github.com/Xudong-Huang/may_signal.git"}
 default = ["kv_store_none"]
 kv_store_none = ["sdag/kv_store_none"]
 kv_store_sled = ["sdag/kv_store_sled"]
+kv_store_rocksdb = ["sdag/kv_store_rocksdb"]
 
