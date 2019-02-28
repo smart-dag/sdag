@@ -580,10 +580,20 @@ impl HubConn {
 
     fn on_get_free_joints(&self, _param: Value) -> Result<Value> {
         match SDAG_CACHE.get_good_free_joints() {
-            Ok(joints) => Ok(json!(joints
-                .iter()
-                .map(|v| v.key.to_string())
-                .collect::<Vec<String>>())),
+            Ok(mut joints) => {
+                joints.sort_unstable_by(|a, b| {
+                    b.read()
+                        .unwrap()
+                        .get_level()
+                        .value()
+                        .cmp(&a.read().unwrap().get_level().value())
+                });
+
+                Ok(json!(joints
+                    .iter()
+                    .map(|v| v.key.to_string())
+                    .collect::<Vec<String>>()))
+            }
 
             Err(e) => {
                 error!(" err={}", e);
