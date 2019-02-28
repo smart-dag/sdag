@@ -198,6 +198,7 @@ impl Default for JointProperty {
 //---------------------------------------------------------------------------------------
 // Joint
 //---------------------------------------------------------------------------------------
+// TODO: move ball and skiplist_unit into joint property
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Joint {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -205,8 +206,6 @@ pub struct Joint {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[serde(default)]
     pub skiplist_units: Vec<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub unsigned: Option<bool>,
     pub unit: Unit,
 }
 
@@ -238,7 +237,6 @@ fn test_write() {
         ball: None,
         skiplist_units: Vec::new(),
         unit,
-        unsigned: None,
     };
     let parents_set = joint
         .unit

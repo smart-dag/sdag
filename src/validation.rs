@@ -367,11 +367,7 @@ fn validate_message_basic(unit: &Unit) -> Result<()> {
 }
 
 fn validate_ball_basic(joint: &Joint) -> Result<()> {
-    if joint.unsigned == Some(true) {
-        if joint.ball.is_some() || !joint.skiplist_units.is_empty() {
-            bail!("unknown fields in unsigned unit-joint");
-        }
-    } else if joint.ball.is_some() {
+    if joint.ball.is_some() {
         let ball = joint.ball.as_ref().unwrap();
         if ball.len() != config::HASH_LENGTH {
             bail!("wrong ball length");

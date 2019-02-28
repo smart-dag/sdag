@@ -497,11 +497,27 @@ impl JointData {
         }
     }
 
-    pub fn update_joint(&self, joint: Joint) {
-        // FIXME: joint' should be rebuild from property
-        unsafe {
-            let joint_ptr = &self.joint as *const _ as *mut Joint;
-            joint_ptr.replace(joint);
+    pub fn clear_content(&self, content_hash: String) {
+        // clear the content is somehow safe here, because we no longer read the messages
+        let content_hash_ptr = &self.joint.unit.content_hash as *const _ as *mut String;
+        unsafe { content_hash_ptr.replace(content_hash) };
+
+        let messages_ptr =
+            &self.joint.unit.content_hash as *const _ as *mut Vec<crate::spec::Message>;
+        unsafe { messages_ptr.replace(Vec::new()) };
+    }
+
+    pub fn update_ball(&self, ball: String) {
+        // FIXME: move ball to property
+        let ball_ptr = &self.joint.ball as *const _ as *mut String;
+        unsafe { ball_ptr.replace(ball) };
+    }
+
+    pub fn update_skiplist(&self, skiplist: Vec<String>) {
+        // FIXME: move skiplist to property
+        if !skiplist.is_empty() {
+            let skip_list_ptr = &self.joint.skiplist_units as *const _ as *mut Vec<String>;
+            unsafe { skip_list_ptr.replace(skiplist) };
         }
     }
 

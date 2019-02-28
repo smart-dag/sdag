@@ -324,7 +324,6 @@ pub fn compose_joint<T: Signer>(composer_info: ComposeInfo, signer: &T) -> Resul
     Ok(Joint {
         ball: None,
         skiplist_units: Vec::new(),
-        unsigned: None,
         unit,
     })
 }

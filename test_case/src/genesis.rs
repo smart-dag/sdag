@@ -177,7 +177,6 @@ pub fn gen_genesis_joint(wallets: &SdagInitInfo, total: u64, msg: &str) -> Resul
             false,
         )),
         skiplist_units: Vec::new(),
-        unsigned: None,
         unit,
     })
 }
@@ -313,7 +312,6 @@ pub fn gen_first_payment(
     Ok(Joint {
         ball: None,
         skiplist_units: Vec::new(),
-        unsigned: None,
         unit,
     })
 }

@@ -49,25 +49,22 @@ fn finalize_joint(cached_joint: CachedJoint) -> Result<()> {
     info!("finalize_joint, unit={}", cached_joint.key);
     let joint_data = cached_joint.read()?;
 
-    let mut joint = (**joint_data).clone();
+    let skiplist_units = calc_skiplist(&joint_data)?;
 
-    joint.skiplist_units = calc_skiplist(&joint_data)?;
-
-    let ball = calc_ball(&joint_data, &joint.skiplist_units)?;
+    let ball = calc_ball(&joint_data, &skiplist_units)?;
     SDAG_CACHE.set_ball_unit_hash(ball.clone(), joint_data.unit.unit.clone())?;
     SDAG_CACHE.del_hash_tree_ball(&ball);
-    joint.ball = Some(ball);
 
-    if joint_data.get_sequence() == JointSequence::NoCommission {
-        if joint.unit.content_hash.is_none() {
-            let content_hash = joint.unit.get_unit_content_hash();
-            joint.unit.content_hash = Some(content_hash);
-        }
+    joint_data.update_ball(ball);
+    joint_data.update_skiplist(skiplist_units);
 
-        joint.unit.messages.clear();
+    // clear the message content if it has no commission payed
+    if joint_data.get_sequence() == JointSequence::NoCommission
+        && joint_data.unit.content_hash.is_none()
+    {
+        let content_hash = joint_data.unit.get_unit_content_hash();
+        joint_data.clear_content(content_hash);
     }
-
-    joint_data.update_joint(joint);
 
     joint_data.set_stable();
     if joint_data.is_on_main_chain() {
@@ -149,7 +146,7 @@ fn get_similar_mcis(mci: usize) -> Vec<usize> {
     }
 }
 
-fn calc_skiplist(joint_data: &JointData) -> Result<(Vec<String>)> {
+fn calc_skiplist(joint_data: &JointData) -> Result<Vec<String>> {
     let mut skiplist = Vec::new();
 
     if !joint_data.is_on_main_chain() {
