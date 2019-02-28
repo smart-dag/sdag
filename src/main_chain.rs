@@ -378,8 +378,8 @@ fn is_best_ancestor(
         // last_ball joint must be stable if it on main chain
         if !last_ball.is_on_main_chain() {
             // last_ball joint must not no main chain
-            error!(
-                "is_stable_to_joint return false, last_ball {} is not on main chain and before stable point",
+            info!(
+                "is_best_ancestor return false, last_ball {} is not on main chain and before stable point",
                 last_ball.unit.unit
             );
             return Ok(false);
@@ -397,8 +397,8 @@ fn is_best_ancestor(
         }
 
         if !is_ancestor {
-            error!(
-                "is_stable_to_joint return false, unit={}, last_ball_unit={} can't lead to last stable unit",
+            info!(
+                "is_best_ancestor return false, unit={}, last_ball_unit={} can't lead to last stable unit",
                 joint.unit.unit, last_ball.unit.unit
             );
             return Ok(false);
@@ -411,8 +411,8 @@ fn is_best_ancestor(
         }
 
         if stable_point != best_parent {
-            error!(
-                "is_stable_to_joint return false, last_ball {} is not on main chain, can't pass to stable point {}",
+            info!(
+                "is_best_ancestor return false, last_ball {} is not on main chain, can't pass to stable point {}",
                 last_ball.unit.unit,
                 stable_point.unit.unit
             );
@@ -426,8 +426,8 @@ fn is_best_ancestor(
         }
 
         if *last_ball != best_parent {
-            error!(
-                "is_stable_to_joint return false, unit={}, last_ball_unit={} can't lead to last ball unit",
+            info!(
+                "is_best_ancestor return false, unit={}, last_ball_unit={} can't lead to last ball unit",
                 joint.unit.unit, last_ball.unit.unit
             );
             return Ok(false);
@@ -597,7 +597,7 @@ pub fn is_stable_to_joint(
     let min_wl = joint.get_min_wl();
     let last_ball_level = last_ball.get_level();
     if min_wl < last_ball_level {
-        error!(
+        info!(
             "is_stable_to_joint return false, min_wl={:?}, last_ball_level={:?}",
             min_wl, last_ball_level
         );
