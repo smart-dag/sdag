@@ -1,9 +1,11 @@
+extern crate crossbeam;
 extern crate sled;
+
+use self::crossbeam::crossbeam_channel::{unbounded, Receiver, Sender};
 use self::sled::{Db, Tree};
 
 use super::*;
 use cache::{CachedJoint, SDAG_CACHE};
-use crossbeam::crossbeam_channel::{unbounded, Receiver, Sender};
 use error::Result;
 use failure::ResultExt;
 use joint::{Joint, JointProperty, Level};
