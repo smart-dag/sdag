@@ -10,7 +10,6 @@ use cache::{JointData, SDAG_CACHE};
 use catchup;
 use composer::*;
 use config;
-use crossbeam::atomic::ArcCell;
 use error::Result;
 use failure::ResultExt;
 use hashbrown::HashMap;
@@ -28,7 +27,7 @@ use tungstenite::client::client;
 use tungstenite::handshake::client::Request;
 use tungstenite::protocol::Role;
 use url::Url;
-use utils::{AtomicLock, FifoCache, MapLock};
+use utils::{AtomicLock, FifoCache, MapLock, OnceOption};
 use validation;
 use wallet_info::MY_WALLET;
 
@@ -46,6 +45,7 @@ lazy_static! {
     static ref IS_CATCHING_UP: AtomicLock = AtomicLock::new();
     static ref SELF_LISTEN_ADDRESS: Option<String> = config::get_listen_address();
     static ref BAD_CONNECTION: FifoCache<String, ()> = FifoCache::with_capacity(10);
+    static ref UNKONW_PEER_ID: Arc<String> = Arc::new(String::from("unknow_peer"));
 }
 
 //---------------------------------------------------------------------------------------
@@ -313,8 +313,8 @@ pub struct HubData {
     // indicate if this connection is a subscribed peer
     is_subscribed: AtomicBool,
     is_inbound: AtomicBool,
-    peer_id: ArcCell<String>,
-    listen_addr: ArcCell<Option<String>>,
+    peer_id: OnceOption<Arc<String>>,
+    listen_addr: OnceOption<String>,
 }
 
 pub type HubConn = WsConnection<HubData>;
@@ -324,8 +324,8 @@ impl Default for HubData {
         HubData {
             is_subscribed: AtomicBool::new(false),
             is_inbound: AtomicBool::new(false),
-            peer_id: ArcCell::new(Arc::new("unknown".to_owned())),
-            listen_addr: ArcCell::new(Arc::new(None)),
+            peer_id: OnceOption::new(),
+            listen_addr: OnceOption::new(),
         }
     }
 }
@@ -413,7 +413,10 @@ impl HubConn {
 
     pub fn get_peer_id(&self) -> Arc<String> {
         let data = self.get_data();
-        data.peer_id.get()
+        data.peer_id
+            .get()
+            .cloned()
+            .unwrap_or_else(|| UNKONW_PEER_ID.clone())
     }
 
     pub fn set_peer_id(&self, peer_id: &str) {
@@ -423,12 +426,14 @@ impl HubConn {
 
     pub fn get_listen_addr(&self) -> Option<String> {
         let data = self.get_data();
-        (*data.listen_addr.get()).clone()
+        data.listen_addr.get().cloned()
     }
 
     pub fn set_listen_addr(&self, listen_addr: Option<String>) {
         let data = self.get_data();
-        data.listen_addr.set(Arc::new(listen_addr));
+        if let Some(addr) = listen_addr {
+            data.listen_addr.set(addr);
+        }
     }
 }
 
