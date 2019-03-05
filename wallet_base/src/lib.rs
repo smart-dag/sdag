@@ -5,23 +5,30 @@ extern crate serde_json;
 #[macro_use]
 extern crate lazy_static;
 
-extern crate base64;
 extern crate bitcoin;
-extern crate rand;
+extern crate crypto;
 extern crate sdag_object_base;
-extern crate secp256k1;
-extern crate sha2;
-extern crate wallet;
+
+pub extern crate base64;
+pub extern crate rand;
+pub extern crate secp256k1;
+pub extern crate sha2;
+
+// mod account;
+// mod accountfactory;
+mod error;
+mod keyfactory;
+mod mnemonic;
 
 use bitcoin::network::constants::Network;
 use bitcoin::util::bip32::ChildNumber;
+use keyfactory::{KeyFactory, Seed};
 use rand::rngs::OsRng;
 use rand::RngCore;
 use sdag_object_base::object_hash;
-use wallet::keyfactory::{KeyFactory, Seed};
 
 pub use bitcoin::util::bip32::{ExtendedPrivKey, ExtendedPubKey};
-pub use wallet::mnemonic::Mnemonic;
+pub use mnemonic::Mnemonic;
 
 pub type Result<T> = ::std::result::Result<T, failure::Error>;
 
@@ -40,7 +47,7 @@ pub trait Base64KeyExt: Sized {
 
 impl Base64KeyExt for ExtendedPubKey {
     fn to_base64_key(&self) -> String {
-        base64::encode(&self.public_key.serialize()[..])
+        base64::encode(&self.public_key.key.serialize()[..])
     }
 }
 
@@ -113,7 +120,7 @@ pub fn wallet_address_pubkey(
 pub fn device_address(master_prvk: &ExtendedPrivKey) -> Result<String> {
     use secp256k1::key::PublicKey;
     let prvk = KEY_FACTORY.private_child(master_prvk, ChildNumber::Hardened { index: 1 })?;
-    let pubk = PublicKey::from_secret_key(&SECP256K1, &prvk.secret_key);
+    let pubk = PublicKey::from_secret_key(&SECP256K1, &prvk.private_key.key);
     let pub_b64 = base64::encode(&pubk.serialize()[..]);
     let mut device_address = object_hash::get_chash(&pub_b64)?;
     device_address.insert(0, '0');
@@ -124,7 +131,7 @@ pub fn device_address(master_prvk: &ExtendedPrivKey) -> Result<String> {
 /// the wallet_pubk should be the return value of `wallet_pubkey`
 pub fn wallet_address(wallet_pubk: &ExtendedPubKey, is_change: bool, index: u32) -> Result<String> {
     let pubk = wallet_address_pubkey(wallet_pubk, is_change, index)?;
-    let pub_b64 = base64::encode(&pubk.public_key.serialize()[..]);
+    let pub_b64 = base64::encode(&pubk.public_key.key.serialize()[..]);
     let json = json!(["sig", { "pubkey": pub_b64 }]);
     Ok(object_hash::get_chash(&json)?)
 }
@@ -141,8 +148,8 @@ pub fn sign(hash: &[u8], prvk: &ExtendedPrivKey) -> Result<String> {
     // let hash = base64::decode(hash)?;
     //Sign it with the secret key
     let msg = secp256k1::Message::from_slice(hash)?;
-    let recoverable = SECP256K1.sign_recoverable(&msg, &prvk.secret_key);
-    let (_, sig) = recoverable.serialize_compact(&SECP256K1);
+    let recoverable = SECP256K1.sign_recoverable(&msg, &prvk.private_key.key);
+    let (_, sig) = recoverable.serialize_compact();
     Ok(base64::encode(&sig[..]))
 }
 
@@ -151,10 +158,10 @@ pub fn verify(hash: &str, b64_sig: &str, b64_pub_key: &str) -> Result<()> {
     let hash = base64::decode(hash)?;
     let msg = secp256k1::Message::from_slice(&hash)?;
     let sig = base64::decode(b64_sig)?;
-    let pub_key = secp256k1::key::PublicKey::from_slice(&SECP256K1, &base64::decode(b64_pub_key)?)?;
+    let pub_key = secp256k1::key::PublicKey::from_slice(&base64::decode(b64_pub_key)?)?;
 
     // verify the signature
-    let signature = secp256k1::Signature::from_compact(&SECP256K1, &sig)?;
+    let signature = secp256k1::Signature::from_compact(&sig)?;
     SECP256K1.verify(&msg, &signature, &pub_key)?;
     Ok(())
 }
