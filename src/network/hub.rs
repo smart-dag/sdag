@@ -45,7 +45,7 @@ lazy_static! {
     static ref IS_CATCHING_UP: AtomicLock = AtomicLock::new();
     static ref SELF_LISTEN_ADDRESS: Option<String> = config::get_listen_address();
     static ref BAD_CONNECTION: FifoCache<String, ()> = FifoCache::with_capacity(10);
-    static ref UNKONW_PEER_ID: Arc<String> = Arc::new(String::from("unknow_peer"));
+    static ref UNKONW_PEER_ID: Arc<String> = Arc::new(String::from("unknown_peer"));
 }
 
 //---------------------------------------------------------------------------------------
@@ -1072,7 +1072,7 @@ impl HubConn {
                 // the light client peer_id is the return value
                 match value["peer_id"].as_str() {
                     Some(peer_id) => {
-                        if self.get_peer_id().as_str() == "unknown" {
+                        if self.get_peer_id() == *UNKONW_PEER_ID {
                             self.set_peer_id(peer_id);
                         }
                     }
