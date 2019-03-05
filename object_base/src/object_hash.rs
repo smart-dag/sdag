@@ -57,19 +57,21 @@ where
 //See the original chash.js for more details.
 lazy_static! {
     static ref CHECKSUM_OFFSETS: Vec<bool> = {
-        let pi = [
-            1, 4, 1, 5, 9, 2, 6, 5, 3, 5, 8, 9, 7, 9, 3, 2, 3, 8, 4, 6, 2, 6, 4, 3, 3, 8, 3, 2, 7,
-            9, 5, 0, 2, 8, 8, 4, 1, 9, 7, 1, 6, 9, 3, 9, 9, 3, 7, 5, 1, 0,
+        let e = [
+            7, 1, 8, 2, 8, 1, 8, 2, 8, 4, 5, 9, 0, 4, 5, 2, 3, 5, 3, 6, 0, 2, 8, 7, 4, 7, 1, 3, 5,
+            2, 6, 6, 2, 4, 9, 7, 7, 5, 7, 2, 4, 9, 0, 9, 3, 6, 9, 9, 9, 5,
         ];
 
         let mut set = vec![];
         let mut offset = 0;
 
-        set.resize(pi.iter().sum::<usize>() + 1, false);
-
-        for i in pi.iter() {
-            if *i > 0 {
+        set.resize(e.iter().sum::<usize>() + 1, false);
+        let mut count_nonzero = 0;
+        for i in e.iter() {
+            if *i > 0 && count_nonzero < 32 {
                 offset += i;
+                count_nonzero += 1;
+
                 set[offset] = true;
             }
         }
@@ -239,14 +241,14 @@ fn test_payload() {
 #[test]
 fn test_chash160() {
     let data = "A0mQdZvy+bGpIu/yBSNt7eB4mTZUQiM173bIQTOQRz3U";
-    let expected = "YFAR4AK2RSRTAWZ3ILRFZOMN7M7QJTJ2";
+    let expected = "RMCBQMSNGWCSCO4PIV2CVOM6PU7QIO22";
 
     assert_eq!(get_chash(&data).unwrap(), expected);
 }
 
 #[test]
 fn test_chash160_validation() {
-    let valid = "YFAR4AK2RSRTAWZ3ILRFZOMN7M7QJTJ2";
+    let valid = "RMCBQMSNGWCSCO4PIV2CVOM6PU7QIO22";
     let invalid = "NFAR4AK2RSRTAWZ3ILRFZOMN7M7QJTJ2";
 
     assert_eq!(is_chash_valid(valid), true);
