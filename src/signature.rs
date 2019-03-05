@@ -15,11 +15,11 @@ pub trait Signer {
 /// return a bas64 string for the encrypted hash with the priv_key
 pub fn sign(hash: &[u8], priv_key: &[u8]) -> Result<String> {
     let msg = Message::from_slice(hash)?;
-    let priv_key = key::SecretKey::from_slice(&SECP256K1, priv_key)?;
+    let priv_key = key::SecretKey::from_slice(priv_key)?;
 
     //Sign it with the secret key
     let recoverable = SECP256K1.sign_recoverable(&msg, &priv_key);
-    let (_, sig) = recoverable.serialize_compact(&SECP256K1);
+    let (_, sig) = recoverable.serialize_compact();
     Ok(base64::encode(&sig[..]))
 }
 
@@ -27,11 +27,10 @@ pub fn sign(hash: &[u8], priv_key: &[u8]) -> Result<String> {
 pub fn verify(hash: &[u8], b64_sig: &str, b64_pub_key: &str) -> Result<()> {
     let msg = Message::from_slice(hash)?;
     let sig = &base64::decode(b64_sig)?;
-    let pub_key = key::PublicKey::from_slice(&SECP256K1, &base64::decode(b64_pub_key)?)?;
+    let pub_key = key::PublicKey::from_slice(&base64::decode(b64_pub_key)?)?;
 
     // verify the signature
-    let signature =
-        Signature::from_compact(&SECP256K1, sig).context("invalid SECP256K1 signature")?;
+    let signature = Signature::from_compact(sig).context("invalid SECP256K1 signature")?;
     SECP256K1
         .verify(&msg, &signature, &pub_key)
         .context("SECP256K1 verify failed")?;

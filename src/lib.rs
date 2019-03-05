@@ -11,19 +11,20 @@ extern crate serde_json;
 #[macro_use]
 extern crate serde_derive;
 
-extern crate base64;
 extern crate hashbrown;
 extern crate may_waiter;
-extern crate rand;
 extern crate rcu_cell;
 extern crate sdag_object_base;
 extern crate sdag_wallet_base;
-extern crate secp256k1;
 extern crate serde;
-extern crate sha2;
 extern crate smallvec;
 extern crate tungstenite;
 extern crate url;
+
+pub use sdag_wallet_base::base64;
+pub use sdag_wallet_base::rand;
+pub use sdag_wallet_base::secp256k1;
+pub use sdag_wallet_base::sha2;
 
 #[macro_export]
 macro_rules! t {
