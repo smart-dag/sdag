@@ -1,5 +1,5 @@
 use std::cmp;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
 
 use cache::{CachedJoint, SDAG_CACHE};
@@ -140,6 +140,7 @@ pub struct JointData {
     create_time: u64,
     stable_flag: SyncFlag,
     peer_id: Option<Arc<String>>,
+    is_post: AtomicBool,
     props: RwLock<JointProperty>,
 }
 
@@ -319,7 +320,7 @@ impl JointData {
     }
 
     // to make sure we only ready once, after return true,
-    // the next time call would always return fasle
+    // the next time call would always return false
     pub fn is_ready(&self) -> bool {
         let len = self.joint.unit.parent_units.len();
         // only ready once!
@@ -401,6 +402,14 @@ impl JointData {
 
     pub fn get_validate_authors_state(&self) -> u8 {
         self.props.read().unwrap().validate_authors_state
+    }
+
+    pub fn set_is_post(&self, is_post: bool) {
+        self.is_post.store(is_post, Ordering::Relaxed);
+    }
+
+    pub fn is_post(&self) -> bool {
+        self.is_post.load(Ordering::Relaxed)
     }
 }
 
@@ -568,6 +577,7 @@ impl JointData {
             unhandled_refs: Default::default(),
             stable_flag: SyncFlag::new(),
             peer_id,
+            is_post: Default::default(),
         }
     }
 }
@@ -621,6 +631,7 @@ impl LoadFromKv<String> for JointData {
             props: RwLock::new(props),
             valid_parent_num: AtomicUsize::new(valid_parent_num),
             unhandled_refs: AtomicUsize::new(0),
+            is_post: Default::default(),
             peer_id: None,
         })
     }

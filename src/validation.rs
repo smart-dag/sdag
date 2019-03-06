@@ -129,6 +129,10 @@ fn normal_validate(cached_joint: CachedJoint) -> Result<()> {
         }
     }
 
+    if joint.get_sequence() != JointSequence::Good && joint.is_post() {
+        bail!("post joint must be good, unit [{}]", joint.unit.unit);
+    }
+
     Ok(())
 }
 

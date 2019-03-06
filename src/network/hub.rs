@@ -45,7 +45,7 @@ lazy_static! {
     static ref IS_CATCHING_UP: AtomicLock = AtomicLock::new();
     static ref SELF_LISTEN_ADDRESS: Option<String> = config::get_listen_address();
     static ref BAD_CONNECTION: FifoCache<String, ()> = FifoCache::with_capacity(10);
-    static ref UNKONW_PEER_ID: Arc<String> = Arc::new(String::from("unknown_peer"));
+    static ref UNKNOWN_PEER_ID: Arc<String> = Arc::new(String::from("unknown_peer"));
 }
 
 //---------------------------------------------------------------------------------------
@@ -416,7 +416,7 @@ impl HubConn {
         data.peer_id
             .get()
             .cloned()
-            .unwrap_or_else(|| UNKONW_PEER_ID.clone())
+            .unwrap_or_else(|| UNKNOWN_PEER_ID.clone())
     }
 
     pub fn set_peer_id(&self, peer_id: &str) {
@@ -621,7 +621,7 @@ impl HubConn {
         let joint: Joint = serde_json::from_value(param)?;
         info!("receive a joint: {:?}", joint);
         ensure!(!joint.unit.unit.is_empty(), "no unit");
-        self.handle_online_joint(joint)
+        self.handle_online_joint(joint, false)
     }
 
     fn on_catchup(&self, param: Value) -> Result<Value> {
@@ -719,7 +719,7 @@ impl HubConn {
         let joint: Joint = serde_json::from_value(param)?;
         info!("receive a posted joint: {:?}", joint);
 
-        self.handle_online_joint(joint)?;
+        self.handle_online_joint(joint, true)?;
 
         Ok(Value::from("accepted"))
     }
@@ -847,7 +847,7 @@ impl HubConn {
 }
 
 impl HubConn {
-    fn handle_online_joint(&self, joint: Joint) -> Result<()> {
+    fn handle_online_joint(&self, joint: Joint, is_post: bool) -> Result<()> {
         // clear the main chain index, main chain index is used by light only
         // joint.unit.main_chain_index = None;
 
@@ -869,6 +869,8 @@ impl HubConn {
             }
         };
         let joint_data = cached_joint.read().unwrap();
+        joint_data.set_is_post(is_post);
+
         if let Some(ref hash) = joint_data.unit.content_hash {
             error!("unit {} content hash = {}", cached_joint.key, hash);
             joint_data.set_sequence(JointSequence::FinalBad);
@@ -1072,7 +1074,7 @@ impl HubConn {
                 // the light client peer_id is the return value
                 match value["peer_id"].as_str() {
                     Some(peer_id) => {
-                        if self.get_peer_id() == *UNKONW_PEER_ID {
+                        if self.get_peer_id() == *UNKNOWN_PEER_ID {
                             self.set_peer_id(peer_id);
                         }
                     }
@@ -1145,7 +1147,7 @@ impl HubConn {
             }
             drop(g);
 
-            ws.handle_online_joint(joint)
+            ws.handle_online_joint(joint, false)
         }
 
         let ws = WSS.get_connection(self.get_peer_id()).ok_or_else(|| {
