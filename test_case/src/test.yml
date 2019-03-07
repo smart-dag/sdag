@@ -25,7 +25,6 @@ subcommands:
                 help: init [n] wallets with the mnemonic
                 takes_value: true
                 required: false
-                value_name: NUM
     - raw_post:
         about: post a raw joint from specified json file
         args:
@@ -91,7 +90,12 @@ subcommands:
                     value_name: samejoint
 
     - genesis:
-        about: create genesis
+        about: create genesis with [n] witnesses
+        args:
+            - n:
+                help: init [n] witness
+                takes_value: true
+                required: false
     - balance:
         about: Show the wallet balance
         args:

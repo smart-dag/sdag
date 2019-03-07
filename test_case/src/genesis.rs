@@ -10,29 +10,19 @@ pub const GENESIS_FILE: &str = "genesis.json";
 pub const FIRST_PAYMENT: &str = "first_payment.json";
 pub const INIT_MNEMONIC: &str = "init_mnemonic.json";
 
-const WITNESSES_NUM: usize = 12;
-
 pub struct SdagInitInfo {
-    pub witnesses: [WalletInfo; WITNESSES_NUM],
+    pub witnesses: Vec<WalletInfo>,
     pub sdag_org: WalletInfo,
 }
 
-pub fn gen_all_wallets() -> Result<SdagInitInfo> {
+pub fn gen_all_wallets(witness_counts: u32) -> Result<SdagInitInfo> {
+    let mut witnesses = vec![];
+    for _ in 0..witness_counts {
+        witnesses.push(WalletInfo::from_mnemonic("")?);
+    }
+
     Ok(SdagInitInfo {
-        witnesses: [
-            WalletInfo::from_mnemonic("")?,
-            WalletInfo::from_mnemonic("")?,
-            WalletInfo::from_mnemonic("")?,
-            WalletInfo::from_mnemonic("")?,
-            WalletInfo::from_mnemonic("")?,
-            WalletInfo::from_mnemonic("")?,
-            WalletInfo::from_mnemonic("")?,
-            WalletInfo::from_mnemonic("")?,
-            WalletInfo::from_mnemonic("")?,
-            WalletInfo::from_mnemonic("")?,
-            WalletInfo::from_mnemonic("")?,
-            WalletInfo::from_mnemonic("")?,
-        ],
+        witnesses: witnesses,
         sdag_org: WalletInfo::from_mnemonic("")?,
     })
 }
@@ -130,7 +120,6 @@ pub fn gen_genesis_joint(wallets: &SdagInitInfo, total: u64, msg: &str) -> Resul
 
     // witnesses
     unit.witnesses = witnesses;
-    //unit.witnesses = witnesses.sort();
     // input coins
     unit.headers_commission = Some(unit.calc_header_size());
     unit.payload_commission = Some(unit.calc_payload_size());
@@ -139,7 +128,7 @@ pub fn gen_genesis_joint(wallets: &SdagInitInfo, total: u64, msg: &str) -> Resul
         let payment_message = unit.messages.last_mut().unwrap();
 
         let foundation_amount = total
-            - (amount as usize * WITNESSES_NUM * 8) as u64
+            - (amount as usize * unit.witnesses.len() * 8) as u64
             - u64::from(unit.headers_commission.unwrap())
             - u64::from(unit.payload_commission.unwrap());
 
