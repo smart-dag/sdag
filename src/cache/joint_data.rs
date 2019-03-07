@@ -518,8 +518,8 @@ impl JointData {
 
     pub fn update_ball(&self, ball: String) {
         // FIXME: move ball to property
-        let ball_ptr = &self.joint.ball as *const _ as *mut String;
-        unsafe { ball_ptr.replace(ball) };
+        let ball_ptr = &self.joint.ball as *const _ as *mut Option<String>;
+        unsafe { ball_ptr.replace(Some(ball)) };
     }
 
     pub fn update_skiplist(&self, skiplist: Vec<String>) {
