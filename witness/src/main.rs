@@ -101,19 +101,6 @@ fn main() -> Result<()> {
     init()?;
     run_hub_server()?;
 
-    // at least wait for genesis got stable
-    sdag::utils::wait_cond(None, || {
-        let genesis = match sdag::cache::SDAG_CACHE.get_joint(&*sdag::spec::GENESIS_UNIT) {
-            Ok(j) => j,
-            _ => return false,
-        };
-
-        match genesis.read() {
-            Ok(data) => data.is_stable(),
-            _ => false,
-        }
-    })?;
-
     if !sdag::my_witness::MY_WITNESSES.contains(&MY_WALLET._00_address) {
         bail!("address {} is not witness");
     }
