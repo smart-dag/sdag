@@ -46,7 +46,6 @@ members = [
     "hub",
     "wallet_base",
     "sdg",
-    "web_server",
     "witness",
     "test_case",
     "object_base",
