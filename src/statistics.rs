@@ -101,26 +101,22 @@ impl AllConnStats {
     fn increase_sec(&self, peer_id: Arc<String>, is_rx: bool, is_good: bool) {
         let index = (::time::now() / 1000 % 60) as usize;
 
-        let mut w_g = self.conn_stats.write().unwrap();
+        if let Some(v) = self.conn_stats.write().unwrap().get_mut(&peer_id) {
+            return v.secs[index].increase(is_rx, is_good);
+        }
 
-        w_g.entry(peer_id.clone())
-            .and_modify(|stat| {
-                stat.secs[index].increase(is_rx, is_good);
-            })
-            .or_insert_with(|| {
-                // init a new conn_stat and insert
-                let mut new_stat = StatsPerPeriod::default();
-                new_stat.increase(is_rx, is_good);
+        // init a new conn_stat and insert
+        let mut new_stat = StatsPerPeriod::default();
+        new_stat.increase(is_rx, is_good);
 
-                let peer_addr = match hub::WSS.get_connection(peer_id) {
-                    Some(conn) => conn.get_peer_addr().to_string(),
-                    None => String::from("unknown"),
-                };
+        let peer_addr = match hub::WSS.get_connection(peer_id.clone()) {
+            Some(conn) => conn.get_peer_addr().to_string(),
+            None => String::from("unknown"),
+        };
 
-                let mut new_stats = ConnStats::new(peer_addr);
-                new_stats.secs[index] = new_stat;
-                new_stats
-            });
+        let mut new_stats = ConnStats::new(peer_addr);
+        new_stats.secs[index] = new_stat;
+        self.conn_stats.write().unwrap().insert(peer_id, new_stats);
     }
 
     fn get_peer_id_by_address(&self, peer_addr: &str) -> Option<String> {

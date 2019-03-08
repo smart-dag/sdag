@@ -28,13 +28,13 @@ pub fn wait_cond<F: Fn() -> bool>(timeout: Option<Duration>, f: F) -> Result<(),
             if now.elapsed() >= timeout {
                 return Err(Error::from(ErrorKind::TimedOut));
             }
-            // every one second check again
-            coroutine::sleep(Duration::from_millis(1));
+            // every 200 ms check again
+            coroutine::sleep(Duration::from_millis(200));
         }
     } else {
         while !f() {
-            // every one second check again
-            coroutine::sleep(Duration::from_millis(1));
+            // every 200 ms check again
+            coroutine::sleep(Duration::from_millis(200));
         }
     }
 

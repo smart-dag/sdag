@@ -293,10 +293,6 @@ impl WsConnections {
     }
 
     fn contains(&self, addr: &str) -> bool {
-        if addr.starts_with("127.0.0") {
-            return true;
-        }
-
         if let Some(peer_id) = statistics::get_peer_id_by_address(addr) {
             return self.conns.read().unwrap().contains_key(&peer_id);
         }
@@ -670,8 +666,17 @@ impl HubConn {
         let peers = WSS.get_hub_peers(peer_id.unwrap_or("unknown"));
         let peer_addrs = peers
             .into_iter()
-            .filter_map(|p| p.listen_addr)
+            .filter_map(|p| {
+                p.listen_addr.and_then(|addr| {
+                    if addr.starts_with("127.0.0") {
+                        None
+                    } else {
+                        Some(addr)
+                    }
+                })
+            })
             .collect::<Vec<String>>();
+
         Ok(serde_json::to_value(peer_addrs)?)
     }
 

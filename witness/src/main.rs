@@ -75,11 +75,15 @@ fn start_ws_server() {
 
 fn connect_to_remote() -> Result<()> {
     let peers = sdag::config::get_remote_hub_url();
-
+    let mut is_no_connect = false;
     for peer in peers {
-        if let Err(e) = sdag::network::hub::create_outbound_conn(&peer) {
-            error!(" fail to connected: {}, err={}", peer, e);
+        match sdag::network::hub::create_outbound_conn(&peer) {
+            Ok(_) => is_no_connect = true,
+            Err(e) => error!(" fail to connected: {}, err={}", peer, e),
         }
+    }
+    if !is_no_connect {
+        bail!("can not connect to any peers");
     }
 
     Ok(())
