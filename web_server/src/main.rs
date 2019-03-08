@@ -1,15 +1,16 @@
-extern crate lazy_static;
+extern crate may_minihttp;
 #[macro_use]
 extern crate serde_derive;
 #[macro_use]
 extern crate failure;
-extern crate sdag;
-
-use may_minihttp::HttpServer;
-use sdag::error::Result;
 
 mod config;
 mod server;
+
+use failure::Error;
+use may_minihttp::HttpServer;
+
+pub type Result<T> = ::std::result::Result<T, Error>;
 
 fn main() -> Result<()> {
     config::show_config()?;

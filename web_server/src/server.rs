@@ -50,12 +50,12 @@ fn file_path_mime(file_path: &Path) -> String {
 
 fn local_path_for_request(request_path: &str, root_dir: &Path) -> Option<PathBuf> {
     // This is equivalent to checking for hyper::RequestUri::AbsoluteUri
-    if !request_path.starts_with("/") {
+    if !request_path.starts_with('/') {
         return None;
     }
 
     // Trim off the url parameters starting with '?'
-    let end = request_path.find('?').unwrap_or(request_path.len());
+    let end = request_path.find('?').unwrap_or_else(|| request_path.len());
     let request_path = &request_path[0..end];
 
     // Append the requested path to the root directory

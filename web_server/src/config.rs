@@ -1,8 +1,7 @@
+use std::fs::File;
 use std::path::PathBuf;
 
-use std::fs::File;
-
-use sdag::error::Result;
+use super::Result;
 
 const SETTINGS_FILE: &str = "settings.json";
 
