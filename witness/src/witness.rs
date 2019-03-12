@@ -44,7 +44,7 @@ fn is_need_witnessing() -> Result<(bool)> {
     }
 
     // distance from max_level_free to SELF_LEVEL should more than 6
-    if !is_more_than_six_to_last_self(&free_joints)? {
+    if !check_self_level(&free_joints)? {
         return Ok(false);
     }
 
@@ -64,12 +64,12 @@ fn is_need_witnessing() -> Result<(bool)> {
     is_need_witness_normal_joint(&free_joints, best_joint)
 }
 
-/// return true if more than six joints from free joints to last_self
-fn is_more_than_six_to_last_self(free_joints: &[CachedJoint]) -> Result<(bool)> {
+/// return true if more than MAJORITY_OF_WITNESSES - 2 joints from free joints to last_self
+fn check_self_level(free_joints: &[CachedJoint]) -> Result<(bool)> {
     let self_level = SELF_LEVEL.load(Ordering::Relaxed);
     for unit in free_joints {
         let level = unit.read()?.get_level();
-        if level.value() as isize - self_level >= sdag::config::MAJORITY_OF_WITNESSES as isize - 1 {
+        if level.value() as isize - self_level >= sdag::config::MAJORITY_OF_WITNESSES as isize - 2 {
             return Ok(true);
         }
     }
@@ -105,7 +105,7 @@ fn is_relative_stable(mut best_free_parent: RcuReader<JointData>) -> Result<(boo
     Ok((true, has_normal_joints))
 }
 
-/// return lastest unstable normal joint ordered by level
+/// return latest unstable normal joint ordered by level
 fn get_unstable_latest_normal_joint(
     free_joints: &[CachedJoint],
 ) -> Result<Option<RcuReader<JointData>>> {

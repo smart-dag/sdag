@@ -12,7 +12,8 @@ pub const SIG_LENGTH: usize = 88;
 pub const MAX_COMPLEXITY: usize = 100;
 pub const TOTAL_WHITEBYTES: u64 = 500_000_000_000_000;
 pub const COUNT_WITNESSES: usize = 12;
-pub const MAJORITY_OF_WITNESSES: usize = 7;
+pub const MAJORITY_OF_WITNESSES: usize = (COUNT_WITNESSES >> 1) + 1;
+
 pub const VERSION: &str = "1.0";
 pub const ALT: &str = "1";
 pub const LIBRARY: &str = "rust-sdag";
