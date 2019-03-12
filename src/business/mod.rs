@@ -556,6 +556,8 @@ impl BusinessCache {
             bail!("joint is already set to finalbad, unit={}", joint.unit.unit);
         }
 
+        self.is_include_last_stable_self_joint(joint)?;
+
         let business_state = self.business_state.read().unwrap();
         for i in 0..joint.unit.messages.len() {
             business_state.validate_message(joint, i)?;
