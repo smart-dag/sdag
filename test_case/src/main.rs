@@ -20,7 +20,6 @@ extern crate serde_json;
 #[macro_use]
 extern crate lazy_static;
 
-use std::fs::File;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 use std::sync::RwLock;

@@ -6,10 +6,6 @@ use sdag::{config, joint::Joint, spec::*};
 use sdag_object_base::object_hash;
 use sdag_wallet_base::Base64KeyExt;
 
-pub const GENESIS_FILE: &str = "genesis.json";
-pub const FIRST_PAYMENT: &str = "first_payment.json";
-pub const INIT_MNEMONIC: &str = "init_mnemonic.json";
-
 pub struct SdagInitInfo {
     pub witnesses: Vec<WalletInfo>,
     pub sdag_org: WalletInfo,
@@ -28,7 +24,8 @@ pub fn gen_all_wallets(witness_counts: u32) -> Result<SdagInitInfo> {
 }
 
 // generate genesis unit according to the params
-pub fn gen_genesis_joint(wallets: &SdagInitInfo, total: u64, msg: &str) -> Result<Joint> {
+// return: (joint, fundation's token)
+pub fn gen_genesis_joint(wallets: &SdagInitInfo, total: u64, msg: &str) -> Result<(Joint, u64)> {
     let mut witnesses = wallets
         .witnesses
         .iter()
@@ -124,10 +121,11 @@ pub fn gen_genesis_joint(wallets: &SdagInitInfo, total: u64, msg: &str) -> Resul
     unit.headers_commission = Some(unit.calc_header_size());
     unit.payload_commission = Some(unit.calc_payload_size());
 
+    let foundation_amount;
     {
         let payment_message = unit.messages.last_mut().unwrap();
 
-        let foundation_amount = total
+        foundation_amount = total
             - (amount as usize * unit.witnesses.len() * 8) as u64
             - u64::from(unit.headers_commission.unwrap())
             - u64::from(unit.payload_commission.unwrap());
@@ -158,22 +156,26 @@ pub fn gen_genesis_joint(wallets: &SdagInitInfo, total: u64, msg: &str) -> Resul
     unit.timestamp = Some(::sdag::time::now() / 1000);
     unit.unit = unit.calc_unit_hash();
 
-    Ok(Joint {
-        ball: Some(object_hash::calc_ball_hash(
-            &unit.calc_unit_hash(),
-            &Vec::new(),
-            &Vec::new(),
-            false,
-        )),
-        skiplist_units: Vec::new(),
-        unit,
-    })
+    Ok((
+        Joint {
+            ball: Some(object_hash::calc_ball_hash(
+                &unit.calc_unit_hash(),
+                &Vec::new(),
+                &Vec::new(),
+                false,
+            )),
+            skiplist_units: Vec::new(),
+            unit,
+        },
+        foundation_amount,
+    ))
 }
 
 pub fn gen_first_payment(
     paying_wallet: &WalletInfo,
     address_amount: u64,
     genesis_joint: &Joint,
+    foundation_total_amount: u64,
 ) -> Result<Joint> {
     // preare a defaut unit first
     let mut unit = Unit {
@@ -203,7 +205,6 @@ pub fn gen_first_payment(
     });
     outputs.sort_by(|a, b| a.address.cmp(&b.address));
 
-    let foundation_total_amount: i64 = 499_999_903_993_426;
 
     let mut index = 0;
     for message in &genesis_joint.unit.messages {

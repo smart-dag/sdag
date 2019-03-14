@@ -52,31 +52,8 @@ fn genesis_init(witness_counts: u32) -> Result<()> {
     let msg = "hello sdag";
     let wallets = genesis::gen_all_wallets(witness_counts)?;
 
-    let genesis_joint = genesis::gen_genesis_joint(&wallets, total, msg)?;
-
-    save_results(&genesis_joint, genesis::GENESIS_FILE)?;
-    save_results(
-        &genesis::gen_first_payment(&wallets.sdag_org, 20, &genesis_joint)?,
-        genesis::FIRST_PAYMENT,
-    )?;
-
-    #[derive(Serialize)]
-    struct MNEMONIC<'a> {
-        wallets: Vec<&'a String>,
-        sdag_org: &'a String,
-    };
-
-    let result = MNEMONIC {
-        wallets: wallets
-            .witnesses
-            .iter()
-            .map(|v| &v.mnemonic)
-            .collect::<Vec<_>>(),
-
-        sdag_org: &wallets.sdag_org.mnemonic,
-    };
-
-    save_results(&result, genesis::INIT_MNEMONIC)?;
+    let (genesis_joint, balance) = genesis::gen_genesis_joint(&wallets, total, msg)?;
+    let first_joint = genesis::gen_first_payment(&wallets.sdag_org, 20, &genesis_joint, balance)?;
 
     use sdag::joint::Joint;
     #[derive(Serialize)]
@@ -93,8 +70,9 @@ fn genesis_init(witness_counts: u32) -> Result<()> {
             .map(|v| &v.mnemonic)
             .collect::<Vec<_>>(),
         sdag_org: &wallets.sdag_org.mnemonic,
-        first_payment: genesis::gen_first_payment(&wallets.sdag_org, 20, &genesis_joint)?,
+        first_payment: first_joint,
         genesis_joint,
     };
+
     save_results(&result, "result.json")
 }

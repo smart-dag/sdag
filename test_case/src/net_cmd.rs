@@ -12,18 +12,8 @@ pub(super) fn net_cmd(m: &ArgMatches, settings: &sdag::config::Settings) -> Resu
     let ws = connect_to_remote(&settings.hub_url)?;
     let witnesses = ws.get_witnesses()?;
     //raw_post
-    if let Some(raw_post) = m.subcommand_matches("raw_post") {
-        if raw_post.values_of("genesis").is_some() {
-            let genesis_file = File::open(genesis::GENESIS_FILE)?;
-            ws.post_joint(&serde_json::from_reader(genesis_file)?)?;
-            return Ok(());
-        }
-
-        if raw_post.values_of("first_pay").is_some() {
-            let first_paid_file = File::open(genesis::FIRST_PAYMENT)?;
-            ws.post_joint(&serde_json::from_reader(first_paid_file)?)?;
-            return Ok(());
-        }
+    if let Some(_) = m.subcommand_matches("raw_post") {
+        info!("unimpliment")
     }
 
     let wallet_info = WalletInfo::from_mnemonic(&settings.get_mnemonic())?;
