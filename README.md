@@ -11,7 +11,7 @@ $ curl -sSf https://static.rust-lang.org/rustup.sh | sh
 
 
 ```
-https://gitlab.com/smart-dag/sdag.git
+https://github.com/smart-dag/sdag.git
 ```
 
 
@@ -244,3 +244,5 @@ DATE  : 2019-01-17 18:10:12.277
   ]
 }
 ```
+
+如果你不想编译，可以直接使用docker进行体验。教程在https://github.com/smart-dag/docs/blob/master/GettingStarted/README_CN.md
