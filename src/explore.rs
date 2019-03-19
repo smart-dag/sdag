@@ -33,6 +33,8 @@ pub struct DisplayUnit {
     pub parents: Vec<String>,
     pub is_on_mc: bool,
     pub level: Level,
+    pub mci: Level,
+    pub sub_mci: Level,
     pub is_stable: bool,
     pub author: Author,
     pub sequence: JointSequence,
@@ -55,6 +57,8 @@ impl<'a> From<&'a JointData> for DisplayUnit {
             is_on_mc: props.mci == props.limci,
             is_stable: props.is_stable,
             level: props.level,
+            mci: props.mci,
+            sub_mci: props.sub_mci,
             sequence: props.sequence,
             author: Author::get_author_type(&joint),
         }

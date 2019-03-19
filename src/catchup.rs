@@ -41,7 +41,10 @@ pub fn prepare_catchup_chain(catchup_req: CatchupReq) -> Result<CatchupChain> {
         last_stable_mci,
         last_known_mci,
     );
-    ensure!(witnesses.len() == 12, "invalid witness list");
+    ensure!(
+        witnesses.len() == ::config::COUNT_WITNESSES,
+        "invalid witness list"
+    );
 
     if SDAG_CACHE
         .get_mc_unit_hash(last_stable_mci.into())?
