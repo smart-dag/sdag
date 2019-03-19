@@ -198,7 +198,7 @@ impl ExploreBuilder {
 
                 // find the missing ones
                 for child in joint_data.children.iter() {
-                    if !visited.contains(&child.key) {
+                    if visited.insert(child.key.clone()) {
                         let child_data = child.read()?;
                         let display_unit = DisplayUnit::from(&*child_data);
                         let level = child_data.get_level();
@@ -208,6 +208,7 @@ impl ExploreBuilder {
                                 level_joints.push(display_unit)
                             }
                         }
+                        queue.push_back((*child).clone());
                     }
                 }
             }
