@@ -1,4 +1,5 @@
-use std::collections::HashMap as StdHashMap;
+use std::collections::{HashMap as StdHashMap, VecDeque};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 
 use hashbrown::HashMap;
@@ -6,24 +7,26 @@ use network::hub;
 
 lazy_static! {
     // stored all connection statistics
-    static ref ALL_CONN_STATS: AllConnStats = AllConnStats::default();
+    static ref ALL_STATS: STATS = STATS::default();
 }
 
 //---------------------------------------------------------------------------------------
-// AllConnStats
+// STATS
 //---------------------------------------------------------------------------------------
 #[derive(Default)]
-pub struct AllConnStats {
+pub struct STATS {
     // key is peer_id, val is ConnStats
     conn_stats: RwLock<HashMap<Arc<String>, ConnStats>>,
+    // finalize_joint_count = AtomicUsize::new(0);
+    finalize_joint_stats: FinalizeJointStats,
 }
 
-impl AllConnStats {
+impl STATS {
     /// hub timer call update every secs
     /// 1) if timestamp % 60 == 0, collect all secs and set mins[timestamp/60], then reset all secs to None
     /// 2) if timestamp % 3600 == 0, collect all mins and set hours[(timestamp/3600)%24], then reset all mins to None
     /// 3) if timestamp % 86400 == 0, collect all hours and set days[(timestamp/86400)%30], then reset all hours to None
-    fn update(&self) {
+    fn conn_stats_update(&self) {
         let timestamp = (::time::now() / 1000) as usize;
         let is_mins = timestamp % 60 == 0;
         if !is_mins {
@@ -213,21 +216,106 @@ fn sum_all_stats(stats: &[StatsPerPeriod]) -> StatsPerPeriod {
     total_state
 }
 
+#[derive(Default)]
+struct FinalizeJointStats {
+    count: AtomicUsize,
+    prev_sec_count: AtomicUsize,
+    prev_hour: (AtomicUsize, AtomicUsize), // 0 is joints count, 1 is timestamp
+    max_tps: AtomicUsize,
+    cur_tps: AtomicUsize,
+    hours_tps: RwLock<VecDeque<f32>>,
+}
+
+impl FinalizeJointStats {
+    fn increase(&self) {
+        self.count.fetch_add(1, Ordering::Release);
+    }
+
+    // update every secs
+    fn update(&self) {
+        let count = self.count.load(Ordering::Acquire);
+
+        let cur_tps = count - self.prev_sec_count.load(Ordering::Acquire);
+        self.cur_tps.store(cur_tps, Ordering::Relaxed);
+        self.prev_sec_count.store(count, Ordering::Relaxed);
+
+        if cur_tps > self.max_tps.load(Ordering::Relaxed) {
+            self.max_tps.store(cur_tps, Ordering::Relaxed);
+        }
+
+        let prev_hour_time = self.prev_hour.1.load(Ordering::Relaxed);
+        if prev_hour_time == 0 {
+            self.prev_hour
+                .1
+                .store((::time::now() / 1000) as usize, Ordering::Relaxed);
+        }
+
+        let timestamp = (::time::now() / 1000) as usize;
+        if timestamp % 3600 != 0 {
+            return;
+        }
+
+        let increase = count - self.prev_hour.0.load(Ordering::Relaxed);
+
+        self.prev_hour.0.store(count, Ordering::Relaxed);
+        self.prev_hour.1.store(timestamp, Ordering::Relaxed);
+
+        let mut w_g = self.hours_tps.write().unwrap();
+        w_g.push_back(increase as f32 / (timestamp - prev_hour_time) as f32);
+        while w_g.len() > 24 {
+            w_g.pop_front();
+        }
+    }
+
+    fn get_tps_info(&self) -> FinalizeJointTPS {
+        FinalizeJointTPS {
+            max_tps: self.max_tps.load(Ordering::Relaxed),
+            cur_tps: self.cur_tps.load(Ordering::Relaxed),
+            hours_tps: self
+                .hours_tps
+                .read()
+                .unwrap()
+                .iter()
+                .cloned()
+                .collect::<Vec<_>>(),
+        }
+    }
+}
+
+/// network api
+#[derive(Serialize, Deserialize, Debug)]
+pub struct FinalizeJointTPS {
+    pub max_tps: usize,
+    pub cur_tps: usize,
+    pub hours_tps: Vec<f32>,
+}
+
+#[inline]
+pub fn final_joints_increase() {
+    ALL_STATS.finalize_joint_stats.increase();
+}
+
 /// hub timer call the func every secs, to update all connection statistics
 pub fn update_stats() {
-    ALL_CONN_STATS.update()
+    ALL_STATS.conn_stats_update();
+    ALL_STATS.finalize_joint_stats.update();
 }
 
 /// only increase secs, mins/hours/days will update by timer
+#[inline]
 pub fn increase_stats(peer_id: Arc<String>, is_rx: bool, is_good: bool) {
-    ALL_CONN_STATS.increase_sec(peer_id, is_rx, is_good);
+    ALL_STATS.increase_sec(peer_id, is_rx, is_good);
 }
 
 /// network interface: get all last statistics
 pub fn get_all_last_stats() -> StdHashMap<String, LastConnStat> {
-    ALL_CONN_STATS.get_all_last_stats()
+    ALL_STATS.get_all_last_stats()
 }
 
 pub fn get_peer_id_by_address(peer_addr: &str) -> Option<String> {
-    ALL_CONN_STATS.get_peer_id_by_address(peer_addr)
+    ALL_STATS.get_peer_id_by_address(peer_addr)
+}
+
+pub fn get_tps_info() -> FinalizeJointTPS {
+    ALL_STATS.finalize_joint_stats.get_tps_info()
 }

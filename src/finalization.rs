@@ -3,6 +3,7 @@ use error::Result;
 use joint::JointSequence;
 use may::coroutine::JoinHandle;
 use may::sync::mpsc;
+use statistics::final_joints_increase;
 
 lazy_static! {
     pub static ref FINALIZATION_WORKER: FinalizationWorker = FinalizationWorker::default();
@@ -39,6 +40,7 @@ fn start_finalization_worker(rx: mpsc::Receiver<CachedJoint>) -> JoinHandle<()> 
     go!(move || {
         while let Ok(joint) = rx.recv() {
             t_c!(finalize_joint(joint));
+            final_joints_increase();
         }
         error!("Finalization worker stopped!");
         ::std::process::abort();

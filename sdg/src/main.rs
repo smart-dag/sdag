@@ -527,6 +527,16 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
+    // TPS
+    if m.subcommand_matches("tps").is_some() {
+        let tps_info = ws.get_tps()?;
+        println!("max TPS   {}", tps_info.max_tps);
+        println!("cur TPS   {}", tps_info.cur_tps);
+        println!("hours TPS {:?}", tps_info.hours_tps);
+
+        return Ok(());
+    }
+
     //show joint and properties
     if let Some(unit_args) = m.subcommand_matches("unit") {
         return handle_subcommand_unit(unit_args, &ws);

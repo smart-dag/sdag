@@ -127,6 +127,13 @@ impl WalletConn {
         Ok(balance)
     }
 
+    // get tps info (latest 24 hours TPS)
+    pub fn get_tps(&self) -> Result<::statistics::FinalizeJointTPS> {
+        let tps_info = self.send_request("get_tps", &Value::Null)?;
+
+        Ok(serde_json::from_value(tps_info)?)
+    }
+
     // get the network status
     pub fn get_net_state(&self) -> Result<super::hub::HubNetState> {
         let response = self.send_request("net_state", &Value::Null)?;

@@ -374,6 +374,7 @@ impl Server<HubData> for HubData {
             "get_joints_by_level" => ws.on_get_joints_by_level(params)?,
             "get_joint_by_unit_hash" => ws.on_get_joint_by_unit_hash(params)?,
             "get_children" => ws.on_get_children(params)?,
+            "get_tps" => ws.on_get_tps(params)?,
 
             command => bail!("on_request unknown command: {}", command),
         };
@@ -457,6 +458,12 @@ impl HubConn {
         let balance = BUSINESS_CACHE.global_state.get_stable_balance(addr)?;
 
         Ok(json!({"address": addr, "balance": balance}))
+    }
+
+    fn on_get_tps(&self, _param: Value) -> Result<Value> {
+        let tps_info = statistics::get_tps_info();
+
+        Ok(serde_json::to_value(tps_info)?)
     }
 
     fn on_get_inputs(&self, param: Value) -> Result<Value> {

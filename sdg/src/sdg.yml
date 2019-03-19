@@ -162,6 +162,8 @@ subcommands:
                 required: false
                 value_name: UNIT
                 takes_value: true
+    - tps:
+        about: Show TPS info
 
 
 
