@@ -2,7 +2,7 @@
 description = "sdag wallet cli rust implmentation"
 name = "sdg"
 version = "0.1.0"
-authors = ["smartDAG team"]
+authors = ["SDAG<sdag@sdag.io>"]
 license = "MIT"
 
 [dependencies]

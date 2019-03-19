@@ -2,7 +2,7 @@
 description = "sdag wallet basic rust implmentation"
 name = "sdag_object_base"
 version = "0.1.0"
-authors = ["SDAG Team <sdag@sdag.io>"]
+authors = ["SDAG<sdag@sdag.io>"]
 license = "MIT"
 
 [dependencies]

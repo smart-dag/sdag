@@ -2,7 +2,7 @@
 description = "sdag rust implmentation"
 name = "sdag"
 version = "0.2.0"
-authors = ["SDAG TEAM"]
+authors = ["SDAG<sdag@sdag.io>"]
 license = "MIT"
 
 [dependencies]

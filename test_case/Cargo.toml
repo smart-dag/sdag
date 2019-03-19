@@ -1,7 +1,7 @@
 [package]
 name = "test_case"
 version = "0.1.0"
-authors = ["_jiang <jiang762507357@163.com>"]
+authors = ["SDAG<sdag@sdag.io>"]
 edition = "2018"
 
 
