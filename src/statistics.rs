@@ -1,4 +1,4 @@
-use std::collections::{HashMap as StdHashMap, VecDeque};
+use std::collections::HashMap as StdHashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 
@@ -223,7 +223,7 @@ struct FinalizeJointStats {
     prev_hour: (AtomicUsize, AtomicUsize), // 0 is joints count, 1 is timestamp
     max_tps: AtomicUsize,
     cur_tps: AtomicUsize,
-    hours_tps: RwLock<VecDeque<f32>>,
+    hours_tps: RwLock<[f32; 24]>,
 }
 
 impl FinalizeJointStats {
@@ -242,42 +242,30 @@ impl FinalizeJointStats {
         if cur_tps > self.max_tps.load(Ordering::Relaxed) {
             self.max_tps.store(cur_tps, Ordering::Relaxed);
         }
-
+        
+        let timestamp = (::time::now() / 1000) as usize;
         let prev_hour_time = self.prev_hour.1.load(Ordering::Relaxed);
         if prev_hour_time == 0 {
             self.prev_hour
                 .1
-                .store((::time::now() / 1000) as usize, Ordering::Relaxed);
-        }
-
-        let timestamp = (::time::now() / 1000) as usize;
-        if timestamp % 3600 != 0 {
-            return;
+                .store(timestamp, Ordering::Relaxed);
         }
 
         let increase = count - self.prev_hour.0.load(Ordering::Relaxed);
-
-        self.prev_hour.0.store(count, Ordering::Relaxed);
-        self.prev_hour.1.store(timestamp, Ordering::Relaxed);
+        if timestamp % 3600 == 0{
+            self.prev_hour.0.store(count, Ordering::Relaxed);
+            self.prev_hour.1.store(timestamp, Ordering::Relaxed);
+        }
 
         let mut w_g = self.hours_tps.write().unwrap();
-        w_g.push_back(increase as f32 / (timestamp - prev_hour_time) as f32);
-        while w_g.len() > 24 {
-            w_g.pop_front();
-        }
+        w_g[timestamp / 3600 % 24] = increase as f32 / (timestamp - prev_hour_time) as f32;
     }
 
     fn get_tps_info(&self) -> FinalizeJointTPS {
         FinalizeJointTPS {
             max_tps: self.max_tps.load(Ordering::Relaxed),
             cur_tps: self.cur_tps.load(Ordering::Relaxed),
-            hours_tps: self
-                .hours_tps
-                .read()
-                .unwrap()
-                .iter()
-                .cloned()
-                .collect::<Vec<_>>(),
+            hours_tps: self.hours_tps.read().unwrap().to_vec()
         }
     }
 }
