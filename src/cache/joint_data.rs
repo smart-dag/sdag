@@ -2,7 +2,7 @@ use std::cmp;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
 
-use cache::{CachedJoint, SDAG_CACHE};
+use cache::{CachedJoint, Reclaimable, SDAG_CACHE};
 use error::Result;
 use failure::ResultExt;
 use hashbrown::HashSet;
@@ -143,6 +143,7 @@ pub struct JointData {
     peer_id: Option<Arc<String>>,
     is_post: AtomicBool,
     props: RwLock<JointProperty>,
+    should_reclaim: AtomicBool,
 }
 
 // impl the property access
@@ -301,10 +302,10 @@ impl JointData {
                 // trigger genesis increase min_wl_increased
                 joint_data.set_min_wl(Level::MINIMUM);
 
-                CachedJoint {
-                    key: Arc::new(self.unit.unit.to_owned()),
-                    data: RcuCell::new(Some(joint_data)),
-                }
+                CachedJoint::new(
+                    Arc::new(self.unit.unit.to_owned()),
+                    RcuCell::new(Some(joint_data)),
+                )
             }
             Some(p) => p.clone(),
         }
@@ -580,6 +581,7 @@ impl JointData {
             stable_flag: SyncFlag::new(),
             peer_id,
             is_post: Default::default(),
+            should_reclaim: AtomicBool::new(false),
         }
     }
 }
@@ -635,6 +637,7 @@ impl LoadFromKv<String> for JointData {
             unhandled_refs: AtomicUsize::new(0),
             is_post: Default::default(),
             peer_id: None,
+            should_reclaim: AtomicBool::new(false),
         })
     }
 
@@ -727,5 +730,14 @@ impl PartialEq for JointData {
     #[inline]
     fn eq(&self, other: &Self) -> bool {
         self.unit.unit == other.unit.unit
+    }
+}
+
+impl Reclaimable for JointData {
+    fn should_reclaim(&self) -> bool {
+        self.should_reclaim.load(Ordering::Relaxed)
+    }
+    fn set_should_reclaim(&self, should_reclaim: bool) {
+        self.should_reclaim.store(should_reclaim, Ordering::Relaxed);
     }
 }

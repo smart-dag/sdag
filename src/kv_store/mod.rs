@@ -21,11 +21,11 @@ lazy_static! {
     pub static ref KV_STORE: KvStore = KvStore::default();
 
     // avoid overwriting when rebuilding everything from kv
-    static ref IS_REBUILDING_FROM_KV: AtomicBool = AtomicBool::new(true);
+    static ref IS_REBUILDING_FROM_KV: AtomicBool = AtomicBool::new(false);
 }
 
 pub fn is_rebuilding_from_kv() -> bool {
-    IS_REBUILDING_FROM_KV.load(Ordering::Relaxed)
+    IS_REBUILDING_FROM_KV.load(Ordering::SeqCst)
 }
 
 //---------------------------------------------------------------------------------------

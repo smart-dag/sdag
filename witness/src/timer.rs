@@ -59,4 +59,12 @@ pub fn start_global_timers() {
         });
         coroutine::sleep(dur);
     });
+
+    // Run cache gc
+    if !cfg!(feature = "kv_store_none") {
+        go!(move || loop {
+            coroutine::sleep(Duration::from_secs(300));
+            sdag::cache::SDAG_CACHE.run_gc();
+        });
+    }
 }

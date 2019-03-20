@@ -5,6 +5,11 @@ use kv_store::{is_rebuilding_from_kv, LoadFromKv};
 use may::coroutine;
 use rcu_cell::{RcuCell, RcuReader};
 
+pub trait Reclaimable {
+    fn should_reclaim(&self) -> bool;
+    fn set_should_reclaim(&self, should_reclaim: bool);
+}
+
 //---------------------------------------------------------------------------------------
 // HashKey
 //---------------------------------------------------------------------------------------
@@ -63,6 +68,10 @@ impl<K: PartialEq, V> PartialEq for CachedData<K, V> {
 }
 
 impl<K, V> CachedData<K, V> {
+    pub fn new(key: Arc<K>, data: RcuCell<V>) -> Self {
+        CachedData { key, data }
+    }
+
     pub fn empty(key: Arc<K>) -> Self {
         CachedData {
             key,
@@ -101,7 +110,7 @@ impl<K, V> CachedData<K, V> {
     }
 }
 
-impl<K, V: LoadFromKv<K>> CachedData<K, V> {
+impl<K, V: LoadFromKv<K> + Reclaimable> CachedData<K, V> {
     // read from mem or else form db
     pub fn read(&self) -> Result<RcuReader<V>> {
         match self.data.read() {
@@ -111,7 +120,10 @@ impl<K, V: LoadFromKv<K>> CachedData<K, V> {
                 // return update self with the correct data
                 self.read_from_db()
             }
-            Some(r) => Ok(r),
+            Some(r) => {
+                r.set_should_reclaim(false);
+                Ok(r)
+            }
         }
     }
 

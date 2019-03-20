@@ -120,6 +120,7 @@ impl KvStore {
         use utils::event::Event;
 
         info!("Rebuild from KV start!");
+        IS_REBUILDING_FROM_KV.store(true, Ordering::SeqCst);
 
         let last_mci = self.read_last_mci().unwrap_or(Level::INVALID);
 
@@ -146,7 +147,7 @@ impl KvStore {
         }
 
         info!("Rebuild from KV done!");
-        IS_REBUILDING_FROM_KV.store(false, Ordering::Relaxed);
+        IS_REBUILDING_FROM_KV.store(false, Ordering::SeqCst);
 
         Ok(())
     }
