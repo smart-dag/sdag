@@ -282,6 +282,7 @@ fn compose_and_normalize() -> Result<()> {
     let cached_joint = SDAG_CACHE.add_new_joint(joint, None)?;
 
     let joint_data = cached_joint.read()?;
+    joint_data.set_is_post(true);
     sdag::validation::validate_ready_joint(cached_joint)?;
     let sequence = joint_data.get_sequence();
     if sequence != JointSequence::Good {
