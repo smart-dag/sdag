@@ -205,7 +205,6 @@ pub fn gen_first_payment(
     });
     outputs.sort_by(|a, b| a.address.cmp(&b.address));
 
-
     let mut index = 0;
     for message in &genesis_joint.unit.messages {
         if let Some(Payload::Payment(x)) = &message.payload {

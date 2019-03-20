@@ -1,8 +1,10 @@
+use std::collections::VecDeque;
+
 use cache::{CachedJoint, JointData, SDAG_CACHE};
 use config;
 use error::Result;
 use hashbrown::{HashMap, HashSet};
-use joint::{Joint, Level};
+use joint::{Joint, JointSequence, Level};
 use light::*;
 use rcu_cell::RcuReader;
 use sdag_object_base::object_hash;
@@ -159,32 +161,34 @@ fn get_include_self_free_joint(
 }
 
 /// get last my joint from unstable joints
+/// we need to detect the good one
 fn get_last_my_unstable_joint(
     free_joints: &[CachedJoint],
     address: &str,
 ) -> Result<Option<RcuReader<JointData>>> {
-    let mut joints = Vec::new();
+    // must use wide search to find the latest one
+    let mut joints = VecDeque::new();
     let mut visited = HashSet::new();
     for joint in free_joints {
         if visited.insert(joint.key.clone()) {
-            joints.push(joint.read()?);
+            joints.push_back(joint.read()?);
         }
     }
 
-    while let Some(joint) = joints.pop() {
+    while let Some(joint) = joints.pop_front() {
         if joint.is_stable() {
             continue;
         }
 
         for author in &joint.unit.authors {
-            if author.address == address {
+            if author.address == address && joint.get_sequence() == JointSequence::Good {
                 return Ok(Some(joint.clone()));
             }
         }
 
         for p in joint.parents.iter() {
             if visited.insert(p.key.clone()) {
-                joints.push(p.read()?);
+                joints.push_back(p.read()?);
             }
         }
     }

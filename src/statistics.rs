@@ -242,17 +242,15 @@ impl FinalizeJointStats {
         if cur_tps > self.max_tps.load(Ordering::Relaxed) {
             self.max_tps.store(cur_tps, Ordering::Relaxed);
         }
-        
+
         let timestamp = (::time::now() / 1000) as usize;
         let prev_hour_time = self.prev_hour.1.load(Ordering::Relaxed);
         if prev_hour_time == 0 {
-            self.prev_hour
-                .1
-                .store(timestamp, Ordering::Relaxed);
+            self.prev_hour.1.store(timestamp, Ordering::Relaxed);
         }
 
         let increase = count - self.prev_hour.0.load(Ordering::Relaxed);
-        if timestamp % 3600 == 0{
+        if timestamp % 3600 == 0 {
             self.prev_hour.0.store(count, Ordering::Relaxed);
             self.prev_hour.1.store(timestamp, Ordering::Relaxed);
         }
@@ -265,7 +263,7 @@ impl FinalizeJointStats {
         FinalizeJointTPS {
             max_tps: self.max_tps.load(Ordering::Relaxed),
             cur_tps: self.cur_tps.load(Ordering::Relaxed),
-            hours_tps: self.hours_tps.read().unwrap().to_vec()
+            hours_tps: self.hours_tps.read().unwrap().to_vec(),
         }
     }
 }
