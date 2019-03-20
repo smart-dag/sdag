@@ -138,12 +138,6 @@ impl KvStore {
             handle_joint_count += 1;
         }
         ::utils::wait_cond(None, || handle_joint_count == SDAG_CACHE.get_num_of_normal_joints())?;
-	
-        if last_mci.is_valid() {
-            while !sem.wait_timeout(Duration::from_secs(1)) {
-                info!("current mci={:?}", main_chain::get_last_stable_mci());
-            }
-        }
 
         info!("Rebuild from KV done!");
         IS_REBUILDING_FROM_KV.store(false, Ordering::Relaxed);
