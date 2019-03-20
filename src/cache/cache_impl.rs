@@ -4,6 +4,7 @@ use std::sync::Arc;
 use cache::{CachedData, CachedJoint, HashKey, JointData};
 use error::Result;
 use hashbrown::{HashMap, HashSet};
+use kv_store::LoadFromKv;
 use rcu_cell::RcuCell;
 
 //---------------------------------------------------------------------------------------
@@ -30,10 +31,7 @@ impl SDagCacheInner {
         let key = hash_key.0.clone();
         self.normal_joints
             .entry(hash_key)
-            .or_insert_with(|| CachedData {
-                key,
-                data: RcuCell::new(Some(data)),
-            })
+            .or_insert_with(|| CachedData::new(key, RcuCell::new(Some(data))))
             .clone()
     }
 
@@ -42,10 +40,7 @@ impl SDagCacheInner {
         let key = hash_key.0.clone();
         self.unhandled_joints
             .entry(hash_key)
-            .or_insert_with(|| CachedData {
-                key,
-                data: RcuCell::new(Some(data)),
-            })
+            .or_insert_with(|| CachedData::new(key, RcuCell::new(Some(data))))
             .clone()
     }
 
@@ -70,10 +65,7 @@ impl SDagCacheInner {
         let hash_key = HashKey(key.clone());
         self.normal_joints
             .entry(hash_key)
-            .or_insert_with(|| CachedData {
-                key,
-                data: RcuCell::default(),
-            })
+            .or_insert_with(|| CachedData::empty(key))
             .clone()
     }
 
@@ -412,5 +404,38 @@ impl SDagCacheInner {
 
     pub fn get_normal_joints_len(&self) -> usize {
         self.normal_joints.len()
+    }
+
+    pub fn run_gc(&self) {
+        //info!("Cache reclaiming start!");
+
+        let mut reclaimed = 0;
+        let mut remaining = 0;
+
+        for (_k, j) in self.normal_joints.iter() {
+            if j.is_empty() {
+                continue;
+            }
+
+            let joint = j.raw_read();
+            if joint.should_reclaim() && joint.is_stable() {
+                //info!("Cache reclaiming clearing {:?}", k);
+                j.clear();
+                reclaimed += 1;
+            } else {
+                //info!("Cache reclaiming skipping {:?}", k);
+
+                //Reset the gc flag for next run
+                joint.set_should_reclaim(true);
+                remaining += 1;
+            }
+        }
+
+        info!(
+            "Cache reclaiming done! total: {}, reclaimed: {}, remaining: {}",
+            self.normal_joints.len(),
+            reclaimed,
+            remaining
+        );
     }
 }

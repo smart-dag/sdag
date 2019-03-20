@@ -25,7 +25,7 @@ lazy_static! {
 }
 
 pub fn is_rebuilding_from_kv() -> bool {
-    IS_REBUILDING_FROM_KV.load(Ordering::Relaxed)
+    IS_REBUILDING_FROM_KV.load(Ordering::Acquire)
 }
 
 //---------------------------------------------------------------------------------------
@@ -35,6 +35,8 @@ pub trait LoadFromKv<K: ?Sized>: Sized {
     // can load data from kv store
     fn load_from_kv<T: ::std::borrow::Borrow<K>>(key: &T) -> Result<Self>;
     fn save_to_kv<T: ::std::borrow::Borrow<K>>(&self, key: &T) -> Result<()>;
+    fn should_reclaim(&self) -> bool;
+    fn set_should_reclaim(&self, should_reclaim: bool);
 }
 
 #[cfg(feature = "kv_store_none")]

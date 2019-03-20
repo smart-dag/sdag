@@ -126,7 +126,7 @@ impl KvStore {
         })?;
 
         info!("Rebuild from KV done!");
-        IS_REBUILDING_FROM_KV.store(false, Ordering::Relaxed);
+        IS_REBUILDING_FROM_KV.store(false, Ordering::Release);
 
         Ok(())
     }

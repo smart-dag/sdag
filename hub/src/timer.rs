@@ -47,4 +47,11 @@ pub fn start_global_timers() {
         statistics::update_stats();
         coroutine::sleep(Duration::from_secs(1));
     });
+
+    if !cfg!(feature = "kv_store_none") {
+        go!(move || loop {
+            coroutine::sleep(Duration::from_secs(60));
+            sdag::cache::SDAG_CACHE.run_gc();
+        });
+    }
 }

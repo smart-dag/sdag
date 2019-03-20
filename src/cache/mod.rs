@@ -112,13 +112,15 @@ impl SDagCache {
                     bail!("unit={} is known bad", key);
                 }
 
-                // now we are rebuilding everything, joint read from kv can not be used directly
+                // when rebuilding from kv, joint read from kv can not be used directly
                 // since the cache and business state are not rebuild accordingly
-                bail!("unit={} does not exist", key);
+                if ::kv_store::is_rebuilding_from_kv() {
+                    bail!("unit={} does not exist", key);
+                }
 
                 // loading joint from kv needs the write guard
-                //drop(g);
-                //self.load_joint_from_kv(key)
+                drop(g);
+                self.load_joint_from_kv(key)
             }
             Some(j) => Ok(j),
         }
@@ -488,5 +490,9 @@ impl SDagCache {
 
     pub fn get_joints_len(&self) -> usize {
         self.joints.read().unwrap().get_normal_joints_len()
+    }
+
+    pub fn run_gc(&self) {
+        self.joints.read().unwrap().run_gc()
     }
 }

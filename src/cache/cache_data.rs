@@ -63,6 +63,10 @@ impl<K: PartialEq, V> PartialEq for CachedData<K, V> {
 }
 
 impl<K, V> CachedData<K, V> {
+    pub fn new(key: Arc<K>, data: RcuCell<V>) -> Self {
+        CachedData { key, data }
+    }
+
     pub fn empty(key: Arc<K>) -> Self {
         CachedData {
             key,
@@ -111,7 +115,10 @@ impl<K, V: LoadFromKv<K>> CachedData<K, V> {
                 // return update self with the correct data
                 self.read_from_db()
             }
-            Some(r) => Ok(r),
+            Some(r) => {
+                r.set_should_reclaim(false);
+                Ok(r)
+            }
         }
     }
 

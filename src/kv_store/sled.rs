@@ -120,7 +120,6 @@ impl KvStore {
         use utils::event::Event;
 
         info!("Rebuild from KV start!");
-
         let last_mci = self.read_last_mci().unwrap_or(Level::INVALID);
 
         let sem = Arc::new(Semphore::new(0));
@@ -146,7 +145,7 @@ impl KvStore {
         }
 
         info!("Rebuild from KV done!");
-        IS_REBUILDING_FROM_KV.store(false, Ordering::Relaxed);
+        IS_REBUILDING_FROM_KV.store(false, Ordering::Release);
 
         Ok(())
     }
