@@ -1,10 +1,16 @@
 [package]
-name = "test_case"
+name = "tests"
 version = "0.1.0"
 authors = ["SDAG<sdag@sdag.io>"]
 edition = "2018"
 
+[lib]
+name = "tests"
+path = "src/lib.rs"
 
+[[bin]]
+name = "test_case"
+path = "src/bin.rs"
 
 [dependencies]
 sdag = { path = ".."}
