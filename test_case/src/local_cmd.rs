@@ -3,7 +3,7 @@ use clap::ArgMatches;
 use crate::*;
 use sdag::error::Result;
 
-pub(super) fn local_cmd(m: &ArgMatches) -> Result<()> {
+pub fn local_cmd(m: &ArgMatches) -> Result<()> {
     // init command
     if let Some(init_arg) = m.subcommand_matches("init") {
         if let Some(mnemonic) = init_arg.value_of("MNEMONIC") {
@@ -30,18 +30,11 @@ pub(super) fn local_cmd(m: &ArgMatches) -> Result<()> {
     }
 
     if let Some(n) = m.subcommand_matches("wallets") {
-        match value_t!(n.value_of("n"), u64) {
-            Ok(num) => {
-                let wallets_info = wallet::gen_wallets(num)?;
-                let wallets = wallets_info
-                    .iter()
-                    .map(|v| (v.mnemonic.clone(), v._00_address.clone()))
-                    .collect::<Vec<_>>();
-                save_results(&wallets, WALLET_ADDRESSES)?;
-            }
+        match value_t!(n.value_of("n"), usize) {
+            Ok(num) => wallet::gen_wallets(num)?,
 
             Err(e) => e.exit(),
-        }
+        };
     }
     Ok(())
 }

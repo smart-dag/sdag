@@ -1,8 +1,9 @@
 use sdag_wallet_base::{ExtendedPrivKey, ExtendedPubKey, Mnemonic};
 use std::fs::File;
 
-use super::WALLET_ADDRESSES;
 use sdag::error::Result;
+
+pub const WALLET_ADDRESSES: &str = "wallets.json";
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Wallets {
@@ -57,12 +58,19 @@ impl sdag::signature::Signer for WalletInfo {
     }
 }
 
-pub fn gen_wallets(num: u64) -> Result<Vec<WalletInfo>> {
-    let mut wallets: Vec<WalletInfo> = Vec::new();
-    for _ in 0..num {
-        wallets.push(WalletInfo::from_mnemonic("")?);
+pub fn gen_wallets(c: usize) -> Result<Vec<WalletInfo>> {
+    let mut wallets_info: Vec<WalletInfo> = Vec::new();
+
+    for _ in 0..c {
+        wallets_info.push(WalletInfo::from_mnemonic("")?);
     }
-    Ok(wallets)
+
+    let wallets = wallets_info
+        .iter()
+        .map(|v| (v.mnemonic.clone(), v._00_address.clone()))
+        .collect::<Vec<_>>();
+    crate::save_results(&wallets, WALLET_ADDRESSES)?;
+    Ok(wallets_info)
 }
 
 pub fn get_wallets() -> Result<Vec<WalletInfo>> {

@@ -1,6 +1,8 @@
 use chrono::{Local, TimeZone};
 use clap::ArgMatches;
 use failure::ResultExt;
+use rand::{thread_rng, Rng};
+use std::sync::Arc;
 
 use crate::*;
 use sdag::error::Result;
@@ -8,7 +10,7 @@ use sdag::network::wallet::WalletConn;
 use sdag_object_base::object_hash;
 use sdag_wallet_base::Base64KeyExt;
 
-pub(super) fn net_cmd(m: &ArgMatches, settings: &sdag::config::Settings) -> Result<()> {
+pub fn net_cmd(m: &ArgMatches, settings: &sdag::config::Settings) -> Result<()> {
     let ws = connect_to_remote(&settings.hub_url)?;
     let witnesses = ws.get_witnesses()?;
     //raw_post
@@ -16,10 +18,13 @@ pub(super) fn net_cmd(m: &ArgMatches, settings: &sdag::config::Settings) -> Resu
         info!("unimpliment")
     }
 
-    let wallet_info = WalletInfo::from_mnemonic(&settings.get_mnemonic())?;
+    let wallet_info = wallet::WalletInfo::from_mnemonic(&settings.get_mnemonic())?;
     //transfer
     if let Some(send) = m.subcommand_matches("send") {
-        send_payment::distrubite_coins_and_cocurrency(&ws, &send, &wallet_info, &witnesses)?;
+        distribute_coins_and_cocurrency(&ws, &send, &wallet_info, &witnesses)?;
+        loop {
+            may::coroutine::sleep(std::time::Duration::from_secs(100));
+        }
     }
 
     //Send one payment to address
@@ -70,7 +75,7 @@ pub(super) fn net_cmd(m: &ArgMatches, settings: &sdag::config::Settings) -> Resu
             return Ok(());
         }
 
-        send_payment::send_payment(&ws, address_amount, &wallet_info, flag)?;
+        transaction::send_payment(&ws, address_amount, &wallet_info, flag)?;
     }
 
     //balance
@@ -87,7 +92,7 @@ pub(super) fn net_cmd(m: &ArgMatches, settings: &sdag::config::Settings) -> Resu
     }
 
     let mut wallets_info = wallet::get_wallets()?;
-    wallets_info.push(WalletInfo::from_mnemonic(&settings.get_mnemonic())?);
+    wallets_info.push(wallet::WalletInfo::from_mnemonic(&settings.get_mnemonic())?);
 
     //info
     if let Some(arg) = m.subcommand_matches("info") {
@@ -103,7 +108,7 @@ pub(super) fn net_cmd(m: &ArgMatches, settings: &sdag::config::Settings) -> Resu
 
     //log
     if let Some(log) = m.subcommand_matches("log") {
-        let wallet = || -> Result<WalletInfo> {
+        let wallet = || -> Result<wallet::WalletInfo> {
             if let Some(address) = log.value_of("ADDRESS") {
                 for wallet in wallets_info {
                     if wallet._00_address == address {
@@ -143,20 +148,7 @@ pub(super) fn net_cmd(m: &ArgMatches, settings: &sdag::config::Settings) -> Resu
     Ok(())
 }
 
-fn connect_to_remote(peers: &[String]) -> Result<Arc<WalletConn>> {
-    for peer in peers {
-        match sdag::network::wallet::create_outbound_conn(&peer) {
-            Err(e) => {
-                error!(" fail to connected: {}, err={}", peer, e);
-                continue;
-            }
-            Ok(c) => return Ok(c),
-        }
-    }
-    bail!("failed to connect remote hub");
-}
-
-fn info(ws: &Arc<WalletConn>, wallet_info: &WalletInfo) -> Result<()> {
+fn info(ws: &Arc<WalletConn>, wallet_info: &wallet::WalletInfo) -> Result<()> {
     let address_pubk = wallet_info._00_address_pubk.to_base64_key();
 
     let stable = ws.get_balance(&wallet_info._00_address)? as f64 / 1_000_000.0;
@@ -224,4 +216,73 @@ fn show_history(
     }
 
     Ok(())
+}
+
+fn distribute_coins_and_cocurrency(
+    ws: &Arc<WalletConn>,
+    send: &ArgMatches,
+    wallet_info: &wallet::WalletInfo,
+    witnesses: &[String],
+) -> Result<()> {
+    let test_wallets = match wallet::get_wallets() {
+        Ok(wallets) => wallets,
+        Err(_) => wallet::gen_wallets(100)?,
+    };
+
+    if witnesses.contains(&wallet_info._00_address) {
+        bail!("witness can not send payment by test");
+    }
+
+    let cycle_index = value_t!(send.value_of("continue"), usize).ok();
+    let paid_amount = value_t!(send.value_of("pay"), f64).ok();
+
+    if cycle_index.is_some() && paid_amount.is_none() {
+        share_token_in_wallets(&ws, cycle_index.unwrap(), test_wallets);
+    } else if let Some(num) = paid_amount {
+        transaction::distribute_token(
+            &ws,
+            &wallet_info,
+            num,
+            cycle_index.unwrap_or(1),
+            witnesses,
+            &test_wallets,
+        );
+    }
+
+    Ok(())
+}
+
+fn share_token_in_wallets(
+    ws: &Arc<WalletConn>,
+    concurrent_counts: usize,
+    test_wallets: Vec<wallet::WalletInfo>,
+) {
+    let arc_test_wallets = Arc::new(test_wallets);
+    for i in 0..concurrent_counts {
+        let tmp_ws = Arc::clone(&ws);
+
+        let tmp = Arc::clone(&arc_test_wallets);
+        may::go!(move || {
+            let index = i;
+            let mut wallet_info = transaction::choose_wallet(i, &tmp).unwrap();
+
+            loop {
+                let mut rng = thread_rng();
+                let w1: usize = rng.gen_range(0, tmp.len());
+                let earned_wallets = vec![(tmp[w1]._00_address.clone(), 0.1)];
+
+                if let Err(e1) =
+                    transaction::send_payment(&tmp_ws, earned_wallets, &wallet_info, "good")
+                {
+                    error!("wallet {} send payment error {} ", index, e1);
+                    if let Ok(wallet) = transaction::choose_wallet(index, &tmp) {
+                        wallet_info = wallet;
+                    }
+                };
+
+                may::coroutine::yield_now();
+                may::coroutine::sleep(std::time::Duration::from_millis(100));
+            }
+        });
+    }
 }
