@@ -5,11 +5,6 @@ use kv_store::{is_rebuilding_from_kv, LoadFromKv};
 use may::coroutine;
 use rcu_cell::{RcuCell, RcuReader};
 
-pub trait Reclaimable {
-    fn should_reclaim(&self) -> bool;
-    fn set_should_reclaim(&self, should_reclaim: bool);
-}
-
 //---------------------------------------------------------------------------------------
 // HashKey
 //---------------------------------------------------------------------------------------
@@ -110,7 +105,7 @@ impl<K, V> CachedData<K, V> {
     }
 }
 
-impl<K, V: LoadFromKv<K> + Reclaimable> CachedData<K, V> {
+impl<K, V: LoadFromKv<K>> CachedData<K, V> {
     // read from mem or else form db
     pub fn read(&self) -> Result<RcuReader<V>> {
         match self.data.read() {

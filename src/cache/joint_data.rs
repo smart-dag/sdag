@@ -2,7 +2,7 @@ use std::cmp;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
 
-use cache::{CachedJoint, Reclaimable, SDAG_CACHE};
+use cache::{CachedJoint, SDAG_CACHE};
 use error::Result;
 use failure::ResultExt;
 use hashbrown::HashSet;
@@ -660,6 +660,14 @@ impl LoadFromKv<String> for JointData {
 
         KV_STORE.save_joint_property(key, &self.props.read().unwrap())
     }
+
+    fn should_reclaim(&self) -> bool {
+        self.should_reclaim.load(Ordering::Relaxed)
+    }
+
+    fn set_should_reclaim(&self, should_reclaim: bool) {
+        self.should_reclaim.store(should_reclaim, Ordering::Relaxed);
+    }
 }
 
 // compare if two joint are included
@@ -730,14 +738,5 @@ impl PartialEq for JointData {
     #[inline]
     fn eq(&self, other: &Self) -> bool {
         self.unit.unit == other.unit.unit
-    }
-}
-
-impl Reclaimable for JointData {
-    fn should_reclaim(&self) -> bool {
-        self.should_reclaim.load(Ordering::Relaxed)
-    }
-    fn set_should_reclaim(&self, should_reclaim: bool) {
-        self.should_reclaim.store(should_reclaim, Ordering::Relaxed);
     }
 }

@@ -1,9 +1,10 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use cache::{CachedData, CachedJoint, Reclaimable, HashKey, JointData};
+use cache::{CachedData, CachedJoint, HashKey, JointData};
 use error::Result;
 use hashbrown::{HashMap, HashSet};
+use kv_store::LoadFromKv;
 use rcu_cell::RcuCell;
 
 //---------------------------------------------------------------------------------------
@@ -411,14 +412,13 @@ impl SDagCacheInner {
         let mut reclaimed = 0;
         let mut remaining = 0;
 
-        for (k, j) in self.normal_joints.iter() {
-            // keep the free joints in cache for frequent raw read
-            if j.is_empty() || self.free_joints.contains_key(k.0.as_ref()) {
+        for (_k, j) in self.normal_joints.iter() {
+            if j.is_empty() {
                 continue;
             }
 
             let joint = j.raw_read();
-            if joint.should_reclaim() {
+            if joint.should_reclaim() && joint.is_stable() {
                 //info!("Cache reclaiming clearing {:?}", k);
                 j.clear();
                 reclaimed += 1;

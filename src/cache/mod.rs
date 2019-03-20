@@ -17,7 +17,7 @@ use statistics;
 use validation;
 
 pub use self::{
-    cache_data::{CachedData, Reclaimable, HashKey},
+    cache_data::{CachedData, HashKey},
     joint_data::{JointData, UnitProps},
 };
 
@@ -493,6 +493,6 @@ impl SDagCache {
     }
 
     pub fn run_gc(&self) {
-        self.joints.write().unwrap().run_gc()
+        self.joints.read().unwrap().run_gc()
     }
 }
