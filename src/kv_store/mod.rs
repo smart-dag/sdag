@@ -116,35 +116,68 @@ mod kv_store_none {
 }
 
 #[cfg(not(feature = "kv_store_none"))]
-fn handle_kv_joint(joint: crate::joint::Joint) -> Result<()> {
-    use cache::SDAG_CACHE;
-    use joint::JointSequence;
-    use validation;
+mod kv_store_common {
+    extern crate crossbeam;
 
-    try_go!(move || {
-        // check content_hash or unit_hash first!
-        validation::validate_unit_hash(&joint.unit)?;
-        let cached_joint = match SDAG_CACHE.add_new_joint(joint, None) {
-            Ok(j) => j,
-            Err(e) => {
-                bail!("add_new_joint: err = {}", e);
+    use std::thread::JoinHandle;
+
+    use self::crossbeam::crossbeam_channel::{unbounded, Receiver, Sender};
+    use super::*;
+    use cache::{CachedJoint, SDAG_CACHE};
+
+    pub fn handle_kv_joint(joint: crate::joint::Joint) -> Result<()> {
+        use joint::JointSequence;
+        use validation;
+
+        try_go!(move || {
+            // check content_hash or unit_hash first!
+            validation::validate_unit_hash(&joint.unit)?;
+            let cached_joint = match SDAG_CACHE.add_new_joint(joint, None) {
+                Ok(j) => j,
+                Err(e) => {
+                    bail!("add_new_joint: err = {}", e);
+                }
+            };
+
+            let joint_data = cached_joint.read().unwrap();
+            if let Some(ref hash) = joint_data.unit.content_hash {
+                error!("unit {} content hash = {}", cached_joint.key, hash);
+                joint_data.set_sequence(JointSequence::FinalBad);
             }
-        };
 
-        let joint_data = cached_joint.read().unwrap();
-        if let Some(ref hash) = joint_data.unit.content_hash {
-            error!("unit {} content hash = {}", cached_joint.key, hash);
-            joint_data.set_sequence(JointSequence::FinalBad);
-        }
+            if joint_data.is_ready() {
+                validation::validate_ready_joint(cached_joint)?;
+            }
 
-        if joint_data.is_ready() {
-            validation::validate_ready_joint(cached_joint)?;
-        }
+            Ok(())
+        });
 
         Ok(())
-    });
+    }
 
-    Ok(())
+    pub fn create_thread_pool(size: usize) -> (Sender<CachedJoint>, Vec<JoinHandle<()>>) {
+        let (sender, receiver): (Sender<CachedJoint>, Receiver<CachedJoint>) = unbounded();
+        let mut handlers = Vec::new();
+
+        for i in 1..size + 1 {
+            let rx = receiver.clone();
+            handlers.push(std::thread::spawn(move || {
+                while let Ok(cached_joint) = rx.recv() {
+                    info!(
+                        "Thread{}: Saving cached joint with key {}",
+                        i, cached_joint.key
+                    );
+
+                    // Joint has already been purged should not be saved
+                    if let Ok(joint) = SDAG_CACHE.get_joint(&cached_joint.key) {
+                        t_c!(joint.save_to_db());
+                    }
+                }
+            }));
+        }
+
+        (sender, handlers)
+    }
 }
 
 #[cfg(all(test, not(feature = "kv_store_none")))]

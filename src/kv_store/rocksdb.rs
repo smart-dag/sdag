@@ -1,7 +1,7 @@
 extern crate crossbeam;
 extern crate rocksdb;
 
-use self::crossbeam::crossbeam_channel::{unbounded, Receiver, Sender};
+use self::crossbeam::crossbeam_channel::Sender;
 use self::rocksdb::{IteratorMode, DB};
 
 use super::*;
@@ -38,21 +38,7 @@ impl KvStore {
         let misc =
             DB::open_default(format!("{}/misc", path)).context("Failed to init misc KvStore")?;
 
-        let (sender, receiver): (Sender<CachedJoint>, Receiver<CachedJoint>) = unbounded();
-        let mut handlers = Vec::new();
-
-        for i in 1..9 {
-            let rx = receiver.clone();
-            handlers.push(std::thread::spawn(move || {
-                while let Ok(cached_joint) = rx.recv() {
-                    info!(
-                        "Thread{}: Saving cached joint with key {}",
-                        i, cached_joint.key
-                    );
-                    t_c!(cached_joint.save_to_db());
-                }
-            }));
-        }
+        let (sender, handlers) = kv_store_common::create_thread_pool(8);
 
         Ok(KvStore {
             joints,
@@ -118,7 +104,7 @@ impl KvStore {
         let mut handle_joint_count = 0;
         for (_key, value) in self.joints.iterator(IteratorMode::Start) {
             let joint: Joint = serde_json::from_slice(&value)?;
-            handle_kv_joint(joint)?;
+            kv_store_common::handle_kv_joint(joint)?;
             handle_joint_count += 1;
         }
         ::utils::wait_cond(None, || {

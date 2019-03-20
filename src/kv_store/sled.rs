@@ -1,7 +1,7 @@
 extern crate crossbeam;
 extern crate sled;
 
-use self::crossbeam::crossbeam_channel::{unbounded, Receiver, Sender};
+use self::crossbeam::crossbeam_channel::Sender;
 use self::sled::{Db, Tree};
 
 use super::*;
@@ -44,21 +44,7 @@ impl KvStore {
             .open_tree(b"misc".to_vec())
             .context("Failed to init misc KvStore")?;
 
-        let (sender, receiver): (Sender<CachedJoint>, Receiver<CachedJoint>) = unbounded();
-        let mut handlers = Vec::new();
-
-        for i in 1..9 {
-            let rx = receiver.clone();
-            handlers.push(std::thread::spawn(move || {
-                while let Ok(cached_joint) = rx.recv() {
-                    info!(
-                        "Thread{}: Saving cached joint with key {}",
-                        i, cached_joint.key
-                    );
-                    t_c!(cached_joint.save_to_db());
-                }
-            }));
-        }
+        let (sender, handlers) = kv_store_common::create_thread_pool(8);
 
         Ok(KvStore {
             joints,
@@ -135,7 +121,7 @@ impl KvStore {
         for item in self.joints.iter() {
             let (_, value) = item.unwrap();
             let joint: Joint = serde_json::from_slice(&value)?;
-            handle_kv_joint(joint)?
+            kv_store_common::handle_kv_joint(joint)?
         }
 
         if last_mci.is_valid() {
