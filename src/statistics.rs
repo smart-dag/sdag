@@ -256,7 +256,7 @@ impl FinalizeJointStats {
         }
 
         let mut w_g = self.hours_tps.write().unwrap();
-        w_g[timestamp / 3600 % 24] = increase as f32 / (timestamp - prev_hour_time) as f32;
+        w_g[(timestamp / 3600 + 1) % 24] = increase as f32 / (timestamp - prev_hour_time) as f32;
     }
 
     fn get_tps_info(&self) -> FinalizeJointTPS {

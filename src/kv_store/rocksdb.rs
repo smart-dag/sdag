@@ -131,11 +131,14 @@ impl KvStore {
             });
         }
 
+        let mut handle_joint_count = 0;
         for (_key, value) in self.joints.iterator(IteratorMode::Start) {
             let joint: Joint = serde_json::from_slice(&value)?;
-            handle_kv_joint(joint)?
+            handle_kv_joint(joint)?;
+            handle_joint_count += 1;
         }
-
+        ::utils::wait_cond(None, || handle_joint_count == SDAG_CACHE.get_num_of_normal_joints())?;
+	
         if last_mci.is_valid() {
             while !sem.wait_timeout(Duration::from_secs(1)) {
                 info!("current mci={:?}", main_chain::get_last_stable_mci());
