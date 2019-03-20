@@ -19,6 +19,7 @@ use main_chain;
 use may::coroutine;
 use may::net::TcpStream;
 use may::sync::RwLock;
+use notify_watcher;
 use rcu_cell::RcuReader;
 use sdag_object_base::object_hash;
 use serde_json::{self, Value};
@@ -375,6 +376,7 @@ impl Server<HubData> for HubData {
             "get_joint_by_unit_hash" => ws.on_get_joint_by_unit_hash(params)?,
             "get_children" => ws.on_get_children(params)?,
             "get_tps" => ws.on_get_tps(params)?,
+            "watch" => ws.on_watch(params)?,
 
             command => bail!("on_request unknown command: {}", command),
         };
@@ -855,6 +857,13 @@ impl HubConn {
             .collect::<Vec<_>>();
 
         Ok(serde_json::to_value(children)?)
+    }
+
+    fn on_watch(&self, param: Value) -> Result<Value> {
+        let watch_info: notify_watcher::WatchInfo = serde_json::from_value(param)?;
+        notify_watcher::watcher_insert(&watch_info);
+
+        Ok(Value::Null)
     }
 }
 

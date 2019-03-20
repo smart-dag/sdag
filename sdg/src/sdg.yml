@@ -164,6 +164,16 @@ subcommands:
                 takes_value: true
     - tps:
         about: Show TPS info
-
+        
+    - watch:
+        about: add watch addresses, example 'watch -w address'
+        args:
+        - watch:
+                help: list watch address
+                long: watch
+                short: w
+                required: true
+                value_name: address
+                takes_value: true
 
 
