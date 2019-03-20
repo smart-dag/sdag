@@ -10,7 +10,6 @@ use error::Result;
 use failure::ResultExt;
 use joint::{Joint, JointProperty, Level};
 use serde_json;
-use std::sync::Arc;
 use std::thread::JoinHandle;
 
 pub struct KvStore {
@@ -112,8 +111,6 @@ impl KvStore {
     }
 
     pub fn rebuild_from_kv(&self) -> Result<()> {
-        use main_chain::{self, MciStableEvent};
-        use may::sync::Semphore;
         use std::time::Duration;
         use utils::event::Event;
 
@@ -124,7 +121,9 @@ impl KvStore {
             handle_kv_joint(joint)?;
             handle_joint_count += 1;
         }
-        ::utils::wait_cond(None, || handle_joint_count == SDAG_CACHE.get_num_of_normal_joints())?;
+        ::utils::wait_cond(None, || {
+            handle_joint_count == SDAG_CACHE.get_num_of_normal_joints()
+        })?;
 
         info!("Rebuild from KV done!");
         IS_REBUILDING_FROM_KV.store(false, Ordering::Relaxed);
