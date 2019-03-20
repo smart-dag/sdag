@@ -168,10 +168,7 @@ mod kv_store_common {
                         i, cached_joint.key
                     );
 
-                    // Joint has already been purged should not be saved
-                    if let Ok(joint) = SDAG_CACHE.get_joint(&cached_joint.key) {
-                        t_c!(joint.save_to_db());
-                    }
+                    t_c!(cached_joint.save_to_db());
                 }
             }));
         }
