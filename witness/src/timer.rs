@@ -63,7 +63,7 @@ pub fn start_global_timers() {
     // Run cache gc
     if !cfg!(feature = "kv_store_none") {
         go!(move || loop {
-            coroutine::sleep(Duration::from_secs(300));
+            coroutine::sleep(Duration::from_secs(60));
             sdag::cache::SDAG_CACHE.run_gc();
         });
     }
