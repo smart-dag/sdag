@@ -118,29 +118,13 @@ impl KvStore {
         use utils::event::Event;
 
         info!("Rebuild from KV start!");
-
-        let last_mci = self.read_last_mci().unwrap_or(Level::INVALID);
-
-        let sem = Arc::new(Semphore::new(0));
-        if last_mci.is_valid() {
-            let post_sem = sem.clone();
-            MciStableEvent::add_handler(move |v| {
-                if v.mci == last_mci {
-                    post_sem.post();
-                }
-            });
-        }
-
+        let mut handle_joint_count = 0;
         for (_key, value) in self.joints.iterator(IteratorMode::Start) {
             let joint: Joint = serde_json::from_slice(&value)?;
-            handle_kv_joint(joint)?
+            handle_kv_joint(joint)?;
+            handle_joint_count += 1;
         }
-
-        if last_mci.is_valid() {
-            while !sem.wait_timeout(Duration::from_secs(1)) {
-                info!("current mci={:?}", main_chain::get_last_stable_mci());
-            }
-        }
+        ::utils::wait_cond(None, || handle_joint_count == SDAG_CACHE.get_num_of_normal_joints())?;
 
         info!("Rebuild from KV done!");
         IS_REBUILDING_FROM_KV.store(false, Ordering::Relaxed);
