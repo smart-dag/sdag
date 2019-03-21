@@ -751,24 +751,25 @@ fn validate_message_format(msg: &Message) -> Result<()> {
 
 fn validate_unstable_joint_serial(joint: CachedJoint) -> Result<JointSequence> {
     let joint_data = joint.read()?;
-    let addr = joint_data.unit.authors[0].address.clone();
+    let addr = &joint_data.unit.authors[0].address;
+
     if let Some(unit) = BUSINESS_CACHE
         .global_state
-        .get_last_unstable_self_joint(&addr)
+        .get_last_unstable_self_joint(addr)
     {
         let last_unstable_joint = SDAG_CACHE.get_joint(&unit)?.read()?;
-        if last_unstable_joint <= joint_data {
-            BUSINESS_CACHE
-                .global_state
-                .update_last_unstable_self_joint(&addr, &unit);
-            return Ok(JointSequence::Good);
-        } else {
+        let is_include = last_unstable_joint <= joint_data;
+        if !is_include {
             warn!(
                 "joint [{}] detect non serial with unit [{}]",
-                joint_data.unit.unit, last_unstable_joint.unit.unit
+                joint_data.unit.unit, unit
             );
             return Ok(JointSequence::NonserialBad);
         }
     }
+    BUSINESS_CACHE
+        .global_state
+        .update_last_unstable_self_joint(addr, &joint_data.unit.unit);
+
     Ok(JointSequence::Good)
 }

@@ -111,9 +111,6 @@ impl KvStore {
     }
 
     pub fn rebuild_from_kv(&self) -> Result<()> {
-        use std::time::Duration;
-        use utils::event::Event;
-
         info!("Rebuild from KV start!");
         let mut handle_joint_count = 0;
         for (_key, value) in self.joints.iterator(IteratorMode::Start) {
@@ -157,15 +154,6 @@ impl KvStore {
     pub fn save_last_mci(&self, mci: Level) -> Result<()> {
         self.misc.put(b"last_mci", &serde_json::to_vec(&mci)?)?;
         Ok(())
-    }
-
-    fn read_last_mci(&self) -> Result<Level> {
-        let v = self
-            .misc
-            .get(b"last_mci")?
-            .ok_or_else(|| format_err!("read last mci from kv failed"))?;
-
-        Ok(serde_json::from_slice(&v)?)
     }
 
     pub fn save_cache_async(&self, data: CachedJoint) -> Result<()> {
