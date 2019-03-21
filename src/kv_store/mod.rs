@@ -21,7 +21,7 @@ lazy_static! {
     pub static ref KV_STORE: KvStore = KvStore::default();
 
     // avoid overwriting when rebuilding everything from kv
-    static ref IS_REBUILDING_FROM_KV: AtomicBool = AtomicBool::new(true);
+    static ref IS_REBUILDING_FROM_KV: AtomicBool = AtomicBool::new(false);
 }
 
 pub fn is_rebuilding_from_kv() -> bool {
@@ -182,6 +182,7 @@ mod tests {
     use super::*;
     use joint::{Joint, JointProperty};
     use serde_json;
+    use cache::CachedJoint;
 
     #[test]
     fn kv_store_joint_test() -> Result<()> {
@@ -292,6 +293,19 @@ mod tests {
         KV_STORE.delete_joint_property(&key)?;
 
         assert_eq!(KV_STORE.read_joint_property(&key).is_err(), true);
+
+        Ok(())
+    }
+
+    #[test]
+    fn kv_store_save_empty_joint_test() -> Result<()> {
+        use cache::CachedData;
+        use std::sync::Arc;
+
+        let key = Arc::new(::std::string::String::from("MHBF65OZbRHOEVyicHo7DUfUjxt41ILtQ7f7QAwBPGc="));
+        let joint: CachedJoint = CachedData::empty(key);
+
+        assert!(joint.save_to_db().is_err());
 
         Ok(())
     }

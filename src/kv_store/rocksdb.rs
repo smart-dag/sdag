@@ -97,10 +97,9 @@ impl KvStore {
     }
 
     pub fn rebuild_from_kv(&self) -> Result<()> {
-        use std::time::Duration;
-        use utils::event::Event;
-
         info!("Rebuild from KV start!");
+        IS_REBUILDING_FROM_KV.store(true, Ordering::Release);
+
         let mut handle_joint_count = 0;
         for (_key, value) in self.joints.iterator(IteratorMode::Start) {
             let joint: Joint = serde_json::from_slice(&value)?;
@@ -117,15 +116,13 @@ impl KvStore {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn save_unstable_joints(&self) -> Result<()> {
         let joints = SDAG_CACHE.get_unstable_joints()?;
 
         for joint in joints {
             joint.save_to_db()?;
         }
-
-        // FIXME: now rebuild everything, will redesign the restore process later
-        self.save_last_mci(::main_chain::get_last_stable_mci())?;
 
         Ok(())
     }
@@ -140,11 +137,13 @@ impl KvStore {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn save_last_mci(&self, mci: Level) -> Result<()> {
         self.misc.put(b"last_mci", &serde_json::to_vec(&mci)?)?;
         Ok(())
     }
 
+    #[allow(dead_code)]
     fn read_last_mci(&self) -> Result<Level> {
         let v = self
             .misc
