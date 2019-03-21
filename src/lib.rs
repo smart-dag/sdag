@@ -102,7 +102,6 @@ pub mod main_chain;
 pub mod my_witness;
 pub mod network;
 pub mod paid_witnessing;
-pub mod serial_check;
 pub mod signature;
 pub mod spec;
 pub mod statistics;

@@ -150,8 +150,11 @@ pub struct GlobalState {
     // HashMap<Address, UnitHash>
     last_stable_self_joint: RwLock<HashMap<String, String>>,
 
-    // HahsMap<Address, output_unit_hash>
+    // HashMap<Address, output_unit_hash>
     related_joints: RwLock<HashMap<String, Vec<String>>>,
+
+    // HashMap<Address, unit_hash>
+    last_unstable_self_joint: RwLock<HashMap<String, String>>,
 }
 
 impl GlobalState {
@@ -202,7 +205,7 @@ impl GlobalState {
         }
     }
 
-    /// get <to_addr, unit_has> from outputs, then update related_joints[to_addr]
+    /// get <to_addr, unit_hash> from outputs, then update related_joints[to_addr]
     fn update_related_joints(&self, joint: &JointData) {
         let address = if joint.unit.authors.len() > 1 {
             "multi_address" // never match
@@ -261,6 +264,39 @@ impl GlobalState {
         }
 
         Ok(balance)
+    }
+
+    /// get last unstable self joint
+    pub fn get_last_unstable_self_joint(&self, address: &str) -> Option<String> {
+        self.last_unstable_self_joint
+            .read()
+            .unwrap()
+            .get(address)
+            .cloned()
+    }
+
+    /// update or insert last unstable self joint
+    pub fn update_last_unstable_self_joint(&self, address: &str, unit: &str) {
+        self.last_unstable_self_joint
+            .write()
+            .unwrap()
+            .entry(address.to_string())
+            .and_modify(|v| *v = unit.to_string())
+            .or_insert_with(|| unit.to_string());
+    }
+
+    /// if my last unstable joint has been stable, remove the record from hashmap
+    pub fn remove_last_unstable_self_joint(&self, address: &str, unit: &str) {
+        let last_unit = match self.get_last_unstable_self_joint(address) {
+            Some(unit) => unit.clone(),
+            None => return,
+        };
+        if last_unit == unit {
+            self.last_unstable_self_joint
+                .write()
+                .unwrap()
+                .remove(address);
+        }
     }
 
     /// rebuild from database
@@ -714,9 +750,25 @@ fn validate_message_format(msg: &Message) -> Result<()> {
 }
 
 fn validate_unstable_joint_serial(joint: CachedJoint) -> Result<JointSequence> {
-    if ::serial_check::is_unstable_joint_non_serial(joint)? {
-        return Ok(JointSequence::NonserialBad);
+    let joint_data = joint.read()?;
+    let addr = joint_data.unit.authors[0].address.clone();
+    if let Some(unit) = BUSINESS_CACHE
+        .global_state
+        .get_last_unstable_self_joint(&addr)
+    {
+        let last_unstable_joint = SDAG_CACHE.get_joint(&unit)?.read()?;
+        if last_unstable_joint <= joint_data {
+            BUSINESS_CACHE
+                .global_state
+                .update_last_unstable_self_joint(&addr, &unit);
+            return Ok(JointSequence::Good);
+        } else {
+            warn!(
+                "joint [{}] detect non serial with unit [{}]",
+                joint_data.unit.unit, last_unstable_joint.unit.unit
+            );
+            return Ok(JointSequence::NonserialBad);
+        }
     }
-
     Ok(JointSequence::Good)
 }
