@@ -55,7 +55,7 @@ Finished dev [unoptimized + debuginfo] target(s) in 0.20s
 之后，进入你就可以使用sdg了。
 
 
-###　如何使用　sdg
+### 如何使用sdg
 
 > sdg　是命令行的钱包。
 
@@ -126,7 +126,7 @@ sdg$ cargo run info -j
 * 转账
 
 > 7E5V7WKXWC4ZELYSRYSA3UO6K53SELYC 是对方地址 ； 
-10 是转账金额，单位是dag ；
+10 是转账金额，单位是sdg；
 hello 是上链信息。
 
 ```
