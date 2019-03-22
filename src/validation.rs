@@ -100,7 +100,7 @@ fn normal_validate(cached_joint: CachedJoint) -> Result<()> {
         // validate_ball(joint)?;
     }
 
-    validate_witnesses(&joint).context("validate witnesses failed")?;
+    validate_witnesses(&joint)?;
 
     if !joint.skiplist_units.is_empty() {
         validate_skip_list(&joint.skiplist_units)?;

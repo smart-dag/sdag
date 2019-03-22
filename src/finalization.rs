@@ -73,6 +73,13 @@ fn finalize_joint(cached_joint: CachedJoint) -> Result<()> {
         ::main_chain::set_last_stable_joint(joint_data.clone());
     }
 
+    ::business::BUSINESS_CACHE
+        .global_state
+        .remove_last_unstable_self_joint(
+            &joint_data.unit.authors[0].address,
+            &joint_data.unit.unit,
+        );
+
     cached_joint.save_to_db_async()?;
 
     Ok(())

@@ -1,12 +1,9 @@
-use std::collections::VecDeque;
-
-use cache::{CachedJoint, JointData, SDAG_CACHE};
+use cache::{CachedJoint, SDAG_CACHE};
 use config;
 use error::Result;
-use hashbrown::{HashMap, HashSet};
-use joint::{Joint, JointSequence, Level};
+use hashbrown::HashMap;
+use joint::{Joint, Level};
 use light::*;
-use rcu_cell::RcuReader;
 use sdag_object_base::object_hash;
 use serde_json::Value;
 use signature::Signer;
@@ -143,54 +140,22 @@ fn get_include_self_free_joint(
     address: &str,
     last_ball_level: Level,
 ) -> Result<Option<String>> {
-    if let Some(joint) = get_last_my_unstable_joint(free_joints, address)? {
+    if let Some(unit) = ::business::BUSINESS_CACHE
+        .global_state
+        .get_last_unstable_self_joint(address)
+    {
+        let joint_data = SDAG_CACHE.get_joint(&unit)?.read()?;
         for free in free_joints {
             let free_joint = free.read()?;
             let last_ball = free_joint.get_last_ball_joint()?;
             if last_ball.get_level() <= last_ball_level {
-                let is_include = joint <= free_joint;
+                let is_include = joint_data <= free_joint;
                 if is_include {
                     return Ok(Some(free_joint.unit.unit.clone()));
                 }
             }
         }
         bail!("no free joints which include my last unstable joint and last ball joint is ancestor of picked last ball");
-    }
-
-    Ok(None)
-}
-
-/// get last my joint from unstable joints
-/// we need to detect the good one
-fn get_last_my_unstable_joint(
-    free_joints: &[CachedJoint],
-    address: &str,
-) -> Result<Option<RcuReader<JointData>>> {
-    // must use wide search to find the latest one
-    let mut joints = VecDeque::new();
-    let mut visited = HashSet::new();
-    for joint in free_joints {
-        if visited.insert(joint.key.clone()) {
-            joints.push_back(joint.read()?);
-        }
-    }
-
-    while let Some(joint) = joints.pop_front() {
-        if joint.is_stable() {
-            continue;
-        }
-
-        for author in &joint.unit.authors {
-            if author.address == address && joint.get_sequence() == JointSequence::Good {
-                return Ok(Some(joint.clone()));
-            }
-        }
-
-        for p in joint.parents.iter() {
-            if visited.insert(p.key.clone()) {
-                joints.push_back(p.read()?);
-            }
-        }
     }
 
     Ok(None)
