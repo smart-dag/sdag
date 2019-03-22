@@ -1,7 +1,7 @@
 extern crate crossbeam;
 extern crate sled;
 
-use self::crossbeam::crossbeam_channel::{unbounded, Receiver, Sender};
+use self::crossbeam::crossbeam_channel::Sender;
 use self::sled::{Db, Tree};
 
 use super::*;
@@ -44,21 +44,7 @@ impl KvStore {
             .open_tree(b"misc".to_vec())
             .context("Failed to init misc KvStore")?;
 
-        let (sender, receiver): (Sender<CachedJoint>, Receiver<CachedJoint>) = unbounded();
-        let mut handlers = Vec::new();
-
-        for i in 1..9 {
-            let rx = receiver.clone();
-            handlers.push(std::thread::spawn(move || {
-                while let Ok(cached_joint) = rx.recv() {
-                    info!(
-                        "Thread{}: Saving cached joint with key {}",
-                        i, cached_joint.key
-                    );
-                    t_c!(cached_joint.save_to_db());
-                }
-            }));
-        }
+        let (sender, handlers) = kv_store_common::create_thread_pool(8);
 
         Ok(KvStore {
             joints,
@@ -114,35 +100,19 @@ impl KvStore {
     }
 
     pub fn rebuild_from_kv(&self) -> Result<()> {
-        use main_chain::{self, MciStableEvent};
-        use may::sync::Semphore;
-        use std::time::Duration;
-        use utils::event::Event;
-
         info!("Rebuild from KV start!");
-        let last_mci = self.read_last_mci().unwrap_or(Level::INVALID);
+        IS_REBUILDING_FROM_KV.store(true, Ordering::Release);
 
-        let sem = Arc::new(Semphore::new(0));
-        if last_mci.is_valid() {
-            let post_sem = sem.clone();
-            MciStableEvent::add_handler(move |v| {
-                if v.mci == last_mci {
-                    post_sem.post();
-                }
-            });
-        }
-
+        let mut handle_joint_count = 0;
         for item in self.joints.iter() {
             let (_, value) = item.unwrap();
             let joint: Joint = serde_json::from_slice(&value)?;
-            handle_kv_joint(joint)?
+            kv_store_common::handle_kv_joint(joint)?;
+            handle_joint_count += 1;
         }
-
-        if last_mci.is_valid() {
-            while !sem.wait_timeout(Duration::from_secs(1)) {
-                info!("current mci={:?}", main_chain::get_last_stable_mci());
-            }
-        }
+        ::utils::wait_cond(None, || {
+            handle_joint_count == SDAG_CACHE.get_num_of_normal_joints()
+        })?;
 
         info!("Rebuild from KV done!");
         IS_REBUILDING_FROM_KV.store(false, Ordering::Release);
@@ -150,15 +120,13 @@ impl KvStore {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn save_unstable_joints(&self) -> Result<()> {
         let joints = SDAG_CACHE.get_unstable_joints()?;
 
         for joint in joints {
             joint.save_to_db()?;
         }
-
-        // FIXME: now rebuild everything, will redesign the restore process later
-        self.save_last_mci(::main_chain::get_last_stable_mci())?;
 
         Ok(())
     }
@@ -173,11 +141,13 @@ impl KvStore {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn save_last_mci(&self, mci: Level) -> Result<()> {
         self.misc.set(b"last_mci", serde_json::to_vec(&mci)?)?;
         Ok(())
     }
 
+    #[allow(dead_code)]
     fn read_last_mci(&self) -> Result<Level> {
         let v = self
             .misc

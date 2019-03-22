@@ -1,7 +1,7 @@
 extern crate crossbeam;
 extern crate rocksdb;
 
-use self::crossbeam::crossbeam_channel::{unbounded, Receiver, Sender};
+use self::crossbeam::crossbeam_channel::Sender;
 use self::rocksdb::{IteratorMode, DB};
 
 use super::*;
@@ -38,21 +38,7 @@ impl KvStore {
         let misc =
             DB::open_default(format!("{}/misc", path)).context("Failed to init misc KvStore")?;
 
-        let (sender, receiver): (Sender<CachedJoint>, Receiver<CachedJoint>) = unbounded();
-        let mut handlers = Vec::new();
-
-        for i in 1..9 {
-            let rx = receiver.clone();
-            handlers.push(std::thread::spawn(move || {
-                while let Ok(cached_joint) = rx.recv() {
-                    info!(
-                        "Thread{}: Saving cached joint with key {}",
-                        i, cached_joint.key
-                    );
-                    t_c!(cached_joint.save_to_db());
-                }
-            }));
-        }
+        let (sender, handlers) = kv_store_common::create_thread_pool(8);
 
         Ok(KvStore {
             joints,
@@ -111,14 +97,13 @@ impl KvStore {
     }
 
     pub fn rebuild_from_kv(&self) -> Result<()> {
-        use std::time::Duration;
-        use utils::event::Event;
-
         info!("Rebuild from KV start!");
+        IS_REBUILDING_FROM_KV.store(true, Ordering::Release);
+
         let mut handle_joint_count = 0;
         for (_key, value) in self.joints.iterator(IteratorMode::Start) {
             let joint: Joint = serde_json::from_slice(&value)?;
-            handle_kv_joint(joint)?;
+            kv_store_common::handle_kv_joint(joint)?;
             handle_joint_count += 1;
         }
         ::utils::wait_cond(None, || {
@@ -131,15 +116,13 @@ impl KvStore {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn save_unstable_joints(&self) -> Result<()> {
         let joints = SDAG_CACHE.get_unstable_joints()?;
 
         for joint in joints {
             joint.save_to_db()?;
         }
-
-        // FIXME: now rebuild everything, will redesign the restore process later
-        self.save_last_mci(::main_chain::get_last_stable_mci())?;
 
         Ok(())
     }
@@ -154,11 +137,13 @@ impl KvStore {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn save_last_mci(&self, mci: Level) -> Result<()> {
         self.misc.put(b"last_mci", &serde_json::to_vec(&mci)?)?;
         Ok(())
     }
 
+    #[allow(dead_code)]
     fn read_last_mci(&self) -> Result<Level> {
         let v = self
             .misc

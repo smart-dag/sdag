@@ -653,9 +653,5 @@ pub fn set_last_stable_joint(joint: RcuReader<JointData>) {
         }
     };
 
-    if ::kv_store::KV_STORE.save_last_mci(joint.get_mci()).is_err() {
-        error!("Save last mci to kv failed");
-    }
-
     g.update(Some(joint));
 }

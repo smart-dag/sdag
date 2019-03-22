@@ -319,14 +319,17 @@ impl SDagCacheInner {
         while let Some(ref joint) = stack.pop() {
             warn!("purge temp-bad free unit = {}", joint);
             self.free_joints.remove(joint);
-            let joint = self
+            let cached_joint = self
                 .normal_joints
-                .get(joint)
-                .expect("purge_free_joint not found")
-                .raw_read();
+                .remove(joint)
+                .expect("purge_free_joint not found");
+
+            let joint = cached_joint.raw_read();
+
+            // Clear it to avoid future save or read
+            cached_joint.clear();
 
             let unit = &joint.unit.unit;
-            self.normal_joints.remove(unit);
 
             //FIXME: should it conform with cache_data api?
             let _ = joint.delete_from_kv(&joint.unit.unit);
