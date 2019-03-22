@@ -180,9 +180,9 @@ mod kv_store_common {
 #[cfg(all(test, not(feature = "kv_store_none")))]
 mod tests {
     use super::*;
+    use cache::CachedJoint;
     use joint::{Joint, JointProperty};
     use serde_json;
-    use cache::CachedJoint;
 
     #[test]
     fn kv_store_joint_test() -> Result<()> {
@@ -302,7 +302,9 @@ mod tests {
         use cache::CachedData;
         use std::sync::Arc;
 
-        let key = Arc::new(::std::string::String::from("MHBF65OZbRHOEVyicHo7DUfUjxt41ILtQ7f7QAwBPGc="));
+        let key = Arc::new(::std::string::String::from(
+            "MHBF65OZbRHOEVyicHo7DUfUjxt41ILtQ7f7QAwBPGc=",
+        ));
         let joint: CachedJoint = CachedData::empty(key);
 
         assert!(joint.save_to_db().is_err());

@@ -67,7 +67,7 @@ impl KvStore {
             return Ok(serde_json::from_slice(&value)?);
         }
 
-        bail!("joint property {} not exist in KV", key)
+        bail!("joint children {} not exist in KV", key)
     }
 
     pub fn read_joint_property(&self, key: &str) -> Result<JointProperty> {

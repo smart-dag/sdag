@@ -649,7 +649,7 @@ impl LoadFromKv<String> for JointData {
         for parent in self.parents.iter() {
             let parent = parent.read()?;
             KV_STORE.save_joint_children(
-                key,
+                &parent.unit.unit,
                 parent
                     .children
                     .iter()
