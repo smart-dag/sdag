@@ -10,7 +10,7 @@ use joint::{Joint, JointProperty, JointSequence, Level};
 use kv_store::{LoadFromKv, KV_STORE};
 use may::sync::{RwLock, SyncFlag};
 use rcu_cell::RcuReader;
-use utils::{AppendList, AppendListExt};
+use utils::{AppendList, AppendListExt, Once};
 
 //---------------------------------------------------------------------------------------
 // UnitProps
@@ -144,6 +144,7 @@ pub struct JointData {
     is_post: AtomicBool,
     props: RwLock<JointProperty>,
     should_reclaim: AtomicBool,
+    max_stable_unit: Once<CachedJoint>,
 }
 
 // impl the property access
@@ -571,6 +572,7 @@ impl JointData {
     pub fn from_joint(joint: Joint, peer_id: Option<Arc<String>>) -> Self {
         JointData {
             joint,
+            peer_id,
             parents: Default::default(),
             best_parent: Default::default(),
             children: Default::default(),
@@ -578,10 +580,10 @@ impl JointData {
             valid_parent_num: Default::default(),
             create_time: crate::time::now(),
             unhandled_refs: Default::default(),
-            stable_flag: SyncFlag::new(),
-            peer_id,
+            stable_flag: Default::default(),
             is_post: Default::default(),
-            should_reclaim: AtomicBool::new(false),
+            should_reclaim: Default::default(),
+            max_stable_unit: Default::default(),
         }
     }
 }
@@ -638,6 +640,7 @@ impl LoadFromKv<String> for JointData {
             is_post: Default::default(),
             peer_id: None,
             should_reclaim: AtomicBool::new(false),
+            max_stable_unit: Once::default(),
         })
     }
 

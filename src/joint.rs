@@ -144,6 +144,7 @@ impl JointSequence {
 
 //---------------------------------------------------------------------------------------
 // JointProperty
+// TODO: some property only init once, use OnceOption instead
 //---------------------------------------------------------------------------------------
 #[derive(Debug, Serialize, Deserialize)]
 pub struct JointProperty {

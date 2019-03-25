@@ -28,6 +28,16 @@ impl<T> OnceOption<T> {
 
     /// get the data, if it's not initialized, return None
     pub fn get(&self) -> Option<&T> {
+        // fast check path
+        if self.b_init.load(Ordering::Relaxed) {
+            let ret = self.data.as_ref();
+            if ret.is_none() {
+                panic!("there is no data set while getting data");
+            }
+            return ret;
+        }
+
+        // check again with strict ordering
         if self.b_init.load(Ordering::Acquire) {
             let ret = self.data.as_ref();
             if ret.is_none() {
