@@ -28,15 +28,15 @@ struct Watcher {
 }
 
 impl Watcher {
-    fn insert(&self, watch_info: &WatchInfo) {
-        if watch_info.self_address.is_empty() || watch_info.watch_address.is_empty() {
+    fn insert(&self, self_address: &str, watch_addresses: &[String]) {
+        if self_address.is_empty() || watch_addresses.is_empty() {
             return;
         }
-        if !object_hash::is_chash_valid(&watch_info.self_address) {
+        if !object_hash::is_chash_valid(self_address) {
             return;
         }
 
-        for watch in watch_info.watch_address.iter() {
+        for watch in watch_addresses.iter() {
             if !object_hash::is_chash_valid(watch) {
                 continue;
             }
@@ -44,8 +44,8 @@ impl Watcher {
             let mut new_watch = HashSet::new();
             let mut w_g = self.watchers.write().unwrap();
             match w_g.get_mut(watch) {
-                Some(v) => v.insert(watch_info.self_address.to_string()),
-                None => new_watch.insert(watch_info.self_address.to_string()),
+                Some(v) => v.insert(self_address.to_string()),
+                None => new_watch.insert(self_address.to_string()),
             };
 
             if !new_watch.is_empty() {
@@ -78,14 +78,8 @@ impl Watcher {
     }
 }
 
-pub fn watcher_insert(watch_info: &WatchInfo) {
-    WATCHERS.insert(watch_info);
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct WatchInfo {
-    pub self_address: String,
-    pub watch_address: Vec<String>,
+pub fn watcher_insert(self_address: &str, watch_addresses: &[String]) {
+    WATCHERS.insert(self_address, watch_addresses);
 }
 
 /// network interface struct

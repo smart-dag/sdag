@@ -871,8 +871,8 @@ impl HubConn {
     }
 
     fn on_watch(&self, param: Value) -> Result<Value> {
-        let watch_info: notify_watcher::WatchInfo = serde_json::from_value(param)?;
-        notify_watcher::watcher_insert(&watch_info);
+        let watch_addresses: Vec<String> = serde_json::from_value(param)?;
+        notify_watcher::watcher_insert(&self.get_peer_id(), &watch_addresses);
 
         Ok(Value::Null)
     }

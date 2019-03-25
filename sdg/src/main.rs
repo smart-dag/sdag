@@ -588,7 +588,7 @@ fn main() -> Result<()> {
                 .iter()
                 .map(|v| v.to_string())
                 .collect::<Vec<String>>();
-            ws.add_watcher(&wallet_info._00_address, &addr)?;
+            ws.add_watcher(&addr)?;
         }
 
         return Ok(());

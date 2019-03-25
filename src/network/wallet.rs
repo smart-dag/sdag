@@ -248,12 +248,8 @@ impl WalletConn {
         Ok(serde_json::from_value(witnesses)?)
     }
 
-    pub fn add_watcher(&self, self_address: &str, watch_address: &[String]) -> Result<()> {
-        let watch_info = ::notify_watcher::WatchInfo {
-            self_address: self_address.to_string(),
-            watch_address: watch_address.to_owned(),
-        };
-        self.send_request("watch", &serde_json::to_value(watch_info)?)?;
+    pub fn add_watcher(&self, watch_address: &[String]) -> Result<()> {
+        self.send_request("watch", &serde_json::to_value(watch_address.to_owned())?)?;
 
         Ok(())
     }
