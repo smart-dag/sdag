@@ -412,8 +412,29 @@ impl JointData {
         self.is_post.store(is_post, Ordering::Relaxed);
     }
 
+    // detect if the joint is posted from client or forward from hub
     pub fn is_post(&self) -> bool {
         self.is_post.load(Ordering::Relaxed)
+    }
+
+    // get the max stabel unit, calc if necessary
+    pub fn get_max_stable_unit(&self) -> Result<RcuReader<JointData>> {
+        if self.is_min_wl_increased() {
+            if !self.max_stable_unit.is_completed() {
+                let joint = SDAG_CACHE.get_joint(&self.unit.unit)?.read()?;
+                self.max_stable_unit.call_once(move || {
+                    ::main_chain::calc_max_stable_unit(joint)
+                        .expect("failed to calc the max stable unit")
+                });
+            }
+
+            return Ok(self.max_stable_unit.get().read()?.clone());
+        }
+
+        bail!(
+            "only min_wl increased unit has max_stable_unit, unit={}",
+            self.unit.unit
+        );
     }
 }
 

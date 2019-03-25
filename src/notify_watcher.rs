@@ -155,7 +155,7 @@ fn get_notify_message(unit: &Unit) -> NotifyMessage {
         from: first_author.to_string(),
         to_msg: Vec::new(),
         text: String::new(),
-        time: unit.timestamp.unwrap_or(::time::now()),
+        time: unit.timestamp.unwrap_or_else(::time::now),
         unit: unit.unit.to_string(),
     };
 
