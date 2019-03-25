@@ -12,6 +12,7 @@ extern crate serde_json;
 extern crate serde_derive;
 
 extern crate hashbrown;
+extern crate lru_cache;
 extern crate may_waiter;
 extern crate rcu_cell;
 extern crate sdag_object_base;
