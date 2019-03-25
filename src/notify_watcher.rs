@@ -1,8 +1,20 @@
 use std::collections::HashSet;
-use std::sync::RwLock;
+use std::sync::{Arc, RwLock};
 
+use cache::JointData;
 use hashbrown::HashMap;
+use rcu_cell::RcuReader;
 use sdag_object_base::object_hash;
+use spec::{Payload, Unit};
+
+//---------------------------------------------------------------------------------------
+// NotifyEvent
+//---------------------------------------------------------------------------------------
+pub struct NotifyEvent {
+    pub joint: RcuReader<JointData>,
+}
+
+impl_event!(NotifyEvent);
 
 lazy_static! {
     // stored watchers info
@@ -78,4 +90,122 @@ pub fn get_watchers(watch_address: &str) -> Option<HashSet<String>> {
 pub struct WatchInfo {
     pub self_address: String,
     pub watch_address: Vec<String>,
+}
+
+/// network interface struct
+/// include all messages, except changes
+#[derive(Default, Serialize, Deserialize, Clone)]
+struct NotifyMessage {
+    from: String,
+    to_msg: Vec<(String, u64)>, // 0 is address, 1 is amount
+    text: String,
+    time: u64,
+    unit: String,
+}
+
+/// notify messages to watchers
+/// - 1) authors: send all messages, just send message to watchers which watch first author;
+/// - 2) output: send output[index], text;
+pub fn notify_watchers(joint: RcuReader<JointData>) {
+    let unit = &joint.unit;
+    let first_author = &unit.authors[0].address;
+    let output_addresses = get_output_addresses(unit);
+
+    let mut is_watched = false;
+    if WATCHERS.get(first_author).is_none() {
+        for addr in &output_addresses {
+            if WATCHERS.get(addr).is_some() {
+                is_watched = true;
+                break;
+            }
+        }
+        if !is_watched {
+            return;
+        }
+    }
+
+    let notify_message = get_notify_message(unit);
+
+    if let Some(dst_address) = WATCHERS.get(first_author) {
+        let msg_value = serde_json::to_value(notify_message.clone()).unwrap();
+        for addr in &dst_address {
+            if let Ok(false) =
+                ::network::hub::WSS.notify_watcher(Arc::new(addr.to_string()), msg_value.clone())
+            {
+                WATCHERS.remove(first_author, addr);
+            }
+        }
+    }
+
+    // watch output address
+    for addr in &output_addresses {
+        if let Some(dst_addr) = WATCHERS.get(addr) {
+            let mut new_msg = notify_message.clone();
+            for i in 0..new_msg.to_msg.len() {
+                if &new_msg.to_msg[i].0 != addr {
+                    new_msg.to_msg.remove(i);
+                }
+            }
+            let new_msg_value = serde_json::to_value(new_msg).unwrap();
+
+            for dst in dst_addr {
+                if let Ok(false) = ::network::hub::WSS
+                    .notify_watcher(Arc::new(dst.to_string()), new_msg_value.clone())
+                {
+                    WATCHERS.remove(first_author, addr);
+                }
+            }
+        }
+    }
+}
+
+fn get_notify_message(unit: &Unit) -> NotifyMessage {
+    let first_author = &unit.authors[0].address;
+    let mut notify_message = NotifyMessage {
+        from: first_author.to_string(),
+        to_msg: Vec::new(),
+        text: String::new(),
+        time: unit.timestamp.unwrap_or(::time::now()),
+        unit: unit.unit.to_string(),
+    };
+
+    for msg in &unit.messages {
+        match msg.payload {
+            Some(Payload::Payment(ref payment)) => {
+                for output in &payment.outputs {
+                    // except changes
+                    if &output.address == first_author {
+                        continue;
+                    }
+                    notify_message
+                        .to_msg
+                        .push((output.address.clone(), output.amount.clone()));
+                }
+            }
+            Some(Payload::Text(ref txt)) => {
+                notify_message.text = txt.to_string();
+            }
+            _ => {
+                warn!("not support payload type");
+            }
+        }
+    }
+    notify_message
+}
+
+/// get distinct output addresses, except changes
+fn get_output_addresses(unit: &Unit) -> HashSet<String> {
+    let mut output_addresses = HashSet::new();
+    for msg in &unit.messages {
+        if let Some(Payload::Payment(ref payment)) = msg.payload {
+            for output in &payment.outputs {
+                if &output.address == &unit.authors[0].address {
+                    continue;
+                }
+                output_addresses.insert(output.address.clone());
+            }
+        }
+    }
+
+    output_addresses
 }

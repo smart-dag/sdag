@@ -3,6 +3,7 @@ use error::Result;
 use joint::JointSequence;
 use may::coroutine::JoinHandle;
 use may::sync::mpsc;
+use notify_watcher::NotifyEvent;
 use statistics::final_joints_increase;
 
 lazy_static! {
@@ -79,6 +80,10 @@ fn finalize_joint(cached_joint: CachedJoint) -> Result<()> {
             &joint_data.unit.authors[0].address,
             &joint_data.unit.unit,
         );
+
+    ::utils::event::emit_event(NotifyEvent {
+        joint: joint_data.clone(),
+    });
 
     cached_joint.save_to_db_async()?;
 

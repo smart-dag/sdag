@@ -174,6 +174,17 @@ impl WsConnections {
         }
     }
 
+    /// notify message to watcher
+    pub fn notify_watcher(&self, peer_id: Arc<String>, message: Value) -> Result<bool> {
+        match self.get_connection(peer_id) {
+            Some(conn) => {
+                try_go!(move || conn.send_notify(&message));
+                Ok(true)
+            }
+            None => Ok(false),
+        }
+    }
+
     fn broadcast_free_joint_list(&self, free_units: &[String]) {
         // disable broadcast during catchup
         let _g = match IS_CATCHING_UP.try_lock() {
@@ -1029,6 +1040,11 @@ impl HubConn {
 
     fn send_free_joint_list(&self, free_units: &[String]) -> Result<()> {
         self.send_just_saying("free_joint_list", serde_json::to_value(free_units)?)
+    }
+
+    /// send notify message to watcher
+    fn send_notify(&self, value: &Value) -> Result<()> {
+        self.send_just_saying("notify", value.to_owned())
     }
 
     /// send stable joints to trigger peer catchup
