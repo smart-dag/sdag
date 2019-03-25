@@ -32,6 +32,10 @@ impl Watcher {
         if watch_info.self_address.is_empty() || watch_info.watch_address.is_empty() {
             return;
         }
+        if !object_hash::is_chash_valid(&watch_info.self_address) {
+            return;
+        }
+
         for watch in watch_info.watch_address.iter() {
             if !object_hash::is_chash_valid(watch) {
                 continue;
@@ -76,14 +80,6 @@ impl Watcher {
 
 pub fn watcher_insert(watch_info: &WatchInfo) {
     WATCHERS.insert(watch_info);
-}
-
-pub fn watcher_remove(self_address: &str, watch_address: &str) {
-    WATCHERS.remove(self_address, watch_address);
-}
-
-pub fn get_watchers(watch_address: &str) -> Option<HashSet<String>> {
-    WATCHERS.get(watch_address)
 }
 
 #[derive(Serialize, Deserialize)]
@@ -179,7 +175,7 @@ fn get_notify_message(unit: &Unit) -> NotifyMessage {
                     }
                     notify_message
                         .to_msg
-                        .push((output.address.clone(), output.amount.clone()));
+                        .push((output.address.clone(), output.amount));
                 }
             }
             Some(Payload::Text(ref txt)) => {
@@ -199,7 +195,7 @@ fn get_output_addresses(unit: &Unit) -> HashSet<String> {
     for msg in &unit.messages {
         if let Some(Payload::Payment(ref payment)) = msg.payload {
             for output in &payment.outputs {
-                if &output.address == &unit.authors[0].address {
+                if output.address == unit.authors[0].address {
                     continue;
                 }
                 output_addresses.insert(output.address.clone());
