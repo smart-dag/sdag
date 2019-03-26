@@ -77,6 +77,10 @@ mod kv_store_none {
             Ok(())
         }
 
+        pub fn update_joint(&self, _key: &str, _joint: &Joint) -> Result<()> {
+            Ok(())
+        }
+
         pub fn save_joint_children(&self, _key: &str, _children: Vec<String>) -> Result<()> {
             Ok(())
         }

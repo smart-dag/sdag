@@ -84,6 +84,12 @@ impl KvStore {
         Ok(())
     }
 
+    pub fn update_joint(&self, key: &str, joint: &Joint) -> Result<()> {
+        self.joints
+            .put(key.as_bytes(), &serde_json::to_vec(joint)?)?;
+        Ok(())
+    }
+
     pub fn save_joint_children(&self, key: &str, children: Vec<String>) -> Result<()> {
         self.children
             .put(key.as_bytes(), &serde_json::to_vec(&children)?)?;

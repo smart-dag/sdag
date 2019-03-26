@@ -64,6 +64,11 @@ fn kv_store_save_joint(joint: &Joint) -> Result<()> {
     Ok(())
 }
 
+fn kv_store_update_joint(joint: &Joint) -> Result<()> {
+    KV_STORE.update_joint(&joint.unit.unit, &joint)?;
+    Ok(())
+}
+
 fn criterion_benchmark(c: &mut Criterion) {
     let joint: Joint = serde_json::from_str(JOINT).expect("string to joint error");
     KV_STORE
@@ -78,6 +83,15 @@ fn criterion_benchmark(c: &mut Criterion) {
         b.iter_batched(
             || joint.clone(),
             |joint| kv_store_save_joint(&joint),
+            BatchSize::PerIteration,
+        )
+    });
+
+    let joint: Joint = serde_json::from_str(JOINT).expect("string to joint error");
+    c.bench_function("kv store update joint", move |b| {
+        b.iter_batched(
+            || joint.clone(),
+            |joint| kv_store_update_joint(&joint),
             BatchSize::PerIteration,
         )
     });
