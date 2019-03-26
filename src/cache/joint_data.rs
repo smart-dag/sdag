@@ -428,7 +428,7 @@ impl JointData {
                 });
             }
 
-            return Ok(self.max_stable_unit.get().read()?.clone());
+            return Ok(self.max_stable_unit.get().read()?);
         }
 
         bail!(

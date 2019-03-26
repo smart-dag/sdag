@@ -1,4 +1,5 @@
 use std::collections::VecDeque;
+use std::sync::Arc;
 
 use cache::{CachedJoint, JointData, SDAG_CACHE};
 use error::Result;
@@ -295,8 +296,10 @@ fn get_all_alt_witness_units(
                     break;
                 }
                 // here we ignore the same witness to speed up
-                if bp.unit.is_authored_by_witness() && !mc.contains(&joint) {
-                    ret.push(joint);
+                if bp.unit.is_authored_by_witness() && !mc.contains(&bp) {
+                    if !ret.contains(&bp) {
+                        ret.push(bp);
+                    }
                     break;
                 }
 
@@ -312,6 +315,7 @@ fn get_all_alt_witness_units(
 // update the max intersect point of main chains
 fn update_mc_to_intersect(
     mc: &mut Vec<RcuReader<JointData>>,
+    visited: &mut HashSet<Arc<String>>,
     mut joint: RcuReader<JointData>,
 ) -> Result<()> {
     let mut last_mc_unit = mc
@@ -331,7 +335,9 @@ fn update_mc_to_intersect(
             break;
         }
 
-        joint = joint.get_best_parent().read()?;
+        let cached_joint = joint.get_best_parent();
+        joint = cached_joint.read()?;
+        visited.insert(cached_joint.key);
         to_level = joint.get_level();
     }
 
@@ -442,8 +448,12 @@ pub fn calc_max_stable_unit(joint: RcuReader<JointData>) -> Result<CachedJoint> 
     let min_wl = joint.get_min_wl();
     let mut mc_joints = build_unstable_main_chain_from_joint_to_min_wl(&joint, min_wl)?;
     let alt_witnesses = get_all_alt_witness_units(&joint, &mc_joints, min_wl)?;
+    // if we already visit the witness, we can skip it
+    let mut visited = HashSet::new();
     for joint in alt_witnesses {
-        update_mc_to_intersect(&mut mc_joints, joint)?;
+        if visited.insert(Arc::new(joint.unit.unit.to_owned())) {
+            update_mc_to_intersect(&mut mc_joints, &mut visited, joint)?;
+        }
     }
     let max_stable_unit = mc_joints
         .pop()
