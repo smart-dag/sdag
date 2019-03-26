@@ -72,6 +72,10 @@ fn start_main_chain_worker(rx: mpsc::Receiver<RcuReader<JointData>>) -> JoinHand
         );
 
         while let Ok(joint) = rx.recv() {
+            if joint.get_min_wl() <= last_stable_level {
+                continue;
+            }
+
             let max_stable_joint = t_c!(joint.get_max_stable_unit());
             if max_stable_joint.get_level() > last_stable_level {
                 info!(
@@ -331,7 +335,8 @@ fn update_mc_to_intersect(
             mc.push(last_mc_unit.clone());
         }
 
-        if mc.contains(&joint) {
+        // reverse visit to speed up
+        if mc.iter().rev().any(|j| j == &joint) {
             break;
         }
 
