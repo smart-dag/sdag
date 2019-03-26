@@ -41,16 +41,19 @@ impl Watcher {
                 continue;
             }
 
-            let mut new_watch = HashSet::new();
-            let mut w_g = self.watchers.write().unwrap();
-            match w_g.get_mut(watch) {
-                Some(v) => v.insert(self_address.to_string()),
-                None => new_watch.insert(self_address.to_string()),
-            };
-
-            if !new_watch.is_empty() {
-                w_g.insert(watch.to_string(), new_watch);
-            }
+            self.watchers
+                .write()
+                .unwrap()
+                .entry(watch.to_string())
+                .and_modify(|v| {
+                    v.insert(self_address.to_string());
+                })
+                .or_insert_with(|| {
+                    [watch]
+                        .iter()
+                        .map(|v| v.to_string())
+                        .collect::<HashSet<String>>()
+                });
         }
     }
 
@@ -75,6 +78,10 @@ impl Watcher {
             Some(v) => Some(v.to_owned()),
             None => None,
         }
+    }
+
+    fn is_watched(&self, watch_address: &str) -> bool {
+        self.watchers.read().unwrap().get(watch_address).is_some()
     }
 }
 
@@ -102,9 +109,10 @@ pub fn notify_watchers(joint: RcuReader<JointData>) {
     let output_addresses = get_output_addresses(unit);
 
     let mut is_watched = false;
-    if WATCHERS.get(first_author).is_none() {
+
+    if !WATCHERS.is_watched(first_author) {
         for addr in &output_addresses {
-            if WATCHERS.get(addr).is_some() {
+            if WATCHERS.is_watched(addr) {
                 is_watched = true;
                 break;
             }
@@ -118,11 +126,11 @@ pub fn notify_watchers(joint: RcuReader<JointData>) {
 
     if let Some(dst_address) = WATCHERS.get(first_author) {
         let msg_value = serde_json::to_value(notify_message.clone()).unwrap();
-        for addr in &dst_address {
+        for dst in &dst_address {
             if let Ok(false) =
-                ::network::hub::WSS.notify_watcher(Arc::new(addr.to_string()), msg_value.clone())
+                ::network::hub::WSS.notify_watcher(Arc::new(dst.to_string()), msg_value.clone())
             {
-                WATCHERS.remove(first_author, addr);
+                WATCHERS.remove(first_author, dst);
             }
         }
     }
@@ -138,11 +146,11 @@ pub fn notify_watchers(joint: RcuReader<JointData>) {
             }
             let new_msg_value = serde_json::to_value(new_msg).unwrap();
 
-            for dst in dst_addr {
+            for dst in &dst_addr {
                 if let Ok(false) = ::network::hub::WSS
                     .notify_watcher(Arc::new(dst.to_string()), new_msg_value.clone())
                 {
-                    WATCHERS.remove(first_author, addr);
+                    WATCHERS.remove(addr, dst);
                 }
             }
         }
