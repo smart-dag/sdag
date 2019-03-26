@@ -19,6 +19,7 @@ use main_chain;
 use may::coroutine;
 use may::net::TcpStream;
 use may::sync::RwLock;
+use notify_watcher;
 use rcu_cell::RcuReader;
 use sdag_object_base::object_hash;
 use serde_json::{self, Value};
@@ -170,6 +171,17 @@ impl WsConnections {
                 let joint = joint.clone();
                 try_go!(move || conn.send_joint(&joint));
             }
+        }
+    }
+
+    /// notify message to watcher
+    pub fn notify_watcher(&self, peer_id: Arc<String>, message: Value) -> Result<bool> {
+        match self.get_connection(peer_id) {
+            Some(conn) => {
+                try_go!(move || conn.send_notify(&message));
+                Ok(true)
+            }
+            None => Ok(false),
         }
     }
 
@@ -375,6 +387,7 @@ impl Server<HubData> for HubData {
             "get_joint_by_unit_hash" => ws.on_get_joint_by_unit_hash(params)?,
             "get_children" => ws.on_get_children(params)?,
             "get_tps" => ws.on_get_tps(params)?,
+            "watch" => ws.on_watch(params)?,
 
             command => bail!("on_request unknown command: {}", command),
         };
@@ -856,6 +869,13 @@ impl HubConn {
 
         Ok(serde_json::to_value(children)?)
     }
+
+    fn on_watch(&self, param: Value) -> Result<Value> {
+        let watch_addresses: Vec<String> = serde_json::from_value(param)?;
+        notify_watcher::watcher_insert(&self.get_peer_id(), &watch_addresses);
+
+        Ok(Value::Null)
+    }
 }
 
 impl HubConn {
@@ -1020,6 +1040,11 @@ impl HubConn {
 
     fn send_free_joint_list(&self, free_units: &[String]) -> Result<()> {
         self.send_just_saying("free_joint_list", serde_json::to_value(free_units)?)
+    }
+
+    /// send notify message to watcher
+    fn send_notify(&self, value: &Value) -> Result<()> {
+        self.send_just_saying("notify", value.to_owned())
     }
 
     /// send stable joints to trigger peer catchup

@@ -247,6 +247,12 @@ impl WalletConn {
         let witnesses = self.send_request("get_witnesses", &Value::Null)?;
         Ok(serde_json::from_value(witnesses)?)
     }
+
+    pub fn add_watcher(&self, watch_address: &[String]) -> Result<()> {
+        self.send_request("watch", &serde_json::to_value(watch_address.to_owned())?)?;
+
+        Ok(())
+    }
 }
 
 // the server side impl

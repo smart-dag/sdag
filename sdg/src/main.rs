@@ -580,6 +580,20 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
+    //watch
+    if let Some(watch) = m.subcommand_matches("watch") {
+        if let Some(address) = watch.values_of("watch") {
+            let addr = address
+                .collect::<Vec<_>>()
+                .iter()
+                .map(|v| v.to_string())
+                .collect::<Vec<String>>();
+            ws.add_watcher(&addr)?;
+        }
+
+        return Ok(());
+    }
+
     Ok(())
 }
 

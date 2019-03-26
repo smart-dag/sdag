@@ -101,6 +101,7 @@ pub mod light;
 pub mod main_chain;
 pub mod my_witness;
 pub mod network;
+pub mod notify_watcher;
 pub mod paid_witnessing;
 pub mod signature;
 pub mod spec;
