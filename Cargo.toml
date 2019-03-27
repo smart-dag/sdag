@@ -37,10 +37,11 @@ lto = true
 # panic = "abort"
 
 [features]
-default = ["kv_store_none"]
+default = ["kv_store_none","lru_cache"]
 kv_store_none = []
 kv_store_sled = ["sled", "crossbeam"]
 kv_store_rocksdb = ["rocksdb", "crossbeam"]
+lru_cache = ["rocksdb"]
 
 [workspace]
 members = [
