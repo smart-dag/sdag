@@ -695,5 +695,12 @@ fn handle_subcommand_unit(unit_args: &clap::ArgMatches, ws: &Arc<WalletConn>) ->
         return Ok(());
     }
 
+    if let Some(unit) = unit_args.value_of("text") {
+        let text = ws.get_text(unit)?;
+        serde_json::to_writer_pretty(std::io::stdout(), &text)?;
+        println!("\n");
+        return Ok(());
+    }
+
     bail!("invalid argument value")
 }

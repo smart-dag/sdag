@@ -1,5 +1,5 @@
 mod data_feed;
-mod text;
+pub mod text;
 mod utxo;
 
 use std::collections::BTreeMap;
