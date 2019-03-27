@@ -138,7 +138,7 @@ impl<K, V: LoadFromKv<K>> CachedData<K, V> {
         }
     }
 
-    // save the value to database and clear the data memory
+    // save the value to database
     pub fn save_to_db(&self) -> Result<()> {
         if is_rebuilding_from_kv() {
             #[cold]
@@ -148,6 +148,19 @@ impl<K, V: LoadFromKv<K>> CachedData<K, V> {
         match self.data.read() {
             Some(v) => v.save_to_kv(&self.key),
             None => bail!("no data found to save to db"),
+        }
+    }
+
+    // update the value to database
+    pub fn update_to_db(&self) -> Result<()> {
+        if is_rebuilding_from_kv() {
+            #[cold]
+            return Ok(());
+        }
+
+        match self.data.read() {
+            Some(v) => v.update_to_kv(&self.key),
+            None => bail!("no data found to update to db"),
         }
     }
 }

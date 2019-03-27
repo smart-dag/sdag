@@ -17,7 +17,7 @@ pub struct KvStore {
     pub properties: DB,
     pub children: DB,
     pub misc: DB,
-    sender: Sender<CachedJoint>,
+    sender: Sender<(CachedJoint, bool)>,
     _handlers: Vec<JoinHandle<()>>,
 }
 
@@ -189,7 +189,12 @@ impl KvStore {
     }
 
     pub fn save_cache_async(&self, data: CachedJoint) -> Result<()> {
-        self.sender.send(data)?;
+        self.sender.send((data, false))?;
+        Ok(())
+    }
+
+    pub fn update_cache_async(&self, data: CachedJoint) -> Result<()> {
+        self.sender.send((data, true))?;
         Ok(())
     }
 

@@ -85,7 +85,7 @@ fn finalize_joint(cached_joint: CachedJoint) -> Result<()> {
         joint: joint_data.clone(),
     });
 
-    cached_joint.save_to_db_async()?;
+    cached_joint.update_to_db_async()?;
 
     Ok(())
 }

@@ -35,6 +35,7 @@ pub trait LoadFromKv<K: ?Sized>: Sized {
     // can load data from kv store
     fn load_from_kv<T: ::std::borrow::Borrow<K>>(key: &T) -> Result<Self>;
     fn save_to_kv<T: ::std::borrow::Borrow<K>>(&self, key: &T) -> Result<()>;
+    fn update_to_kv<T: ::std::borrow::Borrow<K>>(&self, key: &T) -> Result<()>;
     fn should_reclaim(&self) -> bool;
     fn set_should_reclaim(&self, should_reclaim: bool);
 }
@@ -113,6 +114,10 @@ mod kv_store_none {
             Ok(())
         }
 
+        pub fn update_cache_async(&self, _data: CachedJoint) -> Result<()> {
+            Ok(())
+        }
+
         pub fn finish(&self) -> Result<()> {
             Ok(())
         }
@@ -159,20 +164,27 @@ mod kv_store_common {
         Ok(())
     }
 
-    pub fn create_thread_pool(size: usize) -> (Sender<CachedJoint>, Vec<JoinHandle<()>>) {
-        let (sender, receiver): (Sender<CachedJoint>, Receiver<CachedJoint>) = unbounded();
+    pub fn create_thread_pool(size: usize) -> (Sender<(CachedJoint, bool)>, Vec<JoinHandle<()>>) {
+        let (sender, receiver): (Sender<(CachedJoint, bool)>, Receiver<(CachedJoint, bool)>) =
+            unbounded();
         let mut handlers = Vec::new();
 
         for i in 1..size + 1 {
             let rx = receiver.clone();
             handlers.push(std::thread::spawn(move || {
-                while let Ok(cached_joint) = rx.recv() {
+                while let Ok((cached_joint, is_update)) = rx.recv() {
                     info!(
-                        "Thread{}: Saving cached joint with key {}",
-                        i, cached_joint.key
+                        "Thread{}: {} cached joint with key {}",
+                        i,
+                        if is_update { "Updating" } else { "Saving" },
+                        cached_joint.key
                     );
 
-                    t_c!(cached_joint.save_to_db());
+                    if is_update {
+                        t_c!(cached_joint.update_to_db());
+                    } else {
+                        t_c!(cached_joint.save_to_db());
+                    }
                 }
             }));
         }

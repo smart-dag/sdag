@@ -685,6 +685,14 @@ impl LoadFromKv<String> for JointData {
         KV_STORE.save_joint_property(key, &self.props.read().unwrap())
     }
 
+    fn update_to_kv<T: ::std::borrow::Borrow<String>>(&self, key: &T) -> Result<()> {
+        let key = key.borrow();
+        KV_STORE.update_joint(key, &self.joint)?;
+
+        // FIXME: implement update joint property
+        KV_STORE.save_joint_property(key, &self.props.read().unwrap())
+    }
+
     fn should_reclaim(&self) -> bool {
         self.should_reclaim.load(Ordering::Relaxed)
     }
