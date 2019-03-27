@@ -29,6 +29,14 @@ pub struct HistoryRequest {
     pub num: usize,
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct Text {
+    pub from_addr: Vec<String>,
+    pub to_addr: Vec<String>,
+    pub text: String,
+    pub time: Option<u64>,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TransactionInfo {
     pub unit_hash: String,

@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use super::network_base::{Sender, Server, WsConnection};
-use business::BUSINESS_CACHE;
+use business::{self, BUSINESS_CACHE};
 use cache::{JointData, SDAG_CACHE};
 use catchup;
 use composer::*;
@@ -373,6 +373,7 @@ impl Server<HubData> for HubData {
             "light/get_link_proofs" => ws.on_get_link_proofs(params)?,
             "get_joint" => ws.on_get_joint(params)?,
             "get_peers" => ws.on_get_peers(params)?,
+            "get_text" => ws.on_get_text(params)?,
             "get_balance" => ws.on_get_balance(params)?,
             "get_hash_tree" => ws.on_get_hash_tree(params)?,
             "get_witnesses" => ws.on_get_witnesses(params)?,
@@ -471,6 +472,12 @@ impl HubConn {
         let balance = BUSINESS_CACHE.global_state.get_stable_balance(addr)?;
 
         Ok(json!({"address": addr, "balance": balance}))
+    }
+
+    fn on_get_text(&self, param: Value) -> Result<Value> {
+        let unit = param.as_str().ok_or_else(|| format_err!("wrong address"))?;
+
+        Ok(json!(business::text::get_text(unit)?))
     }
 
     fn on_get_tps(&self, _param: Value) -> Result<Value> {

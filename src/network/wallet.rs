@@ -237,6 +237,12 @@ impl WalletConn {
         Ok(serde_json::from_value(response)?)
     }
 
+    pub fn get_text(&self, unit: &str) -> Result<light::Text> {
+        let response = self.send_request("get_text", &serde_json::to_value(unit)?)?;
+
+        Ok(serde_json::from_value(response)?)
+    }
+
     pub fn get_light_props(&self, address: &str) -> Result<light::LightProps> {
         let light_prop = self.send_request("light/light_props", &serde_json::to_value(address)?)?;
 
