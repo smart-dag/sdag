@@ -111,8 +111,14 @@ fn get_unstable_latest_normal_joint(
 ) -> Result<Option<RcuReader<JointData>>> {
     use std::cmp;
     use std::collections::BinaryHeap;
-    #[derive(PartialOrd, PartialEq)]
+    #[derive(PartialEq)]
     struct OrdJoint(RcuReader<JointData>);
+    impl cmp::PartialOrd for OrdJoint {
+        fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+            self.0.get_level().partial_cmp(&other.0.get_level())
+        }
+    }
+
     impl cmp::Eq for OrdJoint {}
     impl cmp::Ord for OrdJoint {
         fn cmp(&self, other: &OrdJoint) -> cmp::Ordering {
