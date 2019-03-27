@@ -2,7 +2,7 @@ extern crate crossbeam;
 extern crate rocksdb;
 
 use self::crossbeam::crossbeam_channel::Sender;
-use self::rocksdb::{IteratorMode, DB};
+use self::rocksdb::{ColumnFamilyDescriptor, IteratorMode, Options, DB};
 
 use super::*;
 use cache::{CachedJoint, SDAG_CACHE};
@@ -17,7 +17,7 @@ pub struct KvStore {
     pub properties: DB,
     pub children: DB,
     pub misc: DB,
-    sender: Sender<CachedJoint>,
+    sender: Sender<(CachedJoint, bool)>,
     _handlers: Vec<JoinHandle<()>>,
 }
 
@@ -29,8 +29,21 @@ impl Default for KvStore {
 
 impl KvStore {
     pub fn load(path: &str) -> Result<Self> {
-        let joints = DB::open_default(format!("{}/joints", path))
-            .context("Failed to init joints KvStore")?;
+        // Some column family for ball and skiplist, now skiplist is not used
+        // Both updated ball and skiplist are saved under ball cf
+        let ball = ColumnFamilyDescriptor::new("ball", Options::default());
+        let skiplist = ColumnFamilyDescriptor::new("skiplist", Options::default());
+
+        let mut joint_opts = Options::default();
+        joint_opts.create_missing_column_families(true);
+        joint_opts.create_if_missing(true);
+        let joints = DB::open_cf_descriptors(
+            &joint_opts,
+            format!("{}/joints", path),
+            vec![ball, skiplist],
+        )
+        .context("Failed to init joints KvStore")?;
+
         let properties = DB::open_default(format!("{}/properties", path))
             .context("Failed to init properties KvStore")?;
         let children = DB::open_default(format!("{}/children", path))
@@ -56,7 +69,17 @@ impl KvStore {
 
     pub fn read_joint(&self, key: &str) -> Result<Joint> {
         if let Some(value) = self.joints.get(key.as_bytes())? {
-            return Ok(serde_json::from_slice(&value)?);
+            let mut joint: Joint = serde_json::from_slice(&value)?;
+
+            if let Some(ball_cf) = self.joints.cf_handle("ball") {
+                if let Some(value) = self.joints.get_cf(ball_cf, key.as_bytes())? {
+                    let (ball, skiplist) = serde_json::from_slice(&value)?;
+                    joint.ball = ball;
+                    joint.skiplist_units = skiplist;
+                }
+            }
+
+            return Ok(joint);
         }
 
         bail!("joint {} not exist in KV", key)
@@ -81,6 +104,18 @@ impl KvStore {
     pub fn save_joint(&self, key: &str, joint: &Joint) -> Result<()> {
         self.joints
             .put(key.as_bytes(), &serde_json::to_vec(joint)?)?;
+        Ok(())
+    }
+
+    pub fn update_joint(&self, key: &str, joint: &Joint) -> Result<()> {
+        if let Some(ball_cf) = self.joints.cf_handle("ball") {
+            self.joints.put_cf(
+                ball_cf,
+                key.as_bytes(),
+                &serde_json::to_vec(&(&joint.ball, &joint.skiplist_units))?,
+            )?;
+        }
+
         Ok(())
     }
 
@@ -154,7 +189,12 @@ impl KvStore {
     }
 
     pub fn save_cache_async(&self, data: CachedJoint) -> Result<()> {
-        self.sender.send(data)?;
+        self.sender.send((data, false))?;
+        Ok(())
+    }
+
+    pub fn update_cache_async(&self, data: CachedJoint) -> Result<()> {
+        self.sender.send((data, true))?;
         Ok(())
     }
 

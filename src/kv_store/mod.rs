@@ -35,6 +35,7 @@ pub trait LoadFromKv<K: ?Sized>: Sized {
     // can load data from kv store
     fn load_from_kv<T: ::std::borrow::Borrow<K>>(key: &T) -> Result<Self>;
     fn save_to_kv<T: ::std::borrow::Borrow<K>>(&self, key: &T) -> Result<()>;
+    fn update_to_kv<T: ::std::borrow::Borrow<K>>(&self, key: &T) -> Result<()>;
     fn should_reclaim(&self) -> bool;
     fn set_should_reclaim(&self, should_reclaim: bool);
 }
@@ -77,6 +78,10 @@ mod kv_store_none {
             Ok(())
         }
 
+        pub fn update_joint(&self, _key: &str, _joint: &Joint) -> Result<()> {
+            Ok(())
+        }
+
         pub fn save_joint_children(&self, _key: &str, _children: Vec<String>) -> Result<()> {
             Ok(())
         }
@@ -106,6 +111,10 @@ mod kv_store_none {
         }
 
         pub fn save_cache_async(&self, _data: CachedJoint) -> Result<()> {
+            Ok(())
+        }
+
+        pub fn update_cache_async(&self, _data: CachedJoint) -> Result<()> {
             Ok(())
         }
 
@@ -155,20 +164,27 @@ mod kv_store_common {
         Ok(())
     }
 
-    pub fn create_thread_pool(size: usize) -> (Sender<CachedJoint>, Vec<JoinHandle<()>>) {
-        let (sender, receiver): (Sender<CachedJoint>, Receiver<CachedJoint>) = unbounded();
+    pub fn create_thread_pool(size: usize) -> (Sender<(CachedJoint, bool)>, Vec<JoinHandle<()>>) {
+        let (sender, receiver): (Sender<(CachedJoint, bool)>, Receiver<(CachedJoint, bool)>) =
+            unbounded();
         let mut handlers = Vec::new();
 
         for i in 1..size + 1 {
             let rx = receiver.clone();
             handlers.push(std::thread::spawn(move || {
-                while let Ok(cached_joint) = rx.recv() {
+                while let Ok((cached_joint, is_update)) = rx.recv() {
                     info!(
-                        "Thread{}: Saving cached joint with key {}",
-                        i, cached_joint.key
+                        "Thread{}: {} cached joint with key {}",
+                        i,
+                        if is_update { "Updating" } else { "Saving" },
+                        cached_joint.key
                     );
 
-                    t_c!(cached_joint.save_to_db());
+                    if is_update {
+                        t_c!(cached_joint.update_to_db());
+                    } else {
+                        t_c!(cached_joint.save_to_db());
+                    }
                 }
             }));
         }
@@ -184,9 +200,7 @@ mod tests {
     use joint::{Joint, JointProperty};
     use serde_json;
 
-    #[test]
-    fn kv_store_joint_test() -> Result<()> {
-        let joint = r#"{
+    static JOINT: &str = r#"{
         "unit":{
             "alt":"1",
             "authors":[
@@ -232,7 +246,10 @@ mod tests {
             "witness_list_unit":"Gz0nOu5Utp3WtCZwlfG5+TbqRMGvF8fDsAVWh9BJc7Q="
         }
     }"#;
-        let joint: Joint = serde_json::from_str(&joint)?;
+
+    #[test]
+    fn kv_store_joint_test() -> Result<()> {
+        let joint: Joint = serde_json::from_str(JOINT)?;
 
         KV_STORE.save_joint(&joint.unit.unit, &joint)?;
         let read_joint = KV_STORE.read_joint(&joint.unit.unit)?;
@@ -308,6 +325,25 @@ mod tests {
         let joint: CachedJoint = CachedData::empty(key);
 
         assert!(joint.save_to_db().is_err());
+
+        Ok(())
+    }
+
+    #[test]
+    fn kv_store_update_joint_test() -> Result<()> {
+        let mut joint: Joint = serde_json::from_str(JOINT)?;
+        KV_STORE.save_joint(&joint.unit.unit, &joint)?;
+
+        joint.ball = Some("JH1Szs6J82XH+UzrI/F3kykSL3ptdQOxoFbAjvoDK2A=".to_owned());
+        joint.skiplist_units = vec!["zg7GhBCgYe3enI03jdf6YmFuLm1mk3BFIGoXVfzjl1w=".to_owned()];
+        KV_STORE.update_joint(&joint.unit.unit, &joint)?;
+
+        let read_joint = KV_STORE.read_joint(&joint.unit.unit)?;
+
+        assert_eq!(
+            serde_json::to_string(&joint)?,
+            serde_json::to_string(&read_joint)?
+        );
 
         Ok(())
     }

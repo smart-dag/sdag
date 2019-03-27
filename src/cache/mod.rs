@@ -35,6 +35,11 @@ impl CachedJoint {
         KV_STORE.save_cache_async(self.clone())?;
         Ok(())
     }
+
+    pub fn update_to_db_async(&self) -> Result<()> {
+        KV_STORE.update_cache_async(self.clone())?;
+        Ok(())
+    }
 }
 
 //---------------------------------------------------------------------------------------
