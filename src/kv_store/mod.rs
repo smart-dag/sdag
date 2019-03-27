@@ -188,9 +188,7 @@ mod tests {
     use joint::{Joint, JointProperty};
     use serde_json;
 
-    #[test]
-    fn kv_store_joint_test() -> Result<()> {
-        let joint = r#"{
+    static JOINT: &str = r#"{
         "unit":{
             "alt":"1",
             "authors":[
@@ -236,7 +234,10 @@ mod tests {
             "witness_list_unit":"Gz0nOu5Utp3WtCZwlfG5+TbqRMGvF8fDsAVWh9BJc7Q="
         }
     }"#;
-        let joint: Joint = serde_json::from_str(&joint)?;
+
+    #[test]
+    fn kv_store_joint_test() -> Result<()> {
+        let joint: Joint = serde_json::from_str(JOINT)?;
 
         KV_STORE.save_joint(&joint.unit.unit, &joint)?;
         let read_joint = KV_STORE.read_joint(&joint.unit.unit)?;
@@ -312,6 +313,25 @@ mod tests {
         let joint: CachedJoint = CachedData::empty(key);
 
         assert!(joint.save_to_db().is_err());
+
+        Ok(())
+    }
+
+    #[test]
+    fn kv_store_update_joint_test() -> Result<()> {
+        let mut joint: Joint = serde_json::from_str(JOINT)?;
+        KV_STORE.save_joint(&joint.unit.unit, &joint)?;
+
+        joint.ball = Some("JH1Szs6J82XH+UzrI/F3kykSL3ptdQOxoFbAjvoDK2A=".to_owned());
+        joint.skiplist_units = vec!["zg7GhBCgYe3enI03jdf6YmFuLm1mk3BFIGoXVfzjl1w=".to_owned()];
+        KV_STORE.update_joint(&joint.unit.unit, &joint)?;
+
+        let read_joint = KV_STORE.read_joint(&joint.unit.unit)?;
+
+        assert_eq!(
+            serde_json::to_string(&joint)?,
+            serde_json::to_string(&read_joint)?
+        );
 
         Ok(())
     }

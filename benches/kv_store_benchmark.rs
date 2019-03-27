@@ -87,13 +87,20 @@ fn criterion_benchmark(c: &mut Criterion) {
         )
     });
 
-    let joint: Joint = serde_json::from_str(JOINT).expect("string to joint error");
+    let mut joint: Joint = serde_json::from_str(JOINT).expect("string to joint error");
+    joint.ball = Some("JH1Szs6J82XH+UzrI/F3kykSL3ptdQOxoFbAjvoDK2A=".to_owned());
+    joint.skiplist_units = vec!["zg7GhBCgYe3enI03jdf6YmFuLm1mk3BFIGoXVfzjl1w=".to_owned()];
     c.bench_function("kv store update joint", move |b| {
         b.iter_batched(
             || joint.clone(),
             |joint| kv_store_update_joint(&joint),
             BatchSize::PerIteration,
         )
+    });
+
+    let joint: Joint = serde_json::from_str(JOINT).expect("string to joint error");
+    c.bench_function("kv store read updated joint", move |b| {
+        b.iter(|| kv_store_read_joint(&joint.unit.unit))
     });
 }
 
