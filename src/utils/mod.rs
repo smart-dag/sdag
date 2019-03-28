@@ -6,7 +6,6 @@ pub mod append_list_ext;
 pub mod fifo_cache;
 pub mod map_lock;
 pub mod once_option;
-//extern crate rocksdb;
 #[cfg(feature = "lru_cache")]
 pub mod lru_cache;
 
