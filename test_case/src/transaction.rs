@@ -128,44 +128,24 @@ pub fn choose_wallet(
     cur_wallet: usize,
     test_wallets: &[wallet::WalletInfo],
 ) -> Result<&wallet::WalletInfo> {
-    if REGISTERED_WALLETS.is_poisoned() {
-        bail!("lock poisoned")
-    }
-
     let mut registered_wallets = REGISTERED_WALLETS.write().unwrap();
 
-    if !registered_wallets.contains(&cur_wallet) && cur_wallet < test_wallets.len() {
-        registered_wallets.insert(cur_wallet);
-        return Ok(&test_wallets[cur_wallet]);
-    }
-
-    let max_wallet = match registered_wallets.iter().max() {
-        Some(&max) => {
-            if max >= test_wallets.len() - 1 {
-                usize::min_value()
-            } else {
-                max
-            }
-        }
-        _ => usize::min_value(),
+    let mut index = if let Some(v) = registered_wallets.iter().max() {
+        *v
+    } else {
+        0
     };
 
-    // FIXME: this never loops!!
-    for index in (max_wallet + 1)..test_wallets.len() {
-        registered_wallets.remove(&cur_wallet);
-        registered_wallets.insert(index);
-
-        return Ok(&test_wallets[index]);
-    }
-
-    for index in 0..max_wallet {
-        if registered_wallets.contains(&index) {
-            continue;
+    while index < test_wallets.len() {
+        if !registered_wallets.contains(&index) && index != cur_wallet {
+            registered_wallets.insert(index);
+            return Ok(&test_wallets[index]);
         }
-        return Ok(&test_wallets[index]);
+        index += 1;
     }
-
-    Ok(&test_wallets[cur_wallet])
+    registered_wallets.clear();
+    registered_wallets.insert(0);
+    Ok(&test_wallets[0])
 }
 
 pub fn distribute_token(

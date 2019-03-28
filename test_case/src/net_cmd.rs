@@ -22,9 +22,6 @@ pub fn net_cmd(m: &ArgMatches, settings: &sdag::config::Settings) -> Result<()> 
     //transfer
     if let Some(send) = m.subcommand_matches("send") {
         distribute_coins_and_cocurrency(&ws, &send, &wallet_info, &witnesses)?;
-        loop {
-            may::coroutine::sleep(std::time::Duration::from_secs(100));
-        }
     }
 
     //Send one payment to address
@@ -238,6 +235,10 @@ fn distribute_coins_and_cocurrency(
 
     if cycle_index.is_some() && paid_amount.is_none() {
         share_token_in_wallets(&ws, cycle_index.unwrap(), test_wallets);
+
+        loop {
+            may::coroutine::sleep(std::time::Duration::from_secs(100));
+        }
     } else if let Some(num) = paid_amount {
         transaction::distribute_token(
             &ws,
@@ -265,7 +266,6 @@ fn share_token_in_wallets(
         may::go!(move || {
             let index = i;
             let mut wallet_info = transaction::choose_wallet(i, &tmp).unwrap();
-
             loop {
                 let mut rng = thread_rng();
                 let w1: usize = rng.gen_range(0, tmp.len());
